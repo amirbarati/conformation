@@ -1,0 +1,151 @@
+
+
+def cluster(data_dir, traj_dir, n_clusters, lag_time):
+	clusterer_dir = "/scratch/users/enf/b2ar_analysis/clusterer_%d_t%d.h5" %(n_clusters, lag_time)
+	if (os.path.exists(clusterer_dir)):
+		print "Already clustered"
+	else:
+		reduced_data = verboseload(data_dir)
+		trajs = np.concatenate(reduced_data)
+		clusterer = MiniBatchKMedoids(n_clusters = n_clusters)
+		clusterer.fit_transform(reduced_data)
+		verbosedump(clusterer, "/scratch/users/enf/b2ar_analysis/clusterer_%d_t%d.h5" %(n_clusters, lag_time))	
+
+def cluster_kmeans(tica_dir, data_dir, traj_dir, n_clusters, lag_time):
+	clusterer_dir = "%s/clusterer_%dclusters.h5" %(tica_dir, n_clusters)
+	if (os.path.exists(clusterer_dir)):
+		print "Already clustered"
+	else:
+		print "Clustering by KMeans"
+		reduced_data = verboseload(data_dir)
+		trajs = np.concatenate(reduced_data)
+		clusterer = KMeans(n_clusters = n_clusters, n_jobs=-1)
+		clusterer.fit_transform(reduced_data)
+		verbosedump(clusterer, clusterer_dir)	
+
+def cluster_minikmeans(tica_dir, data_dir, traj_dir, n_clusters, lag_time):
+	clusterer_dir = "%s/clusterer_%dclusters.h5" %(tica_dir, n_clusters)
+	if (os.path.exists(clusterer_dir)):
+		print "Already clustered"
+	else:
+		print "Clustering by KMeans"
+		reduced_data = verboseload(data_dir)
+		trajs = np.concatenate(reduced_data)
+		clusterer = MiniBatchKMeans(n_clusters = n_clusters, n_jobs=-1)
+		clusterer.fit_transform(reduced_data)
+		verbosedump(clusterer, clusterer_dir)	
+
+def make_clusters_map(clusterer):
+	n_clusters = clusterer.n_clusters
+	labels = clusterer.labels_
+	clusters_map = {}
+
+	for i in range(0,n_clusters):
+		clusters_map[i] = set()
+
+	for i in range(0, len(labels)):
+		trajectory = labels[i]
+		for j in range(0, len(trajectory)):
+			cluster = trajectory[j]
+			clusters_map[cluster].add((i,j))
+
+	for cluster in clusters_map.keys():
+		print len(clusters_map[cluster])
+
+	return clusters_map
+
+def cos_to_means(clusterer_dir, features_dir):
+	clusterer = verboseload(clusterer_dir)
+	clusters_map = make_clusters_map(clusterer)
+
+	features = verboseload(features_dir)
+	feature_distances = {}
+
+	for i in range(0, len(clusters_map.keys())):
+		indices = clusters_map[i]
+		k_mean = clusterer.cluster_centers_[i]
+		print k_mean
+		find_cos_partial = partial(find_cos, k_mean=k_mean, features = features)
+		feature_distances_i = map(find_cos_partial, indices)
+		feature_distances[i] = feature_distances_i
+
+	print(feature_distances[0][0:10])
+	sorted_map = {}
+
+	print(feature_distances.keys())
+	print(len(feature_distances.keys()))
+
+	for i in range(0, len(feature_distances.keys())):
+		sorted_features = sorted(feature_distances[i], key = lambda x: x[2], reverse = True)
+		sorted_map[i] = sorted_features
+
+	print sorted_map[0][0:10]
+	return sorted_map
+
+def find_dist(index, k_mean, features):
+		traj = index[0]
+		frame = index[1]
+		conformation = features[traj][frame]
+		a = conformation
+		b = k_mean
+		return (traj, frame, np.linalg.norm(b-a))
+
+def dist_to_means(clusterer_dir, features_dir):
+	clusterer = verboseload(clusterer_dir)
+	clusters_map = make_clusters_map(clusterer)
+
+	features = verboseload(features_dir)
+	feature_distances = {}
+
+	for i in range(0, len(clusters_map.keys())):
+		indices = clusters_map[i]
+		k_mean = clusterer.cluster_centers_[i]
+		print k_mean
+		find_dist_partial = partial(find_dist, k_mean=k_mean, features = features)
+		feature_distances_i = map(find_dist_partial, indices)
+		feature_distances[i] = feature_distances_i
+
+	print(feature_distances[0][0:10])
+	sorted_map = {}
+
+	print(feature_distances.keys())
+	print(len(feature_distances.keys()))
+
+	for i in range(0, len(feature_distances.keys())):
+		sorted_features = sorted(feature_distances[i], key = lambda x: x[2], reverse = False)
+		sorted_map[i] = sorted_features
+
+	print sorted_map[0][0:10]
+	return sorted_map
+
+def get_samples(cluster, trajectories, clusters_map, clusterer_dir, features_dir, traj_dir, save_dir, n_samples, method = "dist"):
+		for s in range(0, n_samples):
+			sample = clusters_map[cluster][s]
+			traj_id = sample[0]
+			frame = sample[1]
+			traj = trajectories[traj_id]
+
+			top = md.load_frame(traj, index=frame).topology
+			indices = [a.index for a in top.atoms if str(a.residue)[0:3] != "SOD" and str(a.residue)[0:3] != "CLA" and a.residue.resSeq < 341]
+
+			conformation = md.load_frame(traj, index=frame, atom_indices=sorted(indices))
+			conformation.save_pdb("%s/cluster%d_sample%d.pdb" %(save_dir, cluster, s))
+
+def sample_clusters(clusterer_dir, features_dir, traj_dir, save_dir, n_samples, method = "dist"):
+	if method == "cos":	
+		clusters_map = cos_to_means(clusterer_dir, features_dir)
+	else:
+		clusters_map = dist_to_means(clusterer_dir, features_dir)
+	clusters = range(0, len(clusters_map.keys()))
+	if not os.path.exists(save_dir): os.makedirs(save_dir)
+	
+	#non_palm = get_traj_no_palm(traj_dir)
+
+	trajectories = get_trajectory_files(traj_dir)
+
+	
+	sampler = partial(get_samples, trajectories = trajectories, clusters_map = clusters_map, clusterer_dir = clusterer_dir, features_dir = features_dir, traj_dir = traj_dir, save_dir = save_dir, n_samples = n_samples, method = method)
+	num_workers = mp.cpu_count()
+	pool = mp.Pool(num_workers)
+	pool.map(sampler, clusters)
+	pool.terminate()
