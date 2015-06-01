@@ -1,4 +1,9 @@
-
+from msmbuilder.utils import verbosedump, verboseload
+from io_functions import *
+from functools import partial
+from analysis import *
+import multiprocessing as mp
+import mdtraj as md
 
 def cluster(data_dir, traj_dir, n_clusters, lag_time):
 	clusterer_dir = "/scratch/users/enf/b2ar_analysis/clusterer_%d_t%d.h5" %(n_clusters, lag_time)
@@ -90,7 +95,7 @@ def find_dist(index, k_mean, features):
 		b = k_mean
 		return (traj, frame, np.linalg.norm(b-a))
 
-def dist_to_means(clusterer_dir, features_dir):
+def dist_to_means(clusterer_dir, features_dir, n_samples = False, n_components = False, tica_coords_csv = False, kmeans_csv = False):
 	clusterer = verboseload(clusterer_dir)
 	clusters_map = make_clusters_map(clusterer)
 
@@ -115,10 +120,38 @@ def dist_to_means(clusterer_dir, features_dir):
 		sorted_features = sorted(feature_distances[i], key = lambda x: x[2], reverse = False)
 		sorted_map[i] = sorted_features
 
+	if n_samples is not False and n_components is not False and tica_coords_csv is not False:
+		tica_coords_map = {}
+		for cluster_id in sorted_map.keys():
+			for j in range(0, n_samples):
+				sample = "cluster%d_sample%d" %(cluster_id, j)
+				sample_tuple = sorted_map[cluster_id][j][0:2]
+				sample_coords = features[sample_tuple[0]][sample_tuple[1]]
+				tica_coords_map[sample] = sample_coords
+		titles = ["sample"]
+		for k in range(0, n_components):
+			titles.append("component_%d" %k)
+		print(tica_coords_map.keys()[0])
+		print(tica_coords_map[tica_coords_map.keys()[0]])
+		write_map_to_csv(tica_coords_csv, tica_coords_map, titles)
+
+	if kmeans_csv is not False:
+		kmeans_map = {}
+		for cluster in range(0,clusterer.n_clusters):
+			k_mean = clusterer.cluster_centers_[cluster]
+			cluster_id = "cluster%d" %cluster
+			kmeans_map[cluster_id] = k_mean
+		titles = ["cluster"]
+		for k in range(0, n_components):
+			titles.append("component_%d" %k)
+		write_map_to_csv(kmeans_csv, kmeans_map, titles)			
+
+
 	print sorted_map[0][0:10]
 	return sorted_map
 
-def get_samples(cluster, trajectories, clusters_map, clusterer_dir, features_dir, traj_dir, save_dir, n_samples, method = "dist"):
+
+def get_samples(cluster, trajectories, clusters_map, clusterer_dir, features_dir, traj_dir, save_dir, n_samples, method):
 		for s in range(0, n_samples):
 			sample = clusters_map[cluster][s]
 			traj_id = sample[0]
@@ -131,7 +164,7 @@ def get_samples(cluster, trajectories, clusters_map, clusterer_dir, features_dir
 			conformation = md.load_frame(traj, index=frame, atom_indices=sorted(indices))
 			conformation.save_pdb("%s/cluster%d_sample%d.pdb" %(save_dir, cluster, s))
 
-def sample_clusters(clusterer_dir, features_dir, traj_dir, save_dir, n_samples, method = "dist"):
+def sample_clusters(clusterer_dir, features_dir, traj_dir, save_dir, n_samples, method, tica_coords_file):
 	if method == "cos":	
 		clusters_map = cos_to_means(clusterer_dir, features_dir)
 	else:

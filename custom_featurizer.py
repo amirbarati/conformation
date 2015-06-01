@@ -1,3 +1,7 @@
+import mdtraj as md
+import numpy as np
+from analysis import *
+from msmbuilder.utils import verbosedump, verboseload
 
 def phi_indices(top, residues = None):
 	residues = copy.deepcopy(residues)
@@ -290,11 +294,9 @@ def featurize_custom(traj_dir, features_dir, dihedral_residues = None, dihedral_
 	print("Completed featurizing")
 
 
-
-def featurize_known_traj(traj_dir, inactive_dir, features_dir, active_dir = None):
+def featurize_known_traj(traj_dir, inactive, features_dir):
 	print("currently featurizing %s" %traj_dir.split("/")[len(traj_dir.split("/"))-1])
 	traj = md.load(traj_dir)
-	inactive = md.load(inactive_dir)
 	rmsds = rmsd_npxxy(traj, inactive)
 	helix6_helix3_distances = helix6_helix3_dist(traj)
 	features = np.transpose(np.concatenate([[rmsds], [np.concatenate(helix6_helix3_distances)]]))
@@ -303,9 +305,11 @@ def featurize_known_traj(traj_dir, inactive_dir, features_dir, active_dir = None
 	filename = "%s/%s" %(features_dir, traj_dir.split("/")[len(traj_dir.split("/"))-1])
 	verbosedump(features, filename)
 
-def featurize_known(directory, inactive_dir):
+def featurize_known(directory, inactive_dir, active_dir):
 	features_dir = "/scratch/users/enf/b2ar_analysis/features_known"
 	if not os.path.exists(features_dir): os.makedirs(features_dir)
+
+	ianctive = md.load(inactive_dir)
 
 	agonist_bound = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
 	all_trajs = get_trajectory_files(directory)
@@ -329,6 +333,80 @@ def featurize_known(directory, inactive_dir):
 
 	print("Completed featurizing")
 
+def compute_pnas_coords_and_distance(traj_file, inactive, active, scale = 1.0):
+	print "featuring %s" %traj_file
+	traj = md.load(traj_file)
+	inactive_tuple = np.array([helix6_helix3_dist(inactive) / scale, rmsd_npxxy(inactive, inactive)])
+	active_tuple = np.array([helix6_helix3_dist(active) / scale, rmsd_npxxy(active, inactive)])
+	traj_coords = [helix6_helix3_dist(traj) / scale, rmsd_npxxy(traj, inactive)]
+	traj_coords = np.transpose(np.vstack(traj_coords))
+	active_vectors = traj_coords - np.transpose(active_tuple)
+	inactive_vectors = traj_coords - np.transpose(inactive_tuple)
+
+	inactive_distances = np.linalg.norm(inactive_vectors, axis = 1)
+	active_distances = np.linalg.norm(active_vectors, axis = 1)
+	distances = [inactive_distances, active_distances]
+
+	return [traj_coords, distances]
+
+def featurize_pnas_distance_traj(traj_dir, ianctive, active, features_dir):
+	#pnas_distances = 
+	return
+
+def featurize_pnas_distance(traj_dir, features_dir, ext, inactive_dir, active_dir, inactive_distances_dir, active_distances_dir, coords_dir, scale):
+	if not os.path.exists(features_dir): os.makedirs(features_dir)
+
+	inactive = md.load(inactive_dir)
+	active = md.load(active_dir)
+
+	agonist_bound = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
+	trajs = get_trajectory_files(traj_dir, ext = ext)
+	featurize_partial = partial(compute_pnas_coords_and_distance, inactive = inactive, active = active, scale = scale)
+	pool = mp.Pool(mp.cpu_count())
+	features = pool.map(featurize_partial, trajs)
+	pool.terminate()
+	
+
+	coords = [f[0] for f in features]
+	inactive_distances = [f[1][0] for f in features]
+	active_distances = [f[1][1] for f in features]
+
+	verbosedump(coords, coords_dir)
+	verbosedump(inactive_distances, inactive_distances_dir)
+	verbosedump(active_distances, active_distances_dir)
+
+	print("Completed featurizing")
+
+def load_pdb_traj(pdb_file):
+	print pdb_file
+	return md.load_frame(pdb_file, index = 0)
+
+def featurize_pnas_distance_pdbs(traj_dir, new_filename, features_dir, inactive_dir, active_dir, inactive_distances_dir, active_distances_dir, coords_dir):
+	#if not os.path.exists(features_dir): os.makedirs(features_dir)
+
+	inactive = md.load(inactive_dir)
+	active = md.load(active_dir)
+
+	agonist_bound = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
+	samples = get_trajectory_files(traj_dir, ext = ".pdb")
+	pool = mp.Pool(mp.cpu_count())
+	trajs = pool.map(load_pdb_traj, samples)
+	trajs_joined = trajs[0].join(trajs[1:])
+
+	trajs_joined.save_hdf5(new_filename)
+
+	features = compute_pnas_coords_and_distance(new_filename, inactive, active)
+
+	coords = [f[0] for f in features]
+	inactive_distances = [f[1][0] for f in features]
+	active_distances = [f[1][1] for f in features]
+
+	verbosedump(coords, coords_dir)
+	verbosedump(inactive_distances, inactive_distances_dir)
+	verbosedump(active_distances, active_distances_dir)
+
+	print("Completed featurizing")
+	
 
 def load_features(filename):
 	return np.transpose(verboseload(filename))

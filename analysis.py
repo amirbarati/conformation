@@ -1,3 +1,18 @@
+from io_functions import *
+import numpy as np
+import copy
+import matplotlib as mpl
+mpl.use('Agg')
+from matplotlib import pyplot as plt
+from matplotlib.colors import LogNorm
+from matplotlib.backends.backend_pdf import PdfPages
+from functools import partial
+import multiprocessing as mp
+import mdtraj as md
+import csv
+import operator
+from msmbuilder.utils import verbosedump, verboseload
+
 
 def calc_mean_and_stdev(rmsd_map):
 	stats_map = {}
@@ -6,6 +21,14 @@ def calc_mean_and_stdev(rmsd_map):
 		mean = np.mean(rmsds, axis = 0)
 		stdev = np.std(rmsds, axis = 0)
 		stats_map[key] = (mean, stdev)
+	return stats_map
+
+def calc_mean(rmsd_map):
+	stats_map = {}
+	for key in rmsd_map.keys():
+		rmsds = np.array(rmsd_map[key])
+		mean = np.mean(rmsds, axis = 0)
+		stats_map[key] = [mean]
 	return stats_map
 
 def find_cos(index, k_mean, features):
@@ -33,27 +56,31 @@ def helix6_helix3_dist(traj):
 	indices = np.empty([1,2])
 	indices[0] = [atom_3, atom_6]
 	dist = md.compute_distances(traj, indices) * 10.0
-	return dist
+	return np.concatenate(dist)
 
 
 
-def plot_pnas_vs_docking(docking_dir, pnas_dir, save_dir):
+def plot_pnas_vs_docking(docking_dir, pnas_dir, save_dir, selected = False):
 	dock_scores = convert_csv_to_map_nocombine(docking_dir)
 	pnas_vectors = convert_csv_to_map_nocombine(pnas_dir)
 	x = []
 	y = []
 	c = []
-	for key in pnas_vectors.keys():
+	for key in dock_scores.keys():
+		if selected is not False:
+			if key not in selected: continue
 		#print "PNAS"
 		#print key
 		#print pnas_vectors[key]
-		if key in dock_scores.keys():
+		if key in pnas_vectors.keys():
 			#print pnas_vectors[key]
 			x.append(pnas_vectors[key][0])
 			y.append(pnas_vectors[key][1])
 			c.append(abs(dock_scores[key][0]))
-	print dock_scores.keys()
-	plt.scatter(x, y, c=c, s=50, cmap = mpl.cm.RdYlBu, norm = LogNorm())
+			#plt.annotate("%s" %key, xy=(pnas_vectors[key][0], pnas_vectors[key][1]), xytext=(pnas_vectors[key][0], pnas_vectors[key][1]),size=6)
+
+	#print dock_scores.keys()
+	plt.scatter(x, y, c=c, s=50, cmap = mpl.cm.RdYlBu_r)
 	pp = PdfPages(save_dir)
 	pp.savefig()
 	pp.close()
@@ -89,7 +116,7 @@ def pnas_distances(traj_dir, inactive_file, active_file):
 
 	pnas_partial = partial(pnas_distance, inactive_file = inactive_file, active_file = active_file)
 
-	trajs = get_trajectory_files(traj_dir, ext = ".pdb")
+	trajs = d_trajectory_files(traj_dir, ext = ".pdb")
 	pool = mp.Pool(mp.cpu_count())
 	distances = pool.map(pnas_partial, trajs)
 	pool.terminate()
@@ -110,16 +137,27 @@ def pnas_distances(traj_dir, inactive_file, active_file):
 
 
 
-def plot_hex(transformed_data_file):
+def plot_hex(transformed_data_file, figure_directory, colors = None):
 	transformed_data = verboseload(transformed_data_file)
-	trajs = transformed_data
-	#trajs = np.concatenate(transformed_data)
-	plt.hexbin(trajs[:,1], trajs[:,0], bins='log', mincnt=1)
-	pp = PdfPages("%s.pdf" %transformed_data_file)
+	trajs = np.concatenate(transformed_data)
+	print trajs
+	plt.hexbin(trajs[:,0], trajs[:,1], bins='log', mincnt=1)
+	pp = PdfPages(figure_directory)
 	pp.savefig()
 	pp.close()
 	return
 
+def plot_col(transformed_data_file, figure_directory, colors_file):
+	transformed_data = verboseload(transformed_data_file)
+	trajs = np.concatenate(transformed_data)
+	colors = np.concatenate(verboseload(colors_file))
+	sc = plt.scatter(trajs[:,0], trajs[:,1], c=colors, s=50, cmap = mpl.cm.RdYlBu_r)
+	plt.colorbar(sc)
+	plt.show()
+	pp = PdfPages(figure_directory)
+	pp.savefig()
+	pp.close()
+	return
 
 def save_pdb(traj_dir, clusterer, i):
 	location = clusterer.cluster_ids_[i,:]
@@ -179,6 +217,44 @@ def plot_all_tics_and_clusters(tica_dir, transformed_data_dir, clusterer_dir, la
 		for j in range(i+1,num_tics):
 			plot_tica_and_clusters(tica_dir, transformed_data_dir, clusterer_dir, lag_time, component_i = i, component_j = j, cluster_ids = cluster_ids)
 	print "Printed all tICA coords and all requested clusters"
+
+#Add way to plot location of specific clusters as well
+def plot_all_tics_samples(tica_coords_csv, save_dir, docking_csv = False, specific_clusters = False):
+	tica_coords_map = convert_csv_to_map_nocombine(tica_coords_csv)
+	n_samples = len(tica_coords_map.keys())
+	if docking_csv is not False: docking_map = convert_csv_to_map_nocombine(docking_csv)
+
+	num_tics = len(tica_coords_map[tica_coords_map.keys()[0]])
+	for i in range(0, num_tics):
+		for j in range(i + 1, num_tics):
+			print("plotting tICS %d %d" %(i, j))
+			x = []
+			y = []
+			if docking_csv is not False: c = []
+			for sample in tica_coords_map.keys():
+				x.append(tica_coords_map[sample][i])
+				y.append(tica_coords_map[sample][j])
+				if docking_csv is not False: 
+					sample_id = "cluster%s" %sample
+					print docking_map[sample_id]
+					c.append(abs(docking_map[sample_id][0]))
+			if docking_csv is not False:
+				plt.scatter(x, y, c=c, s=50, cmap = mpl.cm.RdYlBu_r)
+			else:
+				plt.scatter(x, y, s=50, color = 'red')
+
+			if specific_clusters is not False:
+				for cluster in specific_clusters:
+					cluster = str(cluster) 
+					cluster_x = float(tica_coords_map[cluster][i])
+					cluster_y = float(tica_coords_map[cluster][j])
+					plt.annotate('%s' %cluster, xy=(cluster_x,cluster_y), xytext=(cluster_x, cluster_y),size=15)
+
+			plot_dir = "%s/samples_%d_tICS_%d_%d.pdf" %(save_dir, n_samples, i, j)
+			pp = PdfPages(plot_dir)
+			pp.savefig()
+			pp.close()
+			plt.clf()
 
 
 
@@ -287,17 +363,19 @@ def print_stats_map(merged_results, directory):
 	mapcsv.close()
 	return
 
-def analyze_docking_results(docking_dir):
-	results_file = "%s/docking_summary.csv" %docking_dir
+def analyze_docking_results(docking_dir, ligand, precision, docking_summary):
+	results_file = docking_summary
 	results = open(results_file, "wb")
 	logs = get_trajectory_files(docking_dir, ext = ".log")
 	scores = {}
 
+	log_num = 1
 	for log_file in logs:
+		if log_num % 1000 == 0: print log_num
 		log = open(log_file, "rb")
 		conformation = log_file.rsplit(".", 1)[0]
 		conformation = conformation.split("/")[len(conformation.split("/"))-1 ]
-		score = 1000.0
+		score = 0.0
 		xp_score = None
 		lines = log.readlines()
 		for line in lines:
@@ -305,33 +383,271 @@ def analyze_docking_results(docking_dir):
 			if len(line) >= 3:
 				if (line[0] == "Best" and line[1] == "XP" and line[2] == "pose:"):
 					xp_score = float(line[6])
-					print "%f, %f" %(xp_score, score)
+					#print "%f, %f" %(xp_score, score)
 					if xp_score < score: score = xp_score
 				elif  (line[0] == "Best" and line[1] == "Emodel="):
 					xp_score = float(line[8])
-					print "%f, %f" %(xp_score, score)
+					#print "%f, %f" %(xp_score, score)
 					if xp_score < score: score = xp_score
-		if score == 1000.0: continue
-		scores[conformation] = score
+		scores[conformation] = [-1.0*score]
+		log_num += 1
 
-	for conf in sorted(scores.keys()):
-		score = scores[conf]
-		results.write("%s, %f \n" %(conf, score))
+	titles = ["sample", "%s" %("%s_%s_score" %(ligand, precision))]
+
+	write_map_to_csv(results_file, scores, titles)
 
 	merged_results = merge_samples(scores)
-	print_stats_map(merged_results, docking_dir)
+	return scores 
 
-	results.close()
+def analyze_docking_results_wrapper(args):
+	return analyze_docking_results(*args)
 
-def combine_docking_distances(docking_csv, distances_csv):
+def get_lig_names(docking_dir):
+	subdirs = [x[0] for x in os.walk(docking_dir)]
+	lig_names = []
+
+	for subdir in subdirs:
+		lig_name = subdir.split("/")[len(subdir.split("/"))-1]
+		lig_names.append(lig_name)
+
+	return lig_names
+
+def analyze_docking_results_multiple(docking_dir, precision, ligands, summary):
+	subdirs = [x[0] for x in os.walk(docking_dir)]
+	subdirs = subdirs[1:len(subdirs)]
+	#print subdirs
+	results_list = []
+	lig_names = []
+	arg_tuples = []
+
+	for subdir in subdirs:
+		lig_name = subdir.split("/")[len(subdir.split("/"))-1]
+		if lig_name not in ligands: continue
+		lig_names.append(lig_name)
+		docking_summary = "%s/docking_summary.csv" %subdir
+		arg_tuples.append([subdir, lig_name, precision, docking_summary])
+
+	pool = mp.Pool(mp.cpu_count())
+	results_list = pool.map(analyze_docking_results_wrapper, arg_tuples)
+	pool.terminate()
+
+	combined_map = combine_maps(results_list)
+	combined_filename = summary
+	write_map_to_csv(combined_filename, combined_map, ["sample"] + lig_names)
+
+def compute_means(docking_csv, joined_csv, means_csv):
+	print "analyzing %s" %docking_csv
+	titles = get_titles(docking_csv)
+	docking_scores = convert_csv_to_joined_map(docking_csv, joined_csv)[0]
+	docking_averages = calc_mean(docking_scores)
+	write_map_to_csv(means_csv, docking_averages, titles)
+	return docking_averages
+
+def compute_means_ligands(docking_dir, pnas_means, ligands):
+	subdirs = [x[0] for x in os.walk(docking_dir)]
+	subdirs = subdirs[1:len(subdirs)]
+
+	docking_csv_files = []
+	docking_means_files = []
+	docking_joined_files = []
+
+	for subdir in subdirs:
+		lig = subdir.split("/")[len(subdir.split("/"))-1]
+		if lig not in ligands: continue
+		docking_csv = "%s/docking_summary.csv" %subdir
+		docking_means = "%s/docking_means.csv" %subdir
+		docking_joined = "%s/docking_joined.csv" %subdir
+		compute_means(docking_csv, docking_joined, docking_means)
+		pnas_joined_csv = "%s/docking_means_pnas_means.csv" %subdir
+		combine_csv_list([docking_means, pnas_means], pnas_joined_csv)
+
+	return 
+
+def compute_z(value, mean, stdev):
+	return (value - mean) / stdev
+
+def compute_aggregate_scores(docking_csv, inverse_agonists = [], summary = "", z_scores_csv = ""):
+	scores_map = convert_csv_to_map_nocombine(docking_csv)
+	docking_titles = get_titles(docking_csv)
+	lig_names = docking_titles[1:len(docking_titles)]
+	print lig_names
+	scores_per_ligand = {}
+	for lig_name in lig_names:
+		scores_per_ligand[lig_name] = []
+	for receptor in scores_map.keys():
+		receptor_scores = scores_map[receptor]
+		for i in range(0, len(receptor_scores)):
+			lig_name = lig_names[i]
+			lig_score = receptor_scores[i]
+			scores_per_ligand[lig_name].append(lig_score)
+	ligand_stats = calc_mean_and_stdev(scores_per_ligand)
+
+	z_scores_per_receptor = {}
+
+	for receptor in scores_map.keys():
+		receptor_scores = scores_map[receptor]
+		z_scores_per_receptor[receptor] = []
+		for i in range(0, len(receptor_scores)):
+			lig_score = receptor_scores[i]
+			lig_name = lig_names[i]
+			lig_mean = ligand_stats[lig_name][0]
+			lig_stdev = ligand_stats[lig_name][1]
+			z_score = compute_z(lig_score, lig_mean, lig_stdev)
+			if abs(lig_score - 0.0) < 0.001: z_score = -3.0
+			if lig_name in inverse_agonists:
+				#print lig_name
+				z_score = -1.0 * z_score
+
+			z_scores_per_receptor[receptor].append(z_score)
+
+	aggregate_scores = calc_mean(z_scores_per_receptor)
+
+	titles = ["sample", "average_z_score"]
+
+	write_map_to_csv(z_scores_csv, z_scores_per_receptor, docking_titles)
+	write_map_to_csv(summary, aggregate_scores, titles)
+
+def combine_docking_distances(docking_csv, distances_csv, docking_dir):
 	docking_map = convert_csv_to_map_nocombine(docking_csv)
-	distances_map = convert_csv_to_map_nocombine()
+	distances_map = convert_csv_to_map_nocombine(distances_csv)
 	combined_map = copy.deepcopy(distances_map)
 
 	for key in distances_map.keys():
 		if key in docking_map.keys():
-			combined_map[key].append(docking_map[key][0])
+			combined_map[key].append(-1.0 * docking_map[key][0])
+		else:
+			combined_map.pop(key, None)
 	
+	firstline = "cluster, inactive_rmsd, inactive_pnas, active_rmsd, active_pnas, docking \n"
+	filename = "%s/distances_docking.csv" %docking_dir
+	write_map_to_csv(filename, combined_map, firstline)
+
+def top_n_scoring_clusters(docking_csv, score_type = 1, n = 50):
+	docking_list = convert_csv_to_list(docking_csv)
+
+	docking_list_sorted = sorted(docking_list, key=operator.itemgetter(score_type), reverse = True)
+
+	top_n = []
+	for i in range(0, n):
+		top_n.append(docking_list_sorted[i][0])
+
+	return top_n
+
+def top_n_scoring_samples(docking_csv, score_type = "mean_docking_score", n = 100, n_samples = 10):
+	docking_list = convert_csv_to_list(docking_csv)
+	titles = docking_list[0]
+	for i in range(0, len(titles)):
+		if titles[i] == score_type: break
+	#print i
+	#print titles[i]
+	docking_list_sorted = sorted(docking_list, key=operator.itemgetter(i), reverse = True)
+	#print docking_list_sorted
+	top_n = []
+	for i in range(0, n):
+		top_n.append(docking_list_sorted[i][0])
+
+	if "sample" not in top_n[0]:
+		top_n_new = []
+		for cluster in top_n:
+			for i in range(0,n_samples):
+				top_n_new.append("%s_sample%d" %(cluster, i))
+		top_n = top_n_new
+
+	return top_n
+
+def combine_docking_mmgbsa(combined_csv, mmgbsa_csv, mmgbsa_dir, filename):
+	combined_map = convert_csv_to_map_nocombine(combined_csv)
+	mmgbsa_map = convert_csv_to_map_nocombine(mmgbsa_csv)
+	new_map = copy.deepcopy(combined_map)
+
+	for key in mmgbsa_map.keys():
+		if key in combined_map.keys():
+			new_map[key].append(-1.0 * mmgbsa_map[key][0])
+		else:
+			new_map.pop(key, None)
+
+	firstline = "sample, inactive_rmsd, inactive_pnas, active_rmsd, active_pnas, docking, mmgbsa \n"
+	write_map_to_csv(filename, new_map, firstline)
+
+def analyze_mmgbsa_results(mmgbsa_dir, ligand, chosen_receptors):
+	analysis_csv = "%s/mmgbsa_summary.csv" %mmgbsa_dir
+	csvfile = open(analysis_csv, "wb")
+	csvfile.write("sample, %s_mmgbsa \n" %ligand)
+	outputs = get_trajectory_files(mmgbsa_dir, ".csv")
+	analyzed_samples = set()
+
+	for output in outputs:
+		output_name = output.split("/")[len(output.split("/"))-1]
+		sample = output_name.split("-out.csv")[0]
+		if chosen_receptors is not False:
+			if sample not in chosen_receptors: continue
+		analyzed_samples.add(sample)
+		results = open(output, "rt")
+		reader = csv.reader(results)
+		score = 10000.0
+		i = 0
+		for row in reader:
+			if i == 0:
+				i += 1
+				continue
+			print row[0]
+			temp = float(row[1])
+			if temp < score:
+				score = temp
+		score = -1.0 * score
+		csvfile.write("%s, %f \n" %(sample, score))
+		results.close()
+
+	not_analyzed_samples = set(chosen_receptors) - analyzed_samples
+	for sample in not_analyzed_samples:
+		if sample not in analyzed_samples:
+			csvfile.write("%s, %f \n" %(sample, 0.00))
+
+
+	csvfile.close()
+
+	results_map = convert_csv_to_map_nocombine(analysis_csv)
+	return results_map
+
+
+def analyze_mmgbsa_results_multiple(mmgbsa_dir, summary, ligands, chosen_receptors):
+	subdirs = [x[0] for x in os.walk(mmgbsa_dir)]
+	subdirs = subdirs[1:len(subdirs)]
+	#print subdirs
+	results_list = []
+	lig_names = []
+
+	for subdir in subdirs:
+		lig_name = subdir.split("/")[len(subdir.split("/"))-1]
+		if lig_name not in ligands: continue
+		lig_names.append(lig_name)
+		mmgbsa_summary = "%s/mmgbsa_summary.csv" %subdir
+		results = analyze_mmgbsa_results(subdir, ligand = lig_name, chosen_receptors = chosen_receptors)
+		#print results
+		#print subdir
+		results_list.append(results)
+		
+	combined_map = combine_maps(results_list)
+	combined_filename = summary
+	write_map_to_csv(combined_filename, combined_map, ["sample"] + lig_names)
+
+def keep_only_sample0(original_csv, output_csv):
+	original = open(original_csv, "rb")
+	output = open(output_csv, "wb")
+	lines = original.readlines()
+	i = 0
+	for line in lines:
+		if i == 0:
+			output.write(line)
+			i += 1
+		else:
+			if "sample0" in line:
+				output.write(line)
+
+	original.close()
+	output.close()
+
+
 def combine_rmsd_docking_maps(rmsd_csv, docking_csv):
 	rmsd_map = {}
 	docking_map = {}
