@@ -39,20 +39,52 @@ def find_cos(index, k_mean, features):
 		b = k_mean
 		return (traj, frame, np.dot(a,b) / (np.linalg.norm(a) * np.linalg.norm(b)))
 
-def rmsd_npxxy(traj, inactive):
-	npxxy_atoms = [a.index for a in traj.topology.atoms if a.residue.resSeq in range(322,328) and a.is_backbone]
+def rmsd_connector(traj, inactive, residues_map):
+	residues = [121, 282]
+	if residues_map is not None:
+		residues = map_residues(residues_map, residues)
+
+	
+	npxxy_atoms = [a.index for a in traj.topology.atoms if a.residue.resSeq in residues and a.is_backbone]
+	#print npxxy_atoms
 	traj_stripped = traj.atom_slice(npxxy_atoms)
 
-	npxxy_atoms_target = [a.index for a in inactive.topology.atoms if a.residue.resSeq in range(322,328) and a.is_backbone]
+	npxxy_atoms_target = [a.index for a in inactive.topology.atoms if a.residue.resSeq in [121, 282] and a.is_backbone]
+	#print npxxy_atoms_target
 	inactive_stripped = inactive.atom_slice(npxxy_atoms_target)
 
 	traj_stripped_aligned = traj_stripped.superpose(inactive_stripped)
 	rmsds = md.rmsd(traj_stripped, inactive_stripped) * 10.0
 	return rmsds
 
-def helix6_helix3_dist(traj):
-	atom_3 = [a.index for a in traj.topology.atoms if a.residue.resSeq == 131 and a.name == "CA"][0]
-	atom_6 = [a.index for a in traj.topology.atoms if a.residue.resSeq == 272 and a.name == "CA"][0]
+def rmsd_npxxy(traj, inactive, residues_map):
+	residues = range(322,328)
+	if residues_map is not None:
+		residues = map_residues(residues_map, residues)
+
+	
+	npxxy_atoms = [a.index for a in traj.topology.atoms if a.residue.resSeq in residues and a.is_backbone]
+	#print npxxy_atoms
+	traj_stripped = traj.atom_slice(npxxy_atoms)
+
+	npxxy_atoms_target = [a.index for a in inactive.topology.atoms if a.residue.resSeq in range(322,328) and a.is_backbone]
+	#print npxxy_atoms_target
+	inactive_stripped = inactive.atom_slice(npxxy_atoms_target)
+
+	traj_stripped_aligned = traj_stripped.superpose(inactive_stripped)
+	rmsds = md.rmsd(traj_stripped, inactive_stripped) * 10.0
+	return rmsds
+
+def helix6_helix3_dist(traj, residues_map):
+	residues = [131, 272]
+	if residues_map is not None:
+		residues = map_residues(residues_map, residues)
+
+	print "New residues = "
+	print [r for r in traj.topology.residues if r.resSeq == residues[1]]
+
+	atom_3 = [a.index for a in traj.topology.atoms if a.residue.resSeq == residues[0] and a.name == "CA"][0]
+	atom_6 = [a.index for a in traj.topology.atoms if a.residue.resSeq == residues[1] and a.name == "CA"][0]
 	indices = np.empty([1,2])
 	indices[0] = [atom_3, atom_6]
 	dist = md.compute_distances(traj, indices) * 10.0
@@ -93,7 +125,7 @@ def pnas_distance(traj_file, inactive_file, active_file):
 	scale = 7.14
 	inactive_tuple = np.array([helix6_helix3_dist(inactive) / scale, rmsd_npxxy(inactive, inactive)])
 	active_tuple = np.array([helix6_helix3_dist(active) / scale, rmsd_npxxy(active, inactive)])
-	traj_coords = [helix6_helix3_dist(traj) / scale, rmsd_npxxy(traj, inactive)]
+	traj_coords = [helix6_helix3_dist(traj, traj_file = traj_file) / scale, rmsd_npxxy(traj, inactive, traj_file = traj_file)]
 	traj_tuple = np.array(traj_coords)
 	active_dist = np.linalg.norm(traj_tuple - active_tuple)
 	inactive_dist = np.linalg.norm(traj_tuple - inactive_tuple)
@@ -116,7 +148,7 @@ def pnas_distances(traj_dir, inactive_file, active_file):
 
 	pnas_partial = partial(pnas_distance, inactive_file = inactive_file, active_file = active_file)
 
-	trajs = d_trajectory_files(traj_dir, ext = ".pdb")
+	trajs = get_trajectory_files(traj_dir, ext = ".pdb")
 	pool = mp.Pool(mp.cpu_count())
 	distances = pool.map(pnas_partial, trajs)
 	pool.terminate()
@@ -137,11 +169,11 @@ def pnas_distances(traj_dir, inactive_file, active_file):
 
 
 
-def plot_hex(transformed_data_file, figure_directory, colors = None):
+def plot_hex(transformed_data_file, figure_directory, colors = None, scale = 1.0):
 	transformed_data = verboseload(transformed_data_file)
 	trajs = np.concatenate(transformed_data)
 	print trajs
-	plt.hexbin(trajs[:,0], trajs[:,1], bins='log', mincnt=1)
+	plt.hexbin(trajs[:,0] * scale, trajs[:,1], bins='log', mincnt=1)
 	pp = PdfPages(figure_directory)
 	pp.savefig()
 	pp.close()
@@ -188,7 +220,7 @@ def plot_tica(transformed_data_dir, lag_time):
 	pp.close()
 
 
-def plot_tica_and_clusters(tica_dir, transformed_data_dir, clusterer_dir, lag_time, component_i = 0, component_j = 1, cluster_ids = False):
+def plot_tica_and_clusters(tica_dir, transformed_data_dir, clusterer_dir, lag_time, component_i, component_j, cluster_ids = []):
 	transformed_data = verboseload(transformed_data_dir)
 	clusterer = verboseload(clusterer_dir)
 
@@ -196,27 +228,43 @@ def plot_tica_and_clusters(tica_dir, transformed_data_dir, clusterer_dir, lag_ti
 	plt.hexbin(trajs[:,component_i], trajs[:,component_j], bins='log', mincnt=1)
 
 	centers = clusterer.cluster_centers_
-	if cluster_ids is False:
-		for i in range(0, np.shape(centers)[0]):
-			center = centers[i,:]
-			plt.annotate('%d' %i, xy=(center[component_i],center[component_j]), xytext=(center[component_i], center[component_j]),size=6)
-	else:
-		for i in cluster_ids:
-			center = centers[i,:]
-			plt.annotate('%d' %i, xy=(center[component_i],center[component_j]), xytext=(center[component_i], center[component_j]),size=6)
+	for i in cluster_ids:
+		center = centers[i,:]
+		plt.annotate('%d' %i, xy=(center[component_i],center[component_j]), xytext=(center[component_i], center[component_j]),size=6)
 
 	pp = PdfPages("%s/c%d_c%d_clusters%d.pdf" %(tica_dir, component_i, component_j, np.shape(centers)[0]))
 	pp.savefig()
 	pp.close()
+	plt.clf()
 
-def plot_all_tics_and_clusters(tica_dir, transformed_data_dir, clusterer_dir, lag_time, cluster_ids = False):
+def plot_all_tics_and_clusters(tica_dir, transformed_data_dir, clusterer_dir, lag_time, cluster_ids = []):
 	transformed_data = verboseload(transformed_data_dir)
 	num_tics = np.shape(transformed_data[0])[1]
 	print "Looking at %d tICS" %num_tics
 	for i in range(0,num_tics):
 		for j in range(i+1,num_tics):
-			plot_tica_and_clusters(tica_dir, transformed_data_dir, clusterer_dir, lag_time, component_i = i, component_j = j, cluster_ids = cluster_ids)
+			plot_tica_and_clusters(tica_dir = tica_dir, transformed_data_dir = transformed_data_dir, clusterer_dir = clusterer_dir, lag_time = lag_time, component_i = i, component_j = j, cluster_ids = cluster_ids)
 	print "Printed all tICA coords and all requested clusters"
+
+def plot_tica_component_i_j(tica_dir, transformed_data_dir, lag_time, component_i = 0, component_j = 1):
+	transformed_data = verboseload(transformed_data_dir)
+
+	trajs = np.concatenate(transformed_data)
+	plt.hexbin(trajs[:,component_i], trajs[:,component_j], bins='log', mincnt=1)
+
+	pp = PdfPages("%s/c%d_c%d.pdf" %(tica_dir, component_i, component_j))
+	pp.savefig()
+	pp.close()
+	plt.clf()
+
+def plot_all_tics(tica_dir, transformed_data_dir, lag_time):
+	transformed_data = verboseload(transformed_data_dir)
+	num_tics = np.shape(transformed_data[0])[1]
+	print "Looking at %d tICS" %num_tics
+	for i in range(0,num_tics):
+		for j in range(i+1,num_tics):
+			plot_tica_and_clusters(tica_dir, transformed_data_dir, lag_time, component_i = i, component_j = j)
+	print "Printed all tICA coords"
 
 #Add way to plot location of specific clusters as well
 def plot_all_tics_samples(tica_coords_csv, save_dir, docking_csv = False, specific_clusters = False):

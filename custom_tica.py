@@ -1,3 +1,11 @@
+import os
+from msmbuilder.decomposition import tICA
+from io_functions import *
+import multiprocessing as mp
+
+def load_features(filename):
+	return np.transpose(verboseload(filename))
+
 def fit_and_transform(features_directory, model_dir, stride=5, lag_time=10, n_components = 5):
 	if not os.path.exists(model_dir):
 		os.makedirs(model_dir)

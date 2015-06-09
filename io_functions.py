@@ -12,6 +12,17 @@ def get_trajectory_files(traj_dir, ext = ".pdb"):
 				traj_files.append("%s/%s" %(traj_dir,traj))
 	return sorted(traj_files)
 
+def get_trajectory_files_conditions(traj_dir, ext, condition_1, condition_2):
+	trajs = get_trajectory_files(traj_dir, ext)
+	traj_1 = [t for t in trajs if condition_1 in t]
+	traj_2 = [t for t in trajs if condition_2 in t]
+	traj_1 = sorted(traj_1)
+	traj_2 = sorted(traj_2)
+	print len(traj_1)
+	print(len(traj_2))
+	print(len(traj_1+traj_2))
+	return(traj_1 + traj_2)
+
 def get_ligands(lig_dir):
 	ligands = get_trajectory_files(lig_dir, ext = ".sdf")
 	ligs = []
@@ -234,7 +245,7 @@ def reverse_sign_csv(csv_file):
 			line_num += 1
 	new_csv.close()
 
-def convert_matrix_to_map(matrix_file, traj_dir, ext, csv_file):
+def convert_matrix_to_map(matrix_file, traj_dir, ext, header, csv_file):
 	trajs = get_trajectory_files(traj_dir, ext = ext)
 	matrix = np.vstack(verboseload(matrix_file))
 	values_map = {}
@@ -244,11 +255,9 @@ def convert_matrix_to_map(matrix_file, traj_dir, ext, csv_file):
 		traj_name = traj_lastname.split(".")[0]
 		values = tuple(matrix[i,:])
 		values_map[traj_name] = values
-	if np.shape(matrix)[1] == 1:
-		write_map_to_csv(csv_file, values_map, ["sample", "pnas_distance"])
-	if np.shape(matrix)[1] == 2:
-		write_map_to_csv(csv_file, values_map, ["sample", "pnas_distance_x", "pnas_distance_y"])
+		write_map_to_csv(csv_file, values_map, header)
 	return values_map
+
 
 def convert_matrix_list_to_list(np_file, csv_file):
 	matrix_list = verboseload(np_file)
@@ -256,6 +265,127 @@ def convert_matrix_list_to_list(np_file, csv_file):
 	np.savetxt(csv_file, all_values, delimiter=",")
 	return all_values	 
 
+def find_missing_features(traj_dir, features_dir):
+	trajs = get_trajectory_files(traj_dir, ".lh5")
+	trajs = [t.split("/")[len(t.split("/"))-1].split(".")[0] for t in trajs]
+	trajs = set(trajs)
+	features = get_trajectory_files(features_dir, ".h5")
+	features = [f.split("/")[len(f.split("/"))-1].split(".")[0] for f in features]
+	features = set(features)
+	print(trajs - features)
+
+def generate_residues_map(csv_map):
+	reader = csv.reader(open(csv_map, "rb"))
+	residues_map = {}
+	for line in reader:
+		residues_map[int(line[0])] = int(line[1])
+	return residues_map
+
+def map_residues(residues_map, residues):
+	new_residues = []
+	for residue in residues:
+		new_residues.append(residues_map[residue])
+	return new_residues 
+
+def map_residues_universal(residues, save):
+	pdb_file = "/home/enf/b2ar_analysis_sherlock_all/exacycle_data/alignment_universal_pdb.txt"
+	lh5_file = "/home/enf/b2ar_analysis_sherlock_all/exacycle_data/alignment_universal_lh5.txt"
+
+	pdb_lines = []
+	lh5_lines = []
+
+	pdb = open(pdb_file, "rb")
+	lh5 = open(lh5_file, "rb")
+	for line in pdb.readlines():
+		if "TER" not in line and "END" not in line:
+			pdb_lines.append(line.split())
+
+	for line in lh5.readlines():
+		if "TER" not in line and "END" not in line:
+			lh5_lines.append(line.split())
+
+	if len(pdb_lines) != len(lh5_lines):
+		print("Alignemnt no goood")
+		sys.exit()
+
+	residues_map = {}
+	new_residues = []
+
+	for i in range(0,len(pdb_lines)):
+		if pdb_lines[i][4] == lh5_lines[i][4]:
+			residues_map[int(pdb_lines[i][5])] = int(lh5_lines[i][5])
+
+	for residue in residues:
+		new_residues.append(residues_map[residue])
+
+	if 281 in residues_map.keys():
+		print("Residue 281 is now Residue %d" %residues_map[281])
+
+	print("residue 272 is now residue %d" %residues_map[272])
+
+	pdb.close()
+	lh5.close()
+
+	if save != False:
+		writer = csv.writer(open(save, "wb"))
+		for key, value in residues_map.items():
+			writer.writerow([key,value])
+
+	return new_residues
+
+def map_residues_condition(residues, condition):
+	if condition == "2rh1":
+		pdb_file = "/home/enf/b2ar_analysis_sherlock_all/exacycle_data/align_2rh1_pdb.txt"
+		lh5_file = "/home/enf/b2ar_analysis_sherlock_all/exacycle_data/align_2rh1_lh5.txt"
+	elif condition == "3p0g":
+		pdb_file = "/home/enf/b2ar_analysis_sherlock_all/exacycle_data/align_3p0g_pdb.txt"
+		lh5_file = "/home/enf/b2ar_analysis_sherlock_all/exacycle_data/align_3p0g_lh5.txt"
+
+	pdb_lines = []
+	lh5_lines = []
+
+	pdb = open(pdb_file, "rb")
+	lh5 = open(lh5_file, "rb")
+	for line in pdb.readlines():
+		if "TER" not in line and "END" not in line:
+			pdb_lines.append(line.split())
+
+	for line in lh5.readlines():
+		if "TER" not in line and "END" not in line:
+			lh5_lines.append(line.split())
+
+	if len(pdb_lines) != len(lh5_lines):
+		print("Alignemnt no goood")
+		sys.exit()
+
+	residues_map = {}
+	new_residues = []
+
+	for i in range(0,len(pdb_lines)):
+		if pdb_lines[i][4] == lh5_lines[i][4]:
+			residues_map[int(pdb_lines[i][5])] = int(lh5_lines[i][5])
+
+	for residue in residues:
+		new_residues.append(residues_map[residue])
+
+	if 281 in residues_map.keys():
+		print("Residue 281 is now Residue %d" %residues_map[281])
+
+	print("residue 272 is now residue %d" %residues_map[272])
+
+	pdb.close()
+	lh5.close()
+
+	if condition == "2rh1":
+		writer = csv.writer(open("/home/enf/b2ar_analysis_sherlock_all/exacycle_data/residues_map_2rh1.csv", "wb"))
+		for key, value in residues_map.items():
+			writer.writerow([key,value])
+	if condition == "3p0g":
+		writer = csv.writer(open("/home/enf/b2ar_analysis_sherlock_all/exacycle_data/residues_map_3p0g.csv", "wb"))
+		for key, value in residues_map.items():
+			writer.writerow([key,value])
+
+	return new_residues
 
 
 

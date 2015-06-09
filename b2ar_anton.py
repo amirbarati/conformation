@@ -29,7 +29,7 @@ import random
 import subprocess
 from subprocess import Popen
 import sys
-from grids import *
+#from grids import *
 from io_functions import *
 from custom_clusterer import *
 from custom_tica import *
@@ -37,7 +37,6 @@ from custom_featurizer import *
 from pdb_editing import *
 from analysis import *
 from io_functions import *
-from grids import *
 from topology_fixing import *
 from subsampling import *
 from conversions import *
@@ -51,19 +50,20 @@ n_components = 5
 n_samples = 10
 #feature_types = "_switches_tm6"
 feature_types = "_switches_npxx_tm6_bp"
+#feature_types = "_switches_npxx_tm6_dihedrals_switches_npxx_contact"
 n_mmgbsa = 50
 #feature_types = ""
 
 switch_residues = [130, 131, 208, 211, 219, 268, 272, 286, 288, 316, 322, 323, 326]
 switch_npxx = [130, 131, 208, 211, 219, 268, 272, 286, 288, 316] + range(322,328)
-tm6_residues = range(269, 299)
+tm6_residues = range(270,299)
 bp_residues = [82, 86, 93, 106, 110, 113, 114, 117, 118, 164, 191, 192, 193, 195, 199, 200, 203, 206, 208, 286, 289, 290, 293, 305, 308, 309, 312, 316]
 dihedral_residues = list(set(switch_npxx + tm6_residues))
 sampling_method = "dist"
 precision = "SP"
 
 sherlock_base = "/scratch/users/enf/b2ar_analysis"
-biox3_base = "/home/enf/b2ar_analysis_sherlock_all"
+biox3_base = "/home/enf/b2ar_analysis_sherlock_all/b2ar_analysis"
 
 if os.path.exists(sherlock_base):
 	print("we are operating on sherlock")
@@ -78,6 +78,7 @@ else:
 traj_dir = "%s/subsampled_allprot_combined_reimaged" %base
 pnas_features_dir = "%s/features_pnas" %base
 
+
 tica_dir = "%s/tICA_t%d_n_components%d%s" %(base, lag_time, n_components, feature_types)
 analysis_dir = "%s/analysis_n_clusters%d" %(tica_dir, n_clusters)
 clusterer_dir = "%s/clusterer_%dclusters.h5" %(tica_dir, n_clusters)
@@ -90,7 +91,8 @@ model_dir = tica_dir
 projected_features_dir = "%s/phi_psi_chi2_allprot_projected.h5" %(tica_dir)
 save_dir = "%s/clusters%d_n_components%d_n_samples%d_%s" %(tica_dir, n_clusters, n_components, n_samples, sampling_method)
 #save_dir = "%s/reorder_test" %tica_dir
-reimaged_dir = "%s/clusters%d_n_components%d_n_samples%d_%s_reimaged" %(tica_dir, n_clusters, n_components, n_samples, sampling_method)
+reimaged_dir = save_dir
+#reimaged_dir = "%s/clusters%d_n_components%d_n_samples%d_%s_reimaged" %(tica_dir, n_clusters, n_components, n_samples, sampling_method)
 combined_reimaged_dir = "%s/combined.h5" %reimaged_dir
 tica_coords_csv = "%s/tica_coords.csv" %analysis_dir
 active_ref_dir = "%s/3P0G_pymol_prepped.pdb" %base
@@ -132,24 +134,36 @@ aggregate_mmgbsa_joined = "%s/aggregate_mmgbsa_joined.csv" %analysis_dir
 aggregate_mmgbsa_pnas_joined = "%s/aggregate_mmgbsa_pnas_joined.csv" %analysis_dir
 mmgbsa_z_scores_csv = "%s/mmgbsa_z_scores.csv" %analysis_dir
 
+ref_receptors_dir = "%s/reference_receptors" %base
+
 subgraph_save_base = "%s/msm%d_graph_n_clusters%d_subgraph" %(analysis_dir, msm_lag_time, n_clusters)
 degree_save_base = "%s/msm%d_graph_n_clusters%d_subgraph" %(analysis_dir, msm_lag_time, n_clusters)
 degree_map_csv = "%s/msm%d_graph_n_clusters%d_degree_map.csv" %(analysis_dir, msm_lag_time, n_clusters)
 degree_z_map_csv = "%s/msm%d_graph_n_clusters%d_degree_z_map.csv" %(analysis_dir, msm_lag_time, n_clusters)
 aggregate_docking_pnas_degree_z_joined = "%s/aggregate_docking_pnas_msm%d_graph_n_clusters%d_degree_z_map.csv" %(analysis_dir, msm_lag_time, n_clusters)
-top_dock = top_n_scoring_clusters(aggregate_docking_joined, score_type = 1, n = 1000)
+#top_dock = top_n_scoring_clusters(aggregate_docking_joined, score_type = 1, n = 1000)
 #print top_dock
 
 graph_file = "%s/msm%d_graph_n_clusters%d.graphml" %(tica_dir, msm_lag_time, n_clusters)
 
-compute_z_core_degrees_group(G = None, graph_file = graph_file, cluster_ids = top_dock, subgraph_save_base = subgraph_save_base, degree_save_base = degree_save_base, degree_map_csv = degree_map_csv, degree_z_map_csv = degree_z_map_csv)
-combine_csv_list([aggregate_docking_pnas_joined, degree_z_map_csv], aggregate_docking_pnas_degree_z_joined)
+#compute_z_core_degrees_group(G = None, graph_file = graph_file, cluster_ids = top_dock, subgraph_save_base = subgraph_save_base, degree_save_base = degree_save_base, degree_map_csv = degree_map_csv, degree_z_map_csv = degree_z_map_csv)
+#combine_csv_list([aggregate_docking_pnas_joined, degree_z_map_csv], aggregate_docking_pnas_degree_z_joined)
 
 pnas_features_dir = analysis_dir
+#pnas_features_dir = "%s/pnas_reference_features" %base
+whole_trajectory_pnas = "%s/all_pnas_features" %(base)
+if not os.path.exists(whole_trajectory_pnas): os.makedirs(whole_trajectory_pnas)
+if not os.path.exists(pnas_features_dir): os.makedirs(pnas_features_dir)
+#whole_trajectory_pnas = pnas_features_dir
 inactive_pnas_distances_dir = "%s/inactive_pnas_distances.h5" %pnas_features_dir
-active_pnas_distances_dir = "%s/active_pnas_distances.h5" %pnas_features_dir
-active_pnas_distances_new_csv = "%s/active_pnas_distances.csv" %pnas_features_dir
-pnas_coords_dir = "%s/pnas_coords.h5" %pnas_features_dir
+active_pnas_distances_dir = "%s/active_pnas_distances.h5" %whole_trajectory_pnas
+active_pnas_all_distances_dir = "%s/active_pnas_all_distances.csv" %whole_trajectory_pnas
+active_pnas_distances_new_csv = "%s/active_pnas_distances_new.csv" %pnas_features_dir
+active_pnas_joined = "%s/active_pnas_joined.csv" %pnas_features_dir
+active_pnas_means = "%s/active_pnas_means.csv" %pnas_features_dir
+pnas_coords_dir = "%s/pnas_coords.h5" %whole_trajectory_pnas
+pnas_coords_csv = "%s/pnas_coords_new.csv" %pnas_features_dir
+pnas_all_coords_csv = "%s/pnas_all_coords.csv" %whole_trajectory_pnas
 pnas_coords_hexbin_dir = "%s/pnas_coords_figure.pdf" %pnas_features_dir
 pnas_coords_co_crystallized_docking_dir = "%s/co_crystallized_docking.pdf" %pnas_features_dir
 pnas_coords_active_colors_dir = "%s/pnas_coords_active_colors_figure.pdf" %pnas_features_dir
@@ -158,8 +172,8 @@ pnas_coords_active_colors_dir = "%s/pnas_coords_active_colors_figure.pdf" %pnas_
 mae_dir = reimaged_dir
 grid_center = "64.4, 16.9, 11.99"
 
-inverse_ligands = get_ligands(inverse_agonist_dir)
-agonist_ligands = get_ligands(agonist_dir)
+#inverse_ligands = get_ligands(inverse_agonist_dir)
+#agonist_ligands = get_ligands(agonist_dir)
 
 #inactive = md.load_frame(inactive_ref_dir, top = inactive_ref_dir, index = 0)
 #active = md.load_frame(active_ref_dir, top = active_ref_dir, index = 0)
@@ -198,27 +212,44 @@ for line in dockfile.readlines():
 	to_dock.append(line)
 print to_dock
 '''
-#featurize_pnas_distance("%s/reference_receptors" %base, "%s/reference_receptors" %base, ".pdb", inactive_ref_dir, active_ref_dir, "%s/reference_receptors/inactive_pnas_distances_ref.h5" %base, "%s/reference_receptors/active_pnas_distances_ref.h5" %base, "%s/reference_receptors/ref_coords.h5" %base, scale = 1.0)
-#convert_matrix_to_map("%s/reference_receptors/ref_coords.h5" %base, "%s/reference_receptors" %base, ".pdb", "%s/reference_receptors/ref_coords.csv" %base)
+if not os.path.exists(analysis_dir): os.makedirs(analysis_dir)
+
+
+
 
 ####Featurize with PNAS distances and coords, 2D####
-#featurize_pnas_distance(traj_dir, pnas_features_dir, inactive_ref_dir, active_ref_dir, inactive_pnas_distances_dir, active_pnas_distances_dir, pnas_coords_dir)
+#featurize_pnas_distance(traj_dir, pnas_features_dir, ".lh5", inactive_ref_dir, active_ref_dir, inactive_pnas_distances_dir, active_pnas_distances_dir, pnas_coords_dir, scale = 7.14)
 ####
-#featurize_pnas_distance(reimaged_dir, features_dir, ".pdb", inactive_ref_dir, active_ref_dir, inactive_pnas_distances_dir, active_pnas_distances_dir, pnas_coords_dir)
+cluster_pnas_distances(clusterer_dir, projected_features_dir, active_pnas_distances_dir, pnas_coords_dir, traj_dir, active_pnas_distances_new_csv, pnas_coords_csv, n_samples, sampling_method)
+#featurize_pnas_distance_pdbs(reimaged_dir, "%s/combined.h5" %reimaged_dir, features_dir, inactive_ref_dir, active_ref_dir, inactive_pnas_distances_dir, active_pnas_distances_dir, pnas_coords_dir, scale = 7.14)
+
+#plot_hex(pnas_coords_dir, pnas_coords_hexbin_dir, colors = None, scale = 7.14)
+#featurize_pnas_distance(traj_dir, pnas_features_dir, ".h5", inactive_ref_dir, active_ref_dir, inactive_pnas_distances_dir, active_pnas_distances_dir, pnas_coords_dir, None, active_pnas_all_distances_dir, pnas_all_coords_csv, scale = 7.14, exacycle = False)
+#featurize_pnas_distance(ref_receptors_dir, pnas_features_dir, ".pdb", inactive_ref_dir, active_ref_dir, inactive_pnas_distances_dir, active_pnas_distances_dir, pnas_coords_dir, None, active_pnas_all_distances_dir, pnas_all_coords_csv, scale = 7.14)
+
+
 #plot_hex(pnas_coords_dir, pnas_coords_hexbin_dir)
 #plot_col(pnas_coords_dir, pnas_coords_active_colors_dir, active_pnas_distances_dir)
 
 #to_dock = ["cluster0_sample1", "cluster0_sample2", "cluster0_sample3"]
 
-#featurize_custom(traj_dir, features_dir = features_dir, dihedral_residues = dihedral_residues, dihedral_types = ["phi", "psi", "chi1", "chi2"], contact_residues = bp_residues)
+#featurize_custom(traj_dir, features_dir = features_dir, traj_ext = ".lh5", dihedral_residues = dihedral_residues, dihedral_types = ["phi", "psi", "chi1", "chi2"], contact_residues = bp_residues)
 #fit_and_transform(features_directory = features_dir, model_dir = tica_dir, stride=5, lag_time = lag_time, n_components = n_components)
+#plot_all_tics(tica_dir, projected_features_dir, lag_time)
 #cluster_minikmeans(tica_dir, projected_features_dir, traj_dir, n_clusters, lag_time)
 #cluster_kmeans(tica_dir, projected_features_dir, traj_dir, n_clusters, lag_time)
-#plot_tica_and_clusters(tica_dir, projected_features_dir, clusterer_dir, lag_time)
+#plot_all_tics_and_clusters(tica_dir, projected_features_dir, clusterer_dir, lag_time, cluster_ids = range(0,1000,10))
+#find_missing_features(traj_dir, features_dir)
 #sample_clusters(clusterer_dir, projected_features_dir, traj_dir, save_dir, n_samples, method = sampling_method)
 #dist_to_means(clusterer_dir, projected_features_dir, n_samples = n_samples, n_components = n_components, tica_coords_csv = tica_coords_csv, kmeans_csv = kmeans_csv)
 #reverse_sign_csv(docking_joined)
-plot_all_tics(tica_dir, projected_features_dir, clusterer_dir, lag_time)
+#plot_all_tics_samples(kmeans_csv, analysis_dir, docking_csv = docking_joined, specific_clusters = [49, 353, 994, 397, 456, 517, 51])
+
+#featurize_pnas_distance("%s/reference_receptors" %base, "%s/reference_receptors" %base, ".pdb", inactive_ref_dir, active_ref_dir, "%s/reference_receptors/inactive_pnas_distances_ref.h5" %base, "%s/reference_receptors/active_pnas_distances_ref.h5" %base, "%s/reference_receptors/ref_coords.h5" %base, scale = 1.0)
+#convert_matrix_to_map("%s/reference_receptors/ref_coords.h5" %base, "%s/reference_receptors" %base, ".pdb", "%s/reference_receptors/ref_coords.csv" %base)
+
+#featurize_pnas_distance(reimaged_dir, features_dir, ".pdb", inactive_ref_dir, active_ref_dir, inactive_pnas_distances_dir, active_pnas_distances_dir, pnas_coords_dir, scale = 7.14)
+#convert_matrix_to_map(active_pnas_distances_dir, reimaged_dir, ".pdb",active_pnas_distances_new_csv)
 
 #pymol_fixpdb(save_dir, pymol_fixpdb_dir)
 #reorder(save_dir)
@@ -244,14 +275,19 @@ plot_all_tics(tica_dir, projected_features_dir, clusterer_dir, lag_time)
 #combine_csv_list([docking_summary, active_pnas_dir], docking_distances_file)
 
 #docking_joined_map = convert_csv_to_joined_map(docking_summary, docking_joined)[0]
-#pnas_joined_map = convert_csv_to_joined_map(active_pnas_dir, active_pnas_joined)[0]
+#pnas_joined_map = convert_csv_to_joined_map(active_pnas_distances_new_csv, active_pnas_joined)[0]
 #inactive_pnas_joined_map = convert_csv_to_joined_map(inactive_pnas_dir, inactive_pnas_joined)[0]
 
 #docking_averages = calc_mean(docking_joined_map)
 #pnas_averages = calc_mean(pnas_joined_map)
 
 #write_map_to_csv(docking_joined, docking_averages, ["cluster", "mean_docking_score"])
-#write_map_to_csv(active_pnas_joined, pnas_averages, ["cluster", "pnas_averages"])
+#write_map_to_csv(active_pnas_means, pnas_averages, ["cluster", "pnas_averages"])
+
+#top_n =  top_n_scoring_samples(active_pnas_means, score_type = "pnas_averages", n = 10, n_samples = 1)
+#print top_n
+#plot_all_tics_and_clusters(tica_dir, projected_features_dir, clusterer_dir, lag_time, cluster_ids = [692, 349, 311, 356, 705, 866, 527, 763, 0, 132, 799, 685, 754])
+
 
 #combine_csv_list([docking_joined, active_pnas_joined], docking_pnas_joined)
 
