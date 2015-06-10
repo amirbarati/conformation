@@ -39,7 +39,7 @@ def find_cos(index, k_mean, features):
 		b = k_mean
 		return (traj, frame, np.dot(a,b) / (np.linalg.norm(a) * np.linalg.norm(b)))
 
-def rmsd_connector(traj, inactive, residues_map):
+def rmsd_connector(traj, inactive, residues_map = None):
 	residues = [121, 282]
 	if residues_map is not None:
 		residues = map_residues(residues_map, residues)
@@ -57,7 +57,7 @@ def rmsd_connector(traj, inactive, residues_map):
 	rmsds = md.rmsd(traj_stripped, inactive_stripped) * 10.0
 	return rmsds
 
-def rmsd_npxxy(traj, inactive, residues_map):
+def rmsd_npxxy(traj, inactive, residues_map = None):
 	residues = range(322,328)
 	if residues_map is not None:
 		residues = map_residues(residues_map, residues)
@@ -75,7 +75,7 @@ def rmsd_npxxy(traj, inactive, residues_map):
 	rmsds = md.rmsd(traj_stripped, inactive_stripped) * 10.0
 	return rmsds
 
-def helix6_helix3_dist(traj, residues_map):
+def helix6_helix3_dist(traj, residues_map = None):
 	residues = [131, 272]
 	if residues_map is not None:
 		residues = map_residues(residues_map, residues)
@@ -263,7 +263,7 @@ def plot_all_tics(tica_dir, transformed_data_dir, lag_time):
 	print "Looking at %d tICS" %num_tics
 	for i in range(0,num_tics):
 		for j in range(i+1,num_tics):
-			plot_tica_and_clusters(tica_dir, transformed_data_dir, lag_time, component_i = i, component_j = j)
+			plot_tica_component_i_j(tica_dir, transformed_data_dir, lag_time, component_i = i, component_j = j)
 	print "Printed all tICA coords"
 
 #Add way to plot location of specific clusters as well

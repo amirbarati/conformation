@@ -3,11 +3,62 @@ import numpy as np
 from analysis import *
 from msmbuilder.utils import verbosedump, verboseload
 import time
-from pdb_editing import *
 from mdtraj.geometry import dihedral as ManualDihedral
-import sys
-from msmbuilder.featurizer import DihedralFeaturizer
 import itertools
+import sys
+
+def fix_topology(topology):
+	
+	new_top = topology.copy()
+
+	residues = {}
+	for chain in new_top.chains:
+		#print chain
+		for residue in chain.residues:
+			resname = str(residue)
+			if resname in residues.keys():
+				residues[resname].append(residue)
+			else:
+				residues[resname] = [residue]
+
+	for resname in residues.keys():
+		fragments = residues[resname]
+		if len(fragments) > 1:
+			main_fragment = fragments[0]
+			new_atom_list = []
+			new_atom_list += main_fragment._atoms
+			for i in range(1,len(fragments)):
+				fragment = fragments[i]
+				for atom in fragment.atoms:
+					atom.residue = main_fragment
+				new_atom_list += fragment._atoms
+				fragment._atoms = []
+				fragment.chain = main_fragment.chain
+			main_fragment._atoms = new_atom_list
+
+	return new_top
+
+def fix_traj(traj):
+	time0 = time.time()
+	new_traj = copy.deepcopy(traj)
+	topology = new_traj.topology 
+
+	new_top = fix_topology(topology)
+	topology = new_top
+	new_traj.topology = new_top 
+
+	new_atom_sequence = [a for a in topology.atoms]
+	new_index_sequence = [a.index for a in topology.atoms]
+	
+	for i in range(0, np.shape(traj.xyz)[0]):
+		new_traj.xyz[i] = new_traj.xyz[i][new_index_sequence]
+
+	for i in range(0, len(new_index_sequence)):
+		new_atom_sequence[i].index = i
+
+	time1 = time.time()
+	print time1 - time0
+	return new_traj
 
 def phi_indices(top, residues = None):
 	residues = copy.deepcopy(residues)
@@ -103,7 +154,7 @@ def psi_indices(top, residues = None):
 		if c != None and ca != None and next_n != None:
 			psi_tuples.append((n.index, c.index, ca.index, next_n.index))
 		else:
-			print "No psis found for %s " %c.residue
+			print "No phs found for %s " %c.name
 
 	#print("psi angles = %d " %len(psi_tuples))
 	return psi_tuples
@@ -126,7 +177,7 @@ def chi1_indices(top, specified_residues = None):
 	chi1_residues = ["Arg", "Asn", "Asp", "Cys", "Gln", "Glu", "His", "Ile", "Leu", "Lys", "Met", "Phe", "Pro", "Ser", "Thr", "Trp", "Tyr", "Val"]
 	chi1_residues = [a.upper() for a in chi1_residues]
 
-	#top = fix_topology(top)
+	top = fix_topology(top)
 	if specified_residues is None:
 		residues = [(res, res.resSeq) for res in top.residues]
 	else:
@@ -166,7 +217,7 @@ def chi2_indices(top, specified_residues = None):
 
 	term_4 = ('CD', 'OD1', 'ND1', 'CD1', 'SD')
 
-	#top = fix_topology(top)
+	top = fix_topology(top)
 	if specified_residues is None:
 		residues = [(res, res.resSeq) for res in top.residues]
 	else:
@@ -184,10 +235,10 @@ def chi2_indices(top, specified_residues = None):
 			if atom.name == 'CB': dihedral[1] = atom.index
 			if atom.name == 'CG' or atom.name == 'CG1': dihedral[2] = atom.index
 			if atom.name in term_4: dihedral[3] = atom.index
-		if (None not in dihedral) and (str(residue.name)[0:3] in chi2_residues):
+		if None not in dihedral:
 			dihedral = tuple(dihedral)
 			chi2_tuples.append(dihedral)
-			#print residue
+			#print residue.resSeq
 		elif dihedral != [None, None, None, None] and str(residue.name)[0:3] in chi2_residues:
 			print "no chi2 found for %s" %str(residue)		
 
@@ -196,35 +247,32 @@ def chi2_indices(top, specified_residues = None):
 
 
 def read_and_featurize_custom(traj_file, features_dir = None, condition=None, dihedral_types = ["phi", "psi", "chi1", "chi2"], dihedral_residues = None, contact_residues = None):
-	#if "clone4.lh5" not in traj_file: return
-	#top = md.load_frame(traj_file,index = 0).topology
+	#if "23" not in traj_file and "24" not in traj_file: return
+	top = md.load_frame(traj_file,index = 0).topology
 	#atom_indices = [a.index for a in top.atoms if a.residue.resSeq != 130]
-	#atom_indices = [a.index for a in top.atoms]
+	atom_indices = [a.index for a in top.atoms]
+	traj = md.load(traj_file, atom_indices=atom_indices)
 	print traj_file
-	try:
-		traj = md.load(traj_file)
-	except:
-		print "Could not load %s" %traj_file
-		sys.exit()
-		return
-	top = traj.topology
+	#print traj
+	#print("loaded trajectory")
+
 	'''
 	a = time.time()
-	featurizer = DihedralFeaturizer(types = ['phi', 'psi', 'chi1', 'chi2'])
+	featurizer = DihedralFeaturizer(types = ['phi', 'psi', 'chi2'])
 	features = featurizer.transform(traj)
 	b = time.time()
 	#print(b-a)
 	print("original features has dim")
 	print(np.shape(features))
-	'''		
+	'''
 	a = time.time()
 	dihedral_indices = []
 
 	for dihedral_type in dihedral_types:
-		if dihedral_type == "phi": dihedral_indices.append(phi_indices(top, dihedral_residues))
-		if dihedral_type == "psi": dihedral_indices.append(psi_indices(top, dihedral_residues))
-		if dihedral_type == "chi1": dihedral_indices.append(chi1_indices(top, dihedral_residues))
-		if dihedral_type == "chi2": dihedral_indices.append(chi2_indices(top, dihedral_residues))
+		if dihedral_type == "phi": dihedral_indices.append(phi_indices(fix_topology(top), dihedral_residues))
+		if dihedral_type == "psi": dihedral_indices.append(psi_indices(fix_topology(top), dihedral_residues))
+		if dihedral_type == "chi1": dihedral_indices.append(chi1_indices(fix_topology(top), dihedral_residues))
+		if dihedral_type == "chi2": dihedral_indices.append(chi2_indices(fix_topology(top), dihedral_residues))
 
 	#print("new features has dim %d" %(2*len(phi_tuples) + 2*len(psi_tuples) + 2*len(chi2_tuples)))
 
@@ -237,17 +285,15 @@ def read_and_featurize_custom(traj_file, features_dir = None, condition=None, di
 		dihedral_angles.append(np.cos(angles))
 
 	manual_features = np.transpose(np.concatenate(dihedral_angles))
-	print("Dihedral features for %s has shape: " %traj_file)
-	print(np.shape(manual_features)) 
 
 	if contact_residues is not None:
-		#fixed_traj = fix_traj(traj)
-		#fixed_top = fixed_traj.topology
+		fixed_traj = fix_traj(traj)
+		fixed_top = fixed_traj.topology
 		distance_residues = []
-		res_objects = [r for r in top.residues]
+		res_objects = [r for r in fixed_top.residues]
 		for r in contact_residues:
 			for res in res_objects:
-				if res.resSeq == r and len(res._atoms) > 0:
+				if res.resSeq == r and len(res._atoms) > 5:
 					#print res._atoms
 					distance_residues.append(res.index)
 		if len(contact_residues) != len(distance_residues):
@@ -270,14 +316,13 @@ def read_and_featurize_custom(traj_file, features_dir = None, condition=None, di
 	print("new features %s has shape: " %traj_file)
 	print(np.shape(manual_features))
 
-	traj_lastname = traj_file.split("/")[len(traj_file.split("/"))-1]
-	traj_noext = traj_lastname.split(".")[0]
-	features_file =  "%s/%s.h5" %(features_dir, traj_noext)
+	if condition is None:
+		condition = get_condition(traj_file)
 
-	verbosedump(manual_features, features_file)
+	verbosedump(manual_features, "%s/%s.h5" %(features_dir, condition))
 
 
-def featurize_custom(traj_dir, features_dir, traj_ext, dihedral_residues = None, dihedral_types = None, contact_residues = None, agonist_bound = False, residues_map = None):
+def featurize_custom(traj_dir, features_dir, traj_ext, dihedral_residues, dihedral_types, contact_residues, residues_map):
 	if not os.path.exists(features_dir): os.makedirs(features_dir)
 
 	all_trajs = get_trajectory_files(traj_dir, traj_ext)
@@ -363,10 +408,6 @@ def compute_pnas_coords_and_distance(traj_file, inactive, active, scale = 7.14, 
 	#print distances[1]
 	return [traj_coords, distances]
 
-def featurize_pnas_distance_traj(traj_dir, ianctive, active, features_dir):
-	#pnas_distances = 
-	return
-
 def convert_np_to_map(data):
 	data_map = {}
 	for i in range(0, len(data)):
@@ -377,6 +418,10 @@ def convert_np_to_map(data):
 			except:
 				data_map["traj%d_frame%d" %(i,j)] = [traj_data[j]]
 	return data_map
+
+def featurize_pnas_distance_traj(traj_dir, ianctive, active, features_dir):
+	#pnas_distances = 
+	return
 
 def featurize_pnas_distance(traj_dir, features_dir, ext, inactive_dir, active_dir, inactive_distances_dir, active_distances_dir, coords_dir, inactive_distances_csv, active_distances_csv, coords_csv, scale = 7.14, residues_map = None):
 	if not os.path.exists(features_dir): os.makedirs(features_dir)
@@ -407,19 +452,18 @@ def featurize_pnas_distance(traj_dir, features_dir, ext, inactive_dir, active_di
 	write_map_to_csv(coords_csv, convert_np_to_map(coords), ["frame", "tm3_tm6_dist", "rmsd_npxxy_inactive", "rmsd_npxxy_active", "rmsd_connector_inactive", "rmsd_connector_active"])
 	write_map_to_csv(active_distances_csv, convert_np_to_map(active_distances), ["frame", "pnas_distance_active"])
 	print("Completed featurizing")
-
 def load_pdb_traj(pdb_file):
 	print pdb_file
 	return md.load_frame(pdb_file, index = 0)
 
-def featurize_pnas_distance_pdbs(traj_dir, new_filename, features_dir, inactive_dir, active_dir, inactive_distances_dir, active_distances_dir, coords_dir, scale = 7.14):
+def featurize_pnas_distance_pdbs(traj_dir, new_filename, features_dir, inactive_dir, active_dir, inactive_distances_dir, active_distances_dir, coords_dir):
 	#if not os.path.exists(features_dir): os.makedirs(features_dir)
 
 	inactive = md.load(inactive_dir)
 	active = md.load(active_dir)
 
 	agonist_bound = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
-	samples = get_trajectory_files(traj_dir, ext = ".pdb")[0:1]
+	samples = get_trajectory_files(traj_dir, ext = ".pdb")
 	pool = mp.Pool(mp.cpu_count())
 	trajs = pool.map(load_pdb_traj, samples)
 	trajs_joined = trajs[0].join(trajs[1:])

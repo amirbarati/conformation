@@ -33,7 +33,7 @@ import sys
 from io_functions import *
 from custom_clusterer import *
 from custom_tica import *
-from custom_featurizer import *
+from custom_featurizer_anton import *
 from pdb_editing import *
 from analysis import *
 from io_functions import *
@@ -41,6 +41,7 @@ from topology_fixing import *
 from subsampling import *
 from conversions import *
 from custom_msm import *
+from grids import *
 
 
 n_clusters = 1000
@@ -49,8 +50,8 @@ msm_lag_time = 10
 n_components = 5
 n_samples = 10
 #feature_types = "_switches_tm6"
-feature_types = "_switches_npxx_tm6_bp"
-#feature_types = "_switches_npxx_tm6_dihedrals_switches_npxx_contact"
+#feature_types = "_switches_npxx_tm6_bp"
+feature_types = "_switches_npxx_tm6_dihedrals_switches_npxx_contact"
 n_mmgbsa = 50
 #feature_types = ""
 
@@ -91,8 +92,8 @@ model_dir = tica_dir
 projected_features_dir = "%s/phi_psi_chi2_allprot_projected.h5" %(tica_dir)
 save_dir = "%s/clusters%d_n_components%d_n_samples%d_%s" %(tica_dir, n_clusters, n_components, n_samples, sampling_method)
 #save_dir = "%s/reorder_test" %tica_dir
-reimaged_dir = save_dir
-#reimaged_dir = "%s/clusters%d_n_components%d_n_samples%d_%s_reimaged" %(tica_dir, n_clusters, n_components, n_samples, sampling_method)
+#reimaged_dir = save_dir
+reimaged_dir = "%s/clusters%d_n_components%d_n_samples%d_%s_reimaged" %(tica_dir, n_clusters, n_components, n_samples, sampling_method)
 combined_reimaged_dir = "%s/combined.h5" %reimaged_dir
 tica_coords_csv = "%s/tica_coords.csv" %analysis_dir
 active_ref_dir = "%s/3P0G_pymol_prepped.pdb" %base
@@ -220,11 +221,10 @@ if not os.path.exists(analysis_dir): os.makedirs(analysis_dir)
 ####Featurize with PNAS distances and coords, 2D####
 #featurize_pnas_distance(traj_dir, pnas_features_dir, ".lh5", inactive_ref_dir, active_ref_dir, inactive_pnas_distances_dir, active_pnas_distances_dir, pnas_coords_dir, scale = 7.14)
 ####
-cluster_pnas_distances(clusterer_dir, projected_features_dir, active_pnas_distances_dir, pnas_coords_dir, traj_dir, active_pnas_distances_new_csv, pnas_coords_csv, n_samples, sampling_method)
 #featurize_pnas_distance_pdbs(reimaged_dir, "%s/combined.h5" %reimaged_dir, features_dir, inactive_ref_dir, active_ref_dir, inactive_pnas_distances_dir, active_pnas_distances_dir, pnas_coords_dir, scale = 7.14)
 
 #plot_hex(pnas_coords_dir, pnas_coords_hexbin_dir, colors = None, scale = 7.14)
-#featurize_pnas_distance(traj_dir, pnas_features_dir, ".h5", inactive_ref_dir, active_ref_dir, inactive_pnas_distances_dir, active_pnas_distances_dir, pnas_coords_dir, None, active_pnas_all_distances_dir, pnas_all_coords_csv, scale = 7.14, exacycle = False)
+#featurize_pnas_distance(traj_dir, pnas_features_dir, ".h5", inactive_ref_dir, active_ref_dir, inactive_pnas_distances_dir, active_pnas_distances_dir, pnas_coords_dir, None, active_pnas_all_distances_dir, pnas_all_coords_csv, scale = 7.14, residues_map = None)
 #featurize_pnas_distance(ref_receptors_dir, pnas_features_dir, ".pdb", inactive_ref_dir, active_ref_dir, inactive_pnas_distances_dir, active_pnas_distances_dir, pnas_coords_dir, None, active_pnas_all_distances_dir, pnas_all_coords_csv, scale = 7.14)
 
 
@@ -233,17 +233,19 @@ cluster_pnas_distances(clusterer_dir, projected_features_dir, active_pnas_distan
 
 #to_dock = ["cluster0_sample1", "cluster0_sample2", "cluster0_sample3"]
 
-#featurize_custom(traj_dir, features_dir = features_dir, traj_ext = ".lh5", dihedral_residues = dihedral_residues, dihedral_types = ["phi", "psi", "chi1", "chi2"], contact_residues = bp_residues)
+#featurize_custom(traj_dir, features_dir = features_dir, traj_ext = ".h5", dihedral_residues = dihedral_residues, dihedral_types = ["phi", "psi", "chi1", "chi2"], contact_residues = switch_npxx, residues_map = None)
 #fit_and_transform(features_directory = features_dir, model_dir = tica_dir, stride=5, lag_time = lag_time, n_components = n_components)
 #plot_all_tics(tica_dir, projected_features_dir, lag_time)
 #cluster_minikmeans(tica_dir, projected_features_dir, traj_dir, n_clusters, lag_time)
 #cluster_kmeans(tica_dir, projected_features_dir, traj_dir, n_clusters, lag_time)
 #plot_all_tics_and_clusters(tica_dir, projected_features_dir, clusterer_dir, lag_time, cluster_ids = range(0,1000,10))
 #find_missing_features(traj_dir, features_dir)
-#sample_clusters(clusterer_dir, projected_features_dir, traj_dir, save_dir, n_samples, method = sampling_method)
+#sample_clusters(clusterer_dir, projected_features_dir, traj_dir, ".h5", save_dir, n_samples, method = sampling_method)
 #dist_to_means(clusterer_dir, projected_features_dir, n_samples = n_samples, n_components = n_components, tica_coords_csv = tica_coords_csv, kmeans_csv = kmeans_csv)
 #reverse_sign_csv(docking_joined)
 #plot_all_tics_samples(kmeans_csv, analysis_dir, docking_csv = docking_joined, specific_clusters = [49, 353, 994, 397, 456, 517, 51])
+#cluster_pnas_distances(clusterer_dir, projected_features_dir, active_pnas_distances_dir, pnas_coords_dir, traj_dir, ".h5", active_pnas_distances_new_csv, pnas_coords_csv, n_samples, sampling_method)
+
 
 #featurize_pnas_distance("%s/reference_receptors" %base, "%s/reference_receptors" %base, ".pdb", inactive_ref_dir, active_ref_dir, "%s/reference_receptors/inactive_pnas_distances_ref.h5" %base, "%s/reference_receptors/active_pnas_distances_ref.h5" %base, "%s/reference_receptors/ref_coords.h5" %base, scale = 1.0)
 #convert_matrix_to_map("%s/reference_receptors/ref_coords.h5" %base, "%s/reference_receptors" %base, ".pdb", "%s/reference_receptors/ref_coords.csv" %base)
@@ -253,9 +255,9 @@ cluster_pnas_distances(clusterer_dir, projected_features_dir, active_pnas_distan
 
 #pymol_fixpdb(save_dir, pymol_fixpdb_dir)
 #reorder(save_dir)
-#reimage_trajs(save_dir, ext = ".pdb")
-#remove_ter(reimaged_dir)
-#reorder(reimaged_dir)
+reimage_trajs(save_dir, ext = ".pdb")
+remove_ter(reimaged_dir)
+reorder(reimaged_dir)
 #pprep(mae_dir)
 #rmsd_pymol(reimaged_dir, inactive_ref_dir, script_dir, inactive_rmsd_dir)
 #rmsd_pymol(reimaged_dir, active_ref_dir, script_dir, active_rmsd_dir)
@@ -268,8 +270,8 @@ cluster_pnas_distances(clusterer_dir, projected_features_dir, active_pnas_distan
 
 
 #plot_all_tics_and_clusters(tica_dir, projected_features_dir, clusterer_dir, lag_time)
-#pprep(mae_dir)
-#generate_grids(mae_dir, grid_center, tica_dir, n_clusters, n_samples, grid_dir)
+pprep(mae_dir)
+generate_grids(mae_dir, grid_center, tica_dir, n_clusters, n_samples, grid_dir, remove_lig = "BIA")
 #dock_conformations(grid_dir = grid_dir, docking_dir = docking_dir, ligand_dir = ligand_dir, chosen_jobs = False, precision = precision)
 #analyze_docking_results(docking_dir, "BI", "SP", docking_summary)
 #combine_csv_list([docking_summary, active_pnas_dir], docking_distances_file)

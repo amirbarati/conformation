@@ -175,7 +175,7 @@ def get_samples(cluster, trajectories, clusters_map, clusterer_dir, features_dir
 
 
 
-def sample_clusters(clusterer_dir, features_dir, traj_dir, save_dir, n_samples, method):
+def sample_clusters(clusterer_dir, features_dir, traj_dir, traj_ext, save_dir, n_samples, method):
 	if method == "cos":	
 		clusters_map = cos_to_means(clusterer_dir, features_dir)
 	else:
@@ -183,7 +183,7 @@ def sample_clusters(clusterer_dir, features_dir, traj_dir, save_dir, n_samples, 
 	clusters = range(0, len(clusters_map.keys()))
 	if not os.path.exists(save_dir): os.makedirs(save_dir)
 	
-	trajectories = get_trajectory_files(traj_dir, ".lh5")
+	trajectories = get_trajectory_files(traj_dir, traj_ext)
 	
 	sampler = partial(get_samples, trajectories = trajectories, clusters_map = clusters_map, clusterer_dir = clusterer_dir, features_dir = features_dir, traj_dir = traj_dir, save_dir = save_dir, n_samples = n_samples, method = method)
 	num_workers = mp.cpu_count()
@@ -214,14 +214,14 @@ def get_pnas(cluster, clusters_map, pnas_active_distances, pnas_coords, n_sample
 			coords.append(pnas_coord)
 		return [distances, coords]
 
-def cluster_pnas_distances(clusterer_dir, features_dir, active_pnas_dir, pnas_coords_dir, traj_dir, active_pnas_csv, pnas_coords_csv, n_samples, method):
+def cluster_pnas_distances(clusterer_dir, features_dir, active_pnas_dir, pnas_coords_dir, traj_dir, traj_ext, active_pnas_csv, pnas_coords_csv, n_samples, method):
 	if method == "cos":	
 		clusters_map = cos_to_means(clusterer_dir, features_dir)
 	else:
 		clusters_map = dist_to_means(clusterer_dir, features_dir)
 	clusters = range(0, len(clusters_map.keys()))
 
-	trajectories = get_trajectory_files(traj_dir, ".lh5")
+	trajectories = get_trajectory_files(traj_dir, traj_ext)
 
 	active_pnas_distances = verboseload(active_pnas_dir)
 	pnas_coords = verboseload(pnas_coords_dir)

@@ -23,14 +23,19 @@ If sim was run under periodic boundary conditions, this will reimage the traject
 
 def reimage_traj(traj_file, traj_dir, save_dir, ext):
 	if ext == ".pdb":
-		traj_pytraj = mdio.load(traj_file, top = traj_file)[:]
-		#traj_pytraj.fixatomorder()
-		traj_pytraj.autoimage()
-
 		file_lastname = traj_file.split("/")[len(traj_file.split("/"))-1]
 		filename = file_lastname.split(".")[0]
 		h5_filename = file_lastname
 		new_h5_file = "%s/%s" %(save_dir, h5_filename)
+		if os.path.exists(new_h5_file):
+			print "already reimaged"
+			return 
+
+		traj_pytraj = mdio.load(traj_file, top = traj_file)[:]
+		#traj_pytraj.fixatomorder()
+		traj_pytraj.autoimage()
+
+		
 		traj_pytraj.save(new_h5_file)
 		print "saving %s" %h5_filename
 
@@ -172,11 +177,12 @@ def prepare_ligands(lig_dir, ext = ".mae"):
 	pool.terminate()
 	print "finished preparing ligands"
 
-def generate_grid_input(mae, grid_center, tica_dir, n_clusters, n_samples, grid_dir):
+def generate_grid_input(mae, grid_center, tica_dir, n_clusters, n_samples, grid_dir, remove_lig = None):
 	mae_name = mae.rsplit( ".", 1)[0]
 	mae_last_name = mae_name.split("/")[len(mae_name.split("/"))-1]
 
 	output_dir = grid_dir
+	
 	new_mae = "%s/%s.mae" %(output_dir, mae_last_name)
 
 	grid_job = "%s/%s.in" %(output_dir, mae_last_name)
@@ -186,9 +192,14 @@ def generate_grid_input(mae, grid_center, tica_dir, n_clusters, n_samples, grid_
 		print "Already created that grid job, skipping"
 		return
 
-	cmd = "$SCHRODINGER/run $SCHRODINGER/mmshare-v29013/python/common/delete_atoms.py -asl \"res.pt BIA \" %s %s" %(mae, new_mae)
-	print cmd
-	subprocess.call(cmd, shell=True)
+	if remove_lig is None:
+		cmd = "cp %s %s" %(mae, new_mae)
+		print cmd
+		subprocess.call(cmd, shell=True)
+	else:
+		cmd = "$SCHRODINGER/run $SCHRODINGER/mmshare-v29013/python/common/delete_atoms.py -asl \"res.pt %s \" %s %s" %(remove_lig, mae, new_mae)
+		print cmd
+		subprocess.call(cmd, shell=True)
 
 	gridfile = open(grid_job, "wb")
 	gridfile.write("GRIDFILE   %s.zip \n" %mae_last_name)
@@ -216,12 +227,12 @@ def generate_grid(grid_file, grid_dir):
 	print "completed grid generation job"
 	return 
 
-def generate_grids(mae_dir, grid_center, tica_dir, n_clusters, n_samples, grid_dir):
+def generate_grids(mae_dir, grid_center, tica_dir, n_clusters, n_samples, grid_dir, remove_lig):
 	if not os.path.exists(grid_dir): os.makedirs(grid_dir)
 
 	maes = get_trajectory_files(mae_dir, ".mae")
 
-	generate_grid_input_partial = partial(generate_grid_input, grid_dir = grid_dir, grid_center = grid_center, tica_dir = tica_dir, n_clusters = n_clusters, n_samples = n_samples)
+	generate_grid_input_partial = partial(generate_grid_input, grid_dir = grid_dir, grid_center = grid_center, tica_dir = tica_dir, n_clusters = n_clusters, n_samples = n_samples, remove_lig = remove_lig)
 	num_workers = mp.cpu_count()
 	pool = mp.Pool(num_workers)
 	pool.map(generate_grid_input_partial, maes)
