@@ -30,6 +30,7 @@ pprep(reimaged_dir, ref = active_ref_dir)					#runs schrodinger protein prep wiz
 generate_grids(mae_dir, grid_center, grids_dir, remove_lig = None)			#generates docking grids for each receptor
 
 inverse_agonist_ligands = get_ligands(ligands_dir)			
+prepare_ligands(ligands_dir, ext = ".sdf")					#invoke Schrodinger LigPrep to prepare ligands for docking
 
 precision = "SP"
 dock_ligands_and_receptors(grids_dir, docking_dir, ligands_dir, precision = precision, ext = "-out.maegz", parallel = "ligand")
