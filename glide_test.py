@@ -30,6 +30,7 @@ generate_grids(mae_dir, grid_center, base, grids_dir)		#generates docking grids 
 
 inverse_agonist_ligands = get_ligands(ligands_dir)			
 
+precision = "SP"
 dock_ligands_and_receptors(grids_dir, docking_dir, ligands_dir, precision = precision, ext = "-out.maegz", parallel = "ligand")
 analyze_docking_results_multiple(docking_dir, precision = "SP", ligands = inverse_agonist_ligands, summary = docking_summary)
 
