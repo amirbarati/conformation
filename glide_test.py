@@ -26,7 +26,7 @@ grid_center = "64.4, 16.9, 11.99"							#note how this is a string, not a python
 
 #reimage_trajs(receptors_dir, ext = ".pdb")	requires PyTraj, do only if you have to reimage your receptors
 pprep(reimaged_dir, ref = active_ref_dir)					#runs schrodinger protein prep wizard, gets aligned and prepped mae file per receptor
-generate_grids(mae_dir, grid_center, base, grids_dir)		#generates docking grids for each receptor
+generate_grids(mae_dir, grid_center, grids_dir, remove_lig = None)			#generates docking grids for each receptor
 
 inverse_agonist_ligands = get_ligands(ligands_dir)			
 
