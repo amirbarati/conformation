@@ -400,7 +400,7 @@ def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "
 			args.append((grid_dir, lig_dir, ligand, precision, chosen_receptors, False))
 		
 		num_workers = mp.cpu_count()
-		pool = mp.pool(num_workers)
+		pool = mp.Pool(num_workers)
 		pool.map(dock_helper, args)
 		pool.terminate()
 
