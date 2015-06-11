@@ -213,7 +213,7 @@ def generate_grid_input(mae, grid_center, grid_dir, remove_lig = None):
 		print "Already created that grid job, skipping"
 		return
 
-	if remove_lig is None:
+	if remove_lig == None:
 		cmd = "cp %s %s" %(mae, new_mae)
 		print cmd
 		subprocess.call(cmd, shell=True)
@@ -400,7 +400,7 @@ def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "
 			args.append((grid_dir, lig_dir, ligand, precision, chosen_receptors, False))
 		
 		num_workers = mp.cpu_count()
-		pool = MyPool(num_workers)
+		pool = mp.pool(num_workers)
 		pool.map(dock_helper, args)
 		pool.terminate()
 
