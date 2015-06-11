@@ -1,5 +1,6 @@
 from grids import *
-from io_functions import *
+from io_functions import get_ligands
+from analysis import analyze_docking_results_multiple
 
 base = "/scratch/users/enf/b2ar_analysis/glide_test_1"
 receptors_dir = "%s/receptors" %base	#where your receptor files in pdb format live
