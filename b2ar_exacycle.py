@@ -64,7 +64,7 @@ sampling_method = "dist"
 precision = "SP"
 
 sherlock_base = "/scratch/users/enf/b2ar_analysis"
-biox3_base = "/home/enf/b2ar_analysis_sherlock_all"
+biox3_base = "/home/enf/b2ar_analysis/"
 
 if os.path.exists(sherlock_base):
 	print("we are operating on sherlock")
@@ -260,10 +260,10 @@ print new_residues
 
 #pymol_fixpdb(save_dir, pymol_fixpdb_dir)
 #reorder(save_dir)
-reimage_trajs(save_dir, ext = ".pdb")
+#reimage_trajs(save_dir, ext = ".pdb")
 #remove_ter(reimaged_dir)
 #reorder(reimaged_dir)
-pprep(mae_dir)
+#pprep(mae_dir, active_ref_dir)
 #rmsd_pymol(reimaged_dir, inactive_ref_dir, script_dir, inactive_rmsd_dir)
 #rmsd_pymol(reimaged_dir, active_ref_dir, script_dir, active_rmsd_dir)
 #analyze_docking_results(docking_dir)
@@ -276,7 +276,7 @@ pprep(mae_dir)
 
 #plot_all_tics_and_clusters(tica_dir, projected_features_dir, clusterer_dir, lag_time)
 #pprep(mae_dir)
-generate_grids(mae_dir, grid_center, tica_dir, n_clusters, n_samples, grid_dir)
+generate_grids(mae_dir, grid_center, n_clusters, n_samples, grid_dir)
 #dock_conformations(grid_dir = grid_dir, docking_dir = docking_dir, ligand_dir = ligand_dir, chosen_jobs = False, precision = precision)
 #analyze_docking_results(docking_dir, "BI", "SP", docking_summary)
 #combine_csv_list([docking_summary, active_pnas_dir], docking_distances_file)

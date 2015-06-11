@@ -14,13 +14,23 @@ import subprocess
 from subprocess import Popen
 import sys
 from io_functions import *
-import pytraj.io as mdio
-from pytraj import adict
+#import pytraj.io as mdio
+#from pytraj import adict
 
 '''
-If sim was run under periodic boundary conditions, this will reimage the trajectory
+If simulation was run under periodic boundary conditions, this will reimage the trajectory.
+It takes as input the trajectory file (traj_file), the directory that that trajectory is in (traj_dir),
+the directory to which you would like to save the new trajectory, and the extension (ext) of the file. 
+
+In the docking pipeline, I do this to all PDB files containing receptors to which I would like to dock. 
+You can skip this step if it already has been reimaged. 
+
+It requires that Pytraj be installed. This can be very annoying to do. It was easy to install on 
+Sherlock but not on Biox3. 
+
 '''
 
+'''
 def reimage_traj(traj_file, traj_dir, save_dir, ext):
 	if ext == ".pdb":
 		file_lastname = traj_file.split("/")[len(traj_file.split("/"))-1]
@@ -72,7 +82,7 @@ def reimage_traj(traj_file, traj_dir, save_dir, ext):
 		os.remove(new_dcd_file)
 		os.remove(new_top_file)
 	return
-
+'''
 
 '''
 If sim was run under periodic boundary conditions, this will reimage all trajectories in directory traj_dir
@@ -100,43 +110,41 @@ def reimage_trajs(traj_dir, ext = ".pdb"):
 
 '''
 The following two functions take as input a directory containing PDB files containing structures to which you would like to dock.
+It will prepare the protein with Schrodinger's tools (add hydrogens, SS bonds (no, not that SS!), bond orders, etc.) and then save
+an .mae file, which is required for docking.
 '''
 
-def pprep_prot(pdb):
+def pprep_prot(pdb, ref):
 	pdb_name = pdb.split("/")[len(pdb.split("/"))-1]
 	new_pdb = pdb_name.rsplit( ".", 1 )[ 0 ]
 	new_pdb = "%s.mae" %(new_pdb)
 	if os.path.exists(new_pdb): 
 		print "already prepped and mae'd protein"
 		return
-	ref = "/scratch/users/enf/b2ar_analysis/3P0G_pymol_prepped.pdb"
-
 	command = "$SCHRODINGER/utilities/prepwizard -WAIT -disulfides -fix -noepik -noimpref -noprotassign -reference_st_file %s -NOLOCAL %s %s" %(ref, pdb_name, new_pdb)
 	print command
 	os.system(command)
 	return
 
-def pprep(pdb_dir):
+def pprep(pdb_dir, ref):
 	pdbs = get_trajectory_files(pdb_dir, ext = ".pdb")
 	os.chdir(pdb_dir)
 	
+	pprep_partial = partial(pprep_prot, ref = ref)
+
 	num_workers = mp.cpu_count()
 	pool = mp.Pool(num_workers)
-	pool.map(pprep_prot, pdbs)
+	pool.map(pprep_partial, pdbs)
 	pool.terminate()
 
-'''
-INPUT_FILE_NAME   ligprep_5.sdf
-OUT_MAE   ligprep_5-out.maegz
-FORCE_FIELD   14
-EPIK   yes
-DETERMINE_CHIRALITIES   no
-IGNORE_CHIRALITIES   no
-NUM_STEREOISOMERS   32
-NUM_RING_CONF   6
-
 
 '''
+The f ollowing two functions take as input the directory contianing the ligands you would like to dock to your receptors, 
+and prepares them with Schrodinger LigPrep, and then saves them in .maegz format, required for the actual docking. 
+You can change the settings listed in "ligfile.write" lines. Perhaps we should add this instead as optional inputs
+in the function definition. 
+'''
+
 
 def prepare_ligand(lig, lig_dir):
 	os.chdir(lig_dir)
@@ -177,7 +185,20 @@ def prepare_ligands(lig_dir, ext = ".mae"):
 	pool.terminate()
 	print "finished preparing ligands"
 
-def generate_grid_input(mae, grid_center, tica_dir, n_clusters, n_samples, grid_dir, remove_lig = None):
+'''
+To dock, Schrodinger has to generate grid files (in .zip format) for each receptor. This needs as input the (x,y,z) coordinates 
+for the center of the grid, and parameters for the size of the box surrounding that point in which Glide will try to dock your ligand(s).
+ALl you need to do is pass to "generate_grids() the following: 
+mae_dir, a directory containing mae files of the receptors to which you will dock 
+grid_center, a *string* containing the x,y,z coords of the center of the grid, e.g: grid_center = "64.4, 16.9, 11.99"
+grid_dir: the directory where you want Schrodinger to save the .zip grid files
+remove_lig: if there is a co-crystallized or docked ligand already in your .mae files, you will need to remove it first. to automatically
+do this, set remove_lig to the 3-letter upper case string residue name denoting that ligand. for B2AR PDB ID: 3P0G, I would pass: remove_lig = "BIA"
+
+"
+'''
+
+def generate_grid_input(mae, grid_center, n_clusters, n_samples, grid_dir, remove_lig = None):
 	mae_name = mae.rsplit( ".", 1)[0]
 	mae_last_name = mae_name.split("/")[len(mae_name.split("/"))-1]
 
@@ -227,12 +248,13 @@ def generate_grid(grid_file, grid_dir):
 	print "completed grid generation job"
 	return 
 
-def generate_grids(mae_dir, grid_center, tica_dir, n_clusters, n_samples, grid_dir, remove_lig):
+def generate_grids(mae_dir, grid_center, n_clusters, n_samples, grid_dir, remove_lig = None):
+	print grid_dir
 	if not os.path.exists(grid_dir): os.makedirs(grid_dir)
 
 	maes = get_trajectory_files(mae_dir, ".mae")
 
-	generate_grid_input_partial = partial(generate_grid_input, grid_dir = grid_dir, grid_center = grid_center, tica_dir = tica_dir, n_clusters = n_clusters, n_samples = n_samples, remove_lig = remove_lig)
+	generate_grid_input_partial = partial(generate_grid_input, grid_dir = grid_dir, grid_center = grid_center, n_clusters = n_clusters, n_samples = n_samples, remove_lig = remove_lig)
 	num_workers = mp.cpu_count()
 	pool = mp.Pool(num_workers)
 	pool.map(generate_grid_input_partial, maes)
@@ -248,6 +270,11 @@ def generate_grids(mae_dir, grid_center, tica_dir, n_clusters, n_samples, grid_d
 	pool.terminate()
 
 	return grid_dir
+
+'''
+the function, dock_conformations() is to dock a single ligand to many conformations. you will probably  be using the function,
+dock_ligands_and_receptors(), however.
+'''
 
 def dock(dock_job):
 	cmd = "$SCHRODINGER/glide %s -OVERWRITE -WAIT" %dock_job
@@ -312,6 +339,23 @@ class NoDaemonProcess(mp.Process):
 
 class MyPool(mp.pool.Pool):
     Process = NoDaemonProcess
+
+'''
+This is the function for docking multiple ligands to multiple receptors. 
+
+grid_dir: the directory where the .zip files for each receptor to whicih you would like to dock is located. 
+docking_dir = the directory to which you would like Glide to save all the results of docking 
+ligands_dir = the directory containing the .maegz files containing the LigPrep prepared ligands for docking 
+precision --> each Glide docking job can be done in SP or XP level of precision. XP is more accurate but takes about 7 times as long as each SP calculations
+	you can change this to precision = "XP" if you would like to try that. Literature shows that it is in fact a little more accurate.
+chosen_ligands --> if, in your ligands_dir directory you only want to dock particular ligands, pass here a list of strings of the ligand names,
+	and it will only dock those ligands. in the example folder provided, for example, if you pass ["procaterol", "ta-2005"], it will only dock
+	those two ligands
+chosen_receptors --> same as chosen_ligands. if you pass ["cluster301_sample0", "cluster451_sample5"] it will only use those two receptors for docking
+parallel --> if you set it to True, it will make everything super-parallel. 
+	there are two levels of parallelization here. one is for ligands, one is for receptors. both use Python multiprocessing pool, so on 
+	most stanford clusters, you can run up to 16 docking calculations at once.    
+'''
 
 def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "SP", ext = "-out.maegz", chosen_ligands = False, chosen_receptors = False, parallel = False):
 	ligands = get_trajectory_files(ligands_dir, ext = ext)
