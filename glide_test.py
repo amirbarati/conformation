@@ -1,3 +1,6 @@
+from grids import *
+from io_functions import *
+
 base = "/scratch/users/enf/b2ar_analysis/glide_test_1"
 receptors_dir = "%s/receptors" %base	#where your receptor files in pdb format live
 ligands_dir = "%s/ligands" %base		#where your ligand files in SDF format live (probably trivial to make it mol2 compatible )
@@ -22,7 +25,7 @@ active_ref_dir = "%s/3P0G_pymol_prepped.pdb" %base			#pdb or mae file containgin
 grid_center = "64.4, 16.9, 11.99"							#note how this is a string, not a python tuple
 
 #reimage_trajs(receptors_dir, ext = ".pdb")	requires PyTraj, do only if you have to reimage your receptors
-pprep(reimaged_dir)											#runs schrodinger protein prep wizard, gets aligned and prepped mae file per receptor
+pprep(reimaged_dir, ref = active_ref_dir)					#runs schrodinger protein prep wizard, gets aligned and prepped mae file per receptor
 generate_grids(mae_dir, grid_center, base, grids_dir)		#generates docking grids for each receptor
 
 inverse_agonist_ligands = get_ligands(ligands_dir)			
