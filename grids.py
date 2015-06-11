@@ -198,7 +198,7 @@ do this, set remove_lig to the 3-letter upper case string residue name denoting 
 "
 '''
 
-def generate_grid_input(mae, grid_center, n_clusters, n_samples, grid_dir, remove_lig = None):
+def generate_grid_input(mae, grid_center, grid_dir, remove_lig = None):
 	mae_name = mae.rsplit( ".", 1)[0]
 	mae_last_name = mae_name.split("/")[len(mae_name.split("/"))-1]
 
@@ -248,13 +248,13 @@ def generate_grid(grid_file, grid_dir):
 	print "completed grid generation job"
 	return 
 
-def generate_grids(mae_dir, grid_center, n_clusters, n_samples, grid_dir, remove_lig = None):
+def generate_grids(mae_dir, grid_center, grid_dir, remove_lig = None):
 	print grid_dir
 	if not os.path.exists(grid_dir): os.makedirs(grid_dir)
 
 	maes = get_trajectory_files(mae_dir, ".mae")
 
-	generate_grid_input_partial = partial(generate_grid_input, grid_dir = grid_dir, grid_center = grid_center, n_clusters = n_clusters, n_samples = n_samples, remove_lig = remove_lig)
+	generate_grid_input_partial = partial(generate_grid_input, grid_dir = grid_dir, grid_center = grid_center, remove_lig = remove_lig)
 	num_workers = mp.cpu_count()
 	pool = mp.Pool(num_workers)
 	pool.map(generate_grid_input_partial, maes)
@@ -283,7 +283,7 @@ def dock(dock_job):
 	return
 
 
-def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP", chosen_jobs = False, num_workers = False):
+def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP", chosen_jobs = False, parallel = False):
 	if not os.path.exists(docking_dir): os.makedirs(docking_dir)
 	os.chdir(docking_dir)
 
@@ -319,10 +319,14 @@ def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP", chos
 
 	print("Written all docking job input files")
 
-	if num_workers is False: num_workers = mp.cpu_count()
-	pool = mp.Pool(num_workers)
-	pool.map(dock, dock_jobs)
-	pool.terminate()
+	if parallel:
+		num_workers = mp.cpu_count()
+		pool = mp.Pool(num_workers)
+		pool.map(dock, dock_jobs)
+		pool.terminate()
+	else:
+		for job in dock_jobs:
+			dock(job)
 
 	print("Done docking.")
 
@@ -352,15 +356,15 @@ chosen_ligands --> if, in your ligands_dir directory you only want to dock parti
 	and it will only dock those ligands. in the example folder provided, for example, if you pass ["procaterol", "ta-2005"], it will only dock
 	those two ligands
 chosen_receptors --> same as chosen_ligands. if you pass ["cluster301_sample0", "cluster451_sample5"] it will only use those two receptors for docking
-parallel --> if you set it to True, it will make everything super-parallel. 
-	there are two levels of parallelization here. one is for ligands, one is for receptors. both use Python multiprocessing pool, so on 
-	most stanford clusters, you can run up to 16 docking calculations at once.    
+parallel --> if you set it to "both" it will run in parallel over both ligands and receptors. I don't recommend this generally. 
+	if you pass "ligand": it will parallelize over all ligands. Recommened if n_liagnds > n_receptors
+	if you pass "receptor": it will parallelize over receptors. Recommedned if n_receptors > n_ligands
 '''
 
 def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "SP", ext = "-out.maegz", chosen_ligands = False, chosen_receptors = False, parallel = False):
 	ligands = get_trajectory_files(ligands_dir, ext = ext)
 
-	if parallel:
+	if parallel == "both":
 		lig_dirs = []
 		docking_dirs = []
 		args = []
@@ -373,15 +377,52 @@ def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "
 			if not os.path.exists(lig_dir): os.makedirs(lig_dir)
 			docking_dirs.append(lig_dir)
 			lig_dirs.append(ligand)
-			args.append((grid_dir, lig_dir, ligand, precision, chosen_receptors, 2))
+			args.append((grid_dir, lig_dir, ligand, precision, chosen_receptors, True))
 		
 		num_workers = 5
 		pool = MyPool(num_workers)
 		pool.map(dock_helper, args)
 		pool.terminate()
 
-	else:
+	elif parallel == "ligand":
+		lig_dirs = []
+		docking_dirs = []
+		args = []
+		for ligand in ligands:
+			lig_last_name = ligand.split("/")[len(ligand.split("/"))-1]
+			lig_no_ext = lig_last_name.split("-out.")[0]
+			if chosen_ligands is not False:
+				if lig_no_ext not in chosen_ligands: continue
+			lig_dir = "%s/%s" %(docking_dir, lig_no_ext)
+			if not os.path.exists(lig_dir): os.makedirs(lig_dir)
+			docking_dirs.append(lig_dir)
+			lig_dirs.append(ligand)
+			args.append((grid_dir, lig_dir, ligand, precision, chosen_receptors, False))
+		
+		num_workers = mp.cpu_count()
+		pool = MyPool(num_workers)
+		pool.map(dock_helper, args)
+		pool.terminate()
 
+	elif parallel == "receptor":
+		lig_dirs = []
+		docking_dirs = []
+		args = []
+		for ligand in ligands:
+			lig_last_name = ligand.split("/")[len(ligand.split("/"))-1]
+			lig_no_ext = lig_last_name.split("-out.")[0]
+			if chosen_ligands is not False:
+				if lig_no_ext not in chosen_ligands: continue
+			lig_dir = "%s/%s" %(docking_dir, lig_no_ext)
+			if not os.path.exists(lig_dir): os.makedirs(lig_dir)
+			docking_dirs.append(lig_dir)
+			lig_dirs.append(ligand)
+			args.append((grid_dir, lig_dir, ligand, precision, chosen_receptors, True))
+		
+		for arg in args:
+			dock_helper(arg)
+
+	else:
 		for ligand in ligands:
 			lig_last_name = ligand.split("/")[len(ligand.split("/"))-1]
 			lig_no_ext = lig_last_name.split("-out.")[0]
@@ -390,6 +431,11 @@ def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "
 			lig_dir = "%s/%s" %(docking_dir, lig_no_ext)
 			if not os.path.exists(lig_dir): os.makedirs(lig_dir)
 			dock_conformations(grid_dir, lig_dir, ligand, precision = precision, chosen_jobs = chosen_receptors)
+
+'''
+
+Identical as above functions for docking, but for MM-GBSA calculations 
+'''
 
 def mmgbsa_individual(job):
 	cmd = "$SCHRODINGER/prime_mmgbsa -WAIT %s" %job

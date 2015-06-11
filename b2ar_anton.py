@@ -64,13 +64,13 @@ sampling_method = "dist"
 precision = "SP"
 
 sherlock_base = "/scratch/users/enf/b2ar_analysis"
-biox3_base = "/home/enf/b2ar_analysis/b2ar_analysis"
+biox3_base = "/home/enf/b2ar_analysis_sherlock_all/b2ar_analysis"
 
 if os.path.exists(sherlock_base):
 	print("we are operating on sherlock")
 	base = sherlock_base
 elif os.path.exists(biox3_base):
-	print("we are operating on biox3 or vsp-compute")
+	print("we are operating on biox3")
 	base = biox3_base
 else:
 	print("WHERE ARE WE?")
@@ -255,9 +255,9 @@ if not os.path.exists(analysis_dir): os.makedirs(analysis_dir)
 
 #pymol_fixpdb(save_dir, pymol_fixpdb_dir)
 #reorder(save_dir)
-#eimage_trajs(save_dir, ext = ".pdb")
-#remove_ter(reimaged_dir)
-#reorder(reimaged_dir)
+reimage_trajs(save_dir, ext = ".pdb")
+remove_ter(reimaged_dir)
+reorder(reimaged_dir)
 #pprep(mae_dir)
 #rmsd_pymol(reimaged_dir, inactive_ref_dir, script_dir, inactive_rmsd_dir)
 #rmsd_pymol(reimaged_dir, active_ref_dir, script_dir, active_rmsd_dir)
