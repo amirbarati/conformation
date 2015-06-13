@@ -195,9 +195,10 @@ def sample_clusters(clusterer_dir, features_dir, traj_dir, traj_ext, save_dir, n
 	#	sampler(cluster)
 	#	print cluster
 
-def get_pnas(cluster, clusters_map, pnas_active_distances, pnas_coords, n_samples):
+def get_pnas(cluster, clusters_map, pnas_active_distances, pnas_coords, tica_coords, n_samples):
 		distances = []
 		coords = []
+		tica_coords_list = []
 		print "cluster = %d" %cluster
 		for s in range(0, n_samples):
 			print "sample  = %d" %s
@@ -210,11 +211,13 @@ def get_pnas(cluster, clusters_map, pnas_active_distances, pnas_coords, n_sample
 			print(np.shape(pnas_active_distances[traj_id]))
 			active_pnas_distance = pnas_active_distances[traj_id][frame]
 			pnas_coord = pnas_coords[traj_id][frame]
+			tica_coord = tica_coords[traj_id][frame]
 			distances.append(active_pnas_distance)
 			coords.append(pnas_coord)
-		return [distances, coords]
+			tica_coords_list.append(tica_coord)
+		return [distances, coords, tica_coords_list]
 
-def cluster_pnas_distances(clusterer_dir, features_dir, active_pnas_dir, pnas_coords_dir, traj_dir, traj_ext, active_pnas_csv, pnas_coords_csv, n_samples, method):
+def cluster_pnas_distances(clusterer_dir, features_dir, active_pnas_dir, pnas_coords_dir, projected_features_dir, traj_dir, traj_ext, active_pnas_csv, pnas_coords_csv, tica_coords_csv, n_samples, method):
 	if method == "cos":	
 		clusters_map = cos_to_means(clusterer_dir, features_dir)
 	else:
@@ -225,8 +228,9 @@ def cluster_pnas_distances(clusterer_dir, features_dir, active_pnas_dir, pnas_co
 
 	active_pnas_distances = verboseload(active_pnas_dir)
 	pnas_coords = verboseload(pnas_coords_dir)
+	tica_coords = verboseload(projected_features_dir)
 
-	sampler = partial(get_pnas, clusters_map = clusters_map, pnas_active_distances = active_pnas_distances, pnas_coords = pnas_coords, n_samples = n_samples)
+	sampler = partial(get_pnas, clusters_map = clusters_map, pnas_active_distances = active_pnas_distances, pnas_coords = pnas_coords, tica_coords = tica_coords, n_samples = n_samples)
 	num_workers = mp.cpu_count()
 	pool = mp.Pool(num_workers)
 	pnas_feature = []
@@ -237,6 +241,7 @@ def cluster_pnas_distances(clusterer_dir, features_dir, active_pnas_dir, pnas_co
 
 	pnas_distance_map = {}
 	pnas_coords_map = {}
+	tica_coords_map = {}
 
 	for i in range(0, len(clusters_map.keys())):
 		try:
@@ -244,15 +249,17 @@ def cluster_pnas_distances(clusterer_dir, features_dir, active_pnas_dir, pnas_co
 			print pnas_distance
 			pnas_coord = pnas_feature[i][1]
 			print pnas_coord
+			tica_coord = pnas_feature[i][2]
 		except:
 			continue
 		for j in range(0, len(pnas_distance)):
 			pnas_distance_map["cluster%d_sample%d" %(i, j)] = [pnas_distance[j]]
 			pnas_coords_map["cluster%d_sample%d" %(i,j)] = pnas_coord[j]
+			tica_coords_map["cluster%d_sample%d" %(i,j)] = tica_coord[j]
 
 	write_map_to_csv(active_pnas_csv, pnas_distance_map, ["sample", "active_pnas_distance"])
 	write_map_to_csv(pnas_coords_csv, pnas_coords_map, ["sample", "tm6_tm3_dist", "npxxy_rmsd_inactive", "npxxy_rmsd_active", "connector_rmsd_inactive", "connector_rmsd_active"])
-
+	write_map_to_csv(tica_coords_csv, tica_coords_map, ["sample", "tIC_0", "tIC_1", "tIC_2", "tIC_3", "tIC_4"])
 
 
 
