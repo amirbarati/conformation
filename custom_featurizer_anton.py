@@ -246,7 +246,7 @@ def chi2_indices(top, specified_residues = None):
 	return chi2_tuples
 
 
-def read_and_featurize_custom(traj_file, features_dir = None, condition=None, dihedral_types = ["phi", "psi", "chi1", "chi2"], dihedral_residues = None, contact_residues = None):
+def read_and_featurize_custom(traj_file, features_dir = None, condition=None, dihedral_types = ["phi", "psi", "chi1", "chi2"], dihedral_residues = None, contact_residues = None, residue_order):
 	#if "23" not in traj_file and "24" not in traj_file: return
 	top = md.load_frame(traj_file,index = 0).topology
 	#atom_indices = [a.index for a in top.atoms if a.residue.resSeq != 130]
@@ -267,6 +267,7 @@ def read_and_featurize_custom(traj_file, features_dir = None, condition=None, di
 	'''
 	a = time.time()
 	dihedral_indices = []
+	residue_order = []
 
 	for dihedral_type in dihedral_types:
 		if dihedral_type == "phi": dihedral_indices.append(phi_indices(fix_topology(top), dihedral_residues))
@@ -338,7 +339,7 @@ def featurize_custom(traj_dir, features_dir, traj_ext, dihedral_residues, dihedr
 		else:
 			trajs.append(fulltraj)
 
-	pool = mp.Pool(mp.cpu_count())
+	pool = mp.Pool(mp.cpu_count()/2)
 
 	if residues_map is not None:
 		dihedral_residues = map_residues(residues_map, dihedral_residues)

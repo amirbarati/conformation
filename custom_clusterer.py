@@ -6,6 +6,7 @@ import multiprocessing as mp
 import mdtraj as md
 from msmbuilder.cluster import KMeans
 from msmbuilder.cluster import MiniBatchKMeans
+from msmbuilder.cluster import KCenters
 
 def cluster(data_dir, traj_dir, n_clusters, lag_time):
 	clusterer_dir = "/scratch/users/enf/b2ar_analysis/clusterer_%d_t%d.h5" %(n_clusters, lag_time)
@@ -39,6 +40,18 @@ def cluster_minikmeans(tica_dir, data_dir, traj_dir, n_clusters, lag_time):
 		reduced_data = verboseload(data_dir)
 		trajs = np.concatenate(reduced_data)
 		clusterer = MiniBatchKMeans(n_clusters = n_clusters)
+		clusterer.fit_transform(reduced_data)
+		verbosedump(clusterer, clusterer_dir)
+
+def cluster_kcenters(tica_dir, data_dir, traj_dir, n_clusters, lag_time):
+	clusterer_dir = "%s/kcenters_clusterer_%dclusters.h5" %(tica_dir, n_clusters)
+	if (os.path.exists(clusterer_dir)):
+		print "Already clustered"
+	else:
+		print "Clustering by KMeans"
+		reduced_data = verboseload(data_dir)
+		trajs = np.concatenate(reduced_data)
+		clusterer = KClusters(n_clusters = n_clusters)
 		clusterer.fit_transform(reduced_data)
 		verbosedump(clusterer, clusterer_dir)	
 
@@ -257,9 +270,14 @@ def cluster_pnas_distances(clusterer_dir, features_dir, active_pnas_dir, pnas_co
 			pnas_coords_map["cluster%d_sample%d" %(i,j)] = pnas_coord[j]
 			tica_coords_map["cluster%d_sample%d" %(i,j)] = tica_coord[j]
 
+	n_components = len(tica_coords_map[tica_coords_map.keys()[0]])
+
 	write_map_to_csv(active_pnas_csv, pnas_distance_map, ["sample", "active_pnas_distance"])
 	write_map_to_csv(pnas_coords_csv, pnas_coords_map, ["sample", "tm6_tm3_dist", "npxxy_rmsd_inactive", "npxxy_rmsd_active", "connector_rmsd_inactive", "connector_rmsd_active"])
-	write_map_to_csv(tica_coords_csv, tica_coords_map, ["sample", "tIC_0", "tIC_1", "tIC_2", "tIC_3", "tIC_4"])
+	tic_names = []
+	for i in range(0, n_components):
+		tic_names.append("tIC_%d" %i)
+	write_map_to_csv(tica_coords_csv, tica_coords_map, ["sample"] + tic_names)
 
 
 

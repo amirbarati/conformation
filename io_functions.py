@@ -23,8 +23,8 @@ def get_trajectory_files_conditions(traj_dir, ext, condition_1, condition_2):
 	print(len(traj_1+traj_2))
 	return(traj_1 + traj_2)
 
-def get_ligands(lig_dir):
-	ligands = get_trajectory_files(lig_dir, ext = ".sdf")
+def get_ligands(lig_dir, ext= ".sdf"):
+	ligands = get_trajectory_files(lig_dir, ext = ext)
 	ligs = []
 	for ligand in ligands:
 		lig_last_name = ligand.split("/")[len(ligand.split("/"))-1]

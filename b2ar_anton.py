@@ -47,24 +47,28 @@ from grids import *
 n_clusters = 1000
 lag_time = 10
 msm_lag_time = 10
-n_components = 5
+n_components = 10
 n_samples = 10
 #feature_types = "_switches_tm6"
 #feature_types = "_switches_npxx_tm6_bp"
-feature_types = "_switches_npxx_tm6_dihedrals_switches_npxx_contact"
+#feature_types = "_switches_npxx_tm6_dihedrals_switches_npxx_contact"
+#feature_types = "_all_protein_contact_map"
+feature_types = "_switches_npxx_tm6_dihedrals_switches_pp_npxx_contact"
 n_mmgbsa = 50
 #feature_types = ""
 
 switch_residues = [130, 131, 208, 211, 219, 268, 272, 286, 288, 316, 322, 323, 326]
 switch_npxx = [130, 131, 208, 211, 219, 268, 272, 286, 288, 316] + range(322,328)
+switch_pp_npxx = set(switch_npxx + [51, 79, 106, 113, 118, 121, 130, 131, 132, 141, 158, 208, 211, 219, 268, 272, 282, 285, 286, 288, 316, 318, 319, 320, 323, 326, 282])
 tm6_residues = range(270,299)
 bp_residues = [82, 86, 93, 106, 110, 113, 114, 117, 118, 164, 191, 192, 193, 195, 199, 200, 203, 206, 208, 286, 289, 290, 293, 305, 308, 309, 312, 316]
 dihedral_residues = list(set(switch_npxx + tm6_residues))
+#all_protein_residues = range(
 sampling_method = "dist"
 precision = "SP"
 
 sherlock_base = "/scratch/users/enf/b2ar_analysis"
-biox3_base = "/home/enf/b2ar_analysis_sherlock_all/b2ar_analysis"
+biox3_base = "/home/enf/b2ar_analysis"
 
 if os.path.exists(sherlock_base):
 	print("we are operating on sherlock")
@@ -233,10 +237,10 @@ if not os.path.exists(analysis_dir): os.makedirs(analysis_dir)
 
 #to_dock = ["cluster0_sample1", "cluster0_sample2", "cluster0_sample3"]
 
-#featurize_custom(traj_dir, features_dir = features_dir, traj_ext = ".h5", dihedral_residues = dihedral_residues, dihedral_types = ["phi", "psi", "chi1", "chi2"], contact_residues = switch_npxx, residues_map = None)
-#fit_and_transform(features_directory = features_dir, model_dir = tica_dir, stride=5, lag_time = lag_time, n_components = n_components)
+#featurize_custom(traj_dir, features_dir = features_dir, traj_ext = ".h5", dihedral_residues = dihedral_residues, dihedral_types = ["phi", "psi", "chi1", "chi2"], contact_residues = switch_pp_npxx , residues_map = None)
+fit_and_transform(features_directory = features_dir, model_dir = tica_dir, stride=5, lag_time = lag_time, n_components = n_components)
 #plot_all_tics(tica_dir, projected_features_dir, lag_time)
-#cluster_minikmeans(tica_dir, projected_features_dir, traj_dir, n_clusters, lag_time)
+cluster_minikmeans(tica_dir, projected_features_dir, traj_dir, n_clusters, lag_time)
 #cluster_kmeans(tica_dir, projected_features_dir, traj_dir, n_clusters, lag_time)
 #plot_all_tics_and_clusters(tica_dir, projected_features_dir, clusterer_dir, lag_time, cluster_ids = range(0,1000,10))
 #find_missing_features(traj_dir, features_dir)
@@ -244,7 +248,7 @@ if not os.path.exists(analysis_dir): os.makedirs(analysis_dir)
 #dist_to_means(clusterer_dir, projected_features_dir, n_samples = n_samples, n_components = n_components, tica_coords_csv = tica_coords_csv, kmeans_csv = kmeans_csv)
 #reverse_sign_csv(docking_joined)
 #plot_all_tics_samples(kmeans_csv, analysis_dir, docking_csv = docking_joined, specific_clusters = [49, 353, 994, 397, 456, 517, 51])
-#cluster_pnas_distances(clusterer_dir, projected_features_dir, active_pnas_distances_dir, pnas_coords_dir, traj_dir, ".h5", active_pnas_distances_new_csv, pnas_coords_csv, n_samples, sampling_method)
+cluster_pnas_distances(clusterer_dir, projected_features_dir, active_pnas_distances_dir, pnas_coords_dir, projected_features_dir, traj_dir, ".h5", active_pnas_distances_new_csv, pnas_coords_csv, tica_coords_csv, n_samples, sampling_method)
 
 
 #featurize_pnas_distance("%s/reference_receptors" %base, "%s/reference_receptors" %base, ".pdb", inactive_ref_dir, active_ref_dir, "%s/reference_receptors/inactive_pnas_distances_ref.h5" %base, "%s/reference_receptors/active_pnas_distances_ref.h5" %base, "%s/reference_receptors/ref_coords.h5" %base, scale = 1.0)
@@ -255,9 +259,9 @@ if not os.path.exists(analysis_dir): os.makedirs(analysis_dir)
 
 #pymol_fixpdb(save_dir, pymol_fixpdb_dir)
 #reorder(save_dir)
-reimage_trajs(save_dir, ext = ".pdb")
-remove_ter(reimaged_dir)
-reorder(reimaged_dir)
+#reimage_trajs(save_dir, ext = ".pdb")
+#remove_ter(reimaged_dir)
+#reorder(reimaged_dir)
 #pprep(mae_dir)
 #rmsd_pymol(reimaged_dir, inactive_ref_dir, script_dir, inactive_rmsd_dir)
 #rmsd_pymol(reimaged_dir, active_ref_dir, script_dir, active_rmsd_dir)
@@ -270,8 +274,8 @@ reorder(reimaged_dir)
 
 
 #plot_all_tics_and_clusters(tica_dir, projected_features_dir, clusterer_dir, lag_time)
-pprep(mae_dir)
-generate_grids(mae_dir, grid_center, tica_dir, n_clusters, n_samples, grid_dir, remove_lig = "BIA")
+#pprep(mae_dir)
+#generate_grids(mae_dir, grid_center, tica_dir, n_clusters, n_samples, grid_dir, remove_lig = "BIA")
 #dock_conformations(grid_dir = grid_dir, docking_dir = docking_dir, ligand_dir = ligand_dir, chosen_jobs = False, precision = precision)
 #analyze_docking_results(docking_dir, "BI", "SP", docking_summary)
 #combine_csv_list([docking_summary, active_pnas_dir], docking_distances_file)
