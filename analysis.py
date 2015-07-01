@@ -475,6 +475,7 @@ def analyze_docking_results_multiple(docking_dir, precision, ligands, summary):
 		docking_summary = "%s/docking_summary.csv" %subdir
 		arg_tuples.append([subdir, lig_name, precision, docking_summary])
 
+	print lig_names
 	pool = mp.Pool(mp.cpu_count())
 	results_list = pool.map(analyze_docking_results_wrapper, arg_tuples)
 	pool.terminate()

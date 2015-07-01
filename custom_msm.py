@@ -13,10 +13,10 @@ def plot_timescales(clusterer_dir, n_clusters, tica_dir):
 	clusterer = verboseload(clusterer_dir)
 	print clusterer
 	sequences = clusterer.labels_
-	print(sequences)
+	#print(sequences)
 	#lag_times = list(np.arange(1,150,5))
-	lag_times = [1, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52]
-	n_timescales = 9
+	lag_times = [1, 4, 8, 12, 16]
+	n_timescales = 10
 
 	msm_timescales = implied_timescales(sequences, lag_times, n_timescales=n_timescales, msm=MarkovStateModel(verbose=True))
 	print msm_timescales
@@ -71,9 +71,13 @@ def construct_graph(msm_modeler_dir, clusterer_dir, n_clusters, tica_lag_time, m
 	clusterer = verboseload(clusterer_dir)
 	n_clusters = np.shape(clusterer.cluster_centers_)[0]
 	labels = clusterer.labels_
-	msm_modeler = MarkovStateModel(lag_time=10, n_timescales = 5, sliding_window = True, verbose = True, ergodic_cutoff = 'off')
-	print("fitting msm to trajectories with %d clusters and lag_time %d" %(n_clusters, msm_lag_time))
-	msm_modeler.fit_transform(labels)
+	if not os.path.exists(msm_modeler_dir):
+		msm_modeler = MarkovStateModel(lag_time=10, n_timescales = 5, sliding_window = True, verbose = True)
+		print("fitting msm to trajectories with %d clusters and lag_time %d" %(n_clusters, msm_lag_time))
+		msm_modeler.fit_transform(labels)
+		verbosedump(msm_modeler, msm_modeler_dir)
+	else:
+		msm_modeler = verboseload(msm_modeler_dir)
 	graph = nx.DiGraph()
 	mapping = msm_modeler.mapping_
 	inv_mapping = {v: k for k, v in mapping.items()}

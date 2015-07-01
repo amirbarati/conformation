@@ -248,6 +248,16 @@ def generate_grid(grid_file, grid_dir):
 	print "completed grid generation job"
 	return 
 
+def unzip(zip_file):
+	output_folder = "/".join(zip_file.split("/")[0:len(zip_file.split("/"))-1])
+	os.chdir(output_folder)
+	zip_file_last_name = zip_file.split("/")[len(zip_file.split("/"))-1].split(".")[0]
+	if os.path.exists("%s/%s.grd" %(output_folder, zip_file_last_name)): return
+
+	cmd = "unzip %s" %zip_file
+	subprocess.call(cmd, shell = True)
+	return
+
 def generate_grids(mae_dir, grid_center, grid_dir, remove_lig = None):
 	print grid_dir
 	if not os.path.exists(grid_dir): os.makedirs(grid_dir)
@@ -269,6 +279,11 @@ def generate_grids(mae_dir, grid_center, grid_dir, remove_lig = None):
 	pool.map(grid_partial, grid_files)
 	pool.terminate()
 
+	zips = get_trajectory_files(grid_dir, ".zip")
+	pool = mp.Pool(num_workers)
+	pool.map(unzip, zips)
+	pool.terminate()
+
 	return grid_dir
 
 '''
@@ -287,20 +302,24 @@ def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP", chos
 	if not os.path.exists(docking_dir): os.makedirs(docking_dir)
 	os.chdir(docking_dir)
 
-	grid_files = get_trajectory_files(grid_dir, ".zip")
+	#grid_subdirs = [x[0] for x in os.walk(grid_dir)]
+	#grid_subdirs = grid_subdirs[1:]
+	grid_files = get_trajectory_files(grid_dir, ".grd")
 	dock_jobs = []
-	for grid_file in grid_files: 
+	for grid_file in grid_files:
 		grid_filename = grid_file.split("/")[len(grid_file.split("/"))-1]
-		grid_file_no_ext = grid_filename.rsplit(".", 1)[0]
+		grid_file_no_ext = grid_filename.split(".")[0]
+
 		if chosen_jobs is not False:
 			if grid_file_no_ext not in chosen_jobs:
-				print "%s not in chosen jobs " %grid_file_no_ext
+				#print "%s not in chosen jobs " %grid_file_no_ext
 				continue
+		#print grid_file_no_ext
 		maegz_name = "%s/%s_pv.maegz" %(docking_dir, grid_file_no_ext)
 		log_name = "%s/%s.log" %(docking_dir, grid_file_no_ext)
 		log_size = 0
 		if os.path.exists(log_name): log_size = os.stat(log_name).st_size
-		if os.path.exists(maegz_name) and log_size > 3000:
+		if os.path.exists(maegz_name):# and log_size > 3000:
 			print "already docked %s" %grid_file_no_ext
 			continue
 		dock_job_name = "%s/%s.in" %(docking_dir, grid_file_no_ext)
@@ -318,6 +337,7 @@ def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP", chos
 		dock_job_input.close()
 
 	print("Written all docking job input files")
+	#print dock_jobs
 
 	if parallel:
 		num_workers = mp.cpu_count()
@@ -329,6 +349,42 @@ def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP", chos
 			dock(job)
 
 	print("Done docking.")
+
+def failed(log_file):
+	log = open(log_file, "rb")
+	conformation = log_file.rsplit(".", 1)[0]
+	conformation = conformation.split("/")[len(conformation.split("/"))-1 ]
+	score = 0.0
+	xp_score = None
+	lines = log.readlines()
+	for line in lines:
+		line = line.split()
+		if len(line) >= 3:
+			if (line[0] == "Best" and line[1] == "XP" and line[2] == "pose:"):
+				xp_score = float(line[6])
+				#print "%f, %f" %(xp_score, score)
+				if xp_score < score: score = xp_score
+			elif  (line[0] == "Best" and line[1] == "Emodel="):
+				xp_score = float(line[8])
+				#print "%f, %f" %(xp_score, score)
+				if xp_score < score: score = xp_score
+	if score == 0: return False 
+	return True
+def failed_docking_jobs(docking_dir, ligand, precision):
+	logs = get_trajectory_files(docking_dir, ext = ".log")
+	failed_jobs = []
+
+	num_workers = mp.cpu_count()
+	pool = mp.Pool(num_workers)
+	job_results = pool.map(failed, logs)
+	pool.terminate()
+
+	for i in range(0,len(logs)):
+		if job_results[i] == False:
+			failed_jobs.append(logs[i])
+
+	failed_jobs = [j.split("/")[len(j.split("/"))-1].split(".")[0] for j in failed_jobs]
+	return failed_jobs
 
 def dock_helper(args):
 	dock_conformations(*args)
