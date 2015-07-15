@@ -220,30 +220,54 @@ def plot_tica(transformed_data_dir, lag_time):
 	pp.close()
 
 
-def plot_tica_and_clusters(tica_dir, transformed_data_dir, clusterer_dir, lag_time, component_i, component_j, cluster_ids = []):
-	transformed_data = verboseload(transformed_data_dir)
-	clusterer = verboseload(clusterer_dir)
+def plot_tica_and_clusters(component_j, transformed_data, clusterer, lag_time, component_i, label = "dot", active_cluster_ids = [], intermediate_cluster_ids = [], inactive_cluster_ids = [], tica_dir = ""):
 
 	trajs = np.concatenate(transformed_data)
 	plt.hexbin(trajs[:,component_i], trajs[:,component_j], bins='log', mincnt=1)
-
+	plt.xlabel("tIC %d" %(component_i + 1))
+	plt.ylabel('tIC %d' %(component_j+1))
 	centers = clusterer.cluster_centers_
-	for i in cluster_ids:
+	indices = [j for j in range(0,len(active_cluster_ids),1)]
+
+	for i in [active_cluster_ids[j] for j in indices]:
 		center = centers[i,:]
-		plt.annotate('%d' %i, xy=(center[component_i],center[component_j]), xytext=(center[component_i], center[component_j]),size=6)
+		if label == "dot":
+			plt.scatter([center[component_i]],[center[component_j]],  marker='v', c='k', s=10)
+		else:
+			plt.annotate('%d' %i, xy=(center[component_i],center[component_j]), xytext=(center[component_i], center[component_j]),size=6)
+	indices = [j for j in range(0,len(intermediate_cluster_ids),5)]
+	for i in [intermediate_cluster_ids[j] for j in indices]:
+		center = centers[i,:]
+		if label == "dot":
+			plt.scatter([center[component_i]],[center[component_j]],  marker='8', c='m', s=10)
+		else:
+			plt.annotate('%d' %i, xy=(center[component_i],center[component_j]), xytext=(center[component_i], center[component_j]),size=6)
+	indices = [j for j in range(0,len(inactive_cluster_ids),5)]
+	for i in [inactive_cluster_ids[j] for j in indices]:
+		center = centers[i,:]
+		if label == "dot":
+			plt.scatter([center[component_i]],[center[component_j]],  marker='s', c='w', s=10)
+		else:
+			plt.annotate('%d' %i, xy=(center[component_i],center[component_j]), xytext=(center[component_i], center[component_j]),size=6)
+
 
 	pp = PdfPages("%s/c%d_c%d_clusters%d.pdf" %(tica_dir, component_i, component_j, np.shape(centers)[0]))
 	pp.savefig()
 	pp.close()
 	plt.clf()
 
-def plot_all_tics_and_clusters(tica_dir, transformed_data_dir, clusterer_dir, lag_time, cluster_ids = []):
+def plot_all_tics_and_clusters(tica_dir, transformed_data_dir, clusterer_dir, lag_time, label = "dot", active_cluster_ids = [], intermediate_cluster_ids = [], inactive_cluster_ids = []):
 	transformed_data = verboseload(transformed_data_dir)
+	clusterer = verboseload(clusterer_dir)
 	num_tics = np.shape(transformed_data[0])[1]
 	print "Looking at %d tICS" %num_tics
-	for i in range(0,num_tics):
-		for j in range(i+1,num_tics):
-			plot_tica_and_clusters(tica_dir = tica_dir, transformed_data_dir = transformed_data_dir, clusterer_dir = clusterer_dir, lag_time = lag_time, component_i = i, component_j = j, cluster_ids = cluster_ids)
+	for i in range(0,1):
+		js = range(i+1, num_tics)
+		plot_partial = partial(plot_tica_and_clusters, tica_dir = tica_dir, transformed_data = transformed_data, clusterer = clusterer, lag_time = lag_time, label = "dot", active_cluster_ids = active_cluster_ids, intermediate_cluster_ids = intermediate_cluster_ids, inactive_cluster_ids = inactive_cluster_ids, component_i = i)
+		pool = mp.Pool(mp.cpu_count())
+		pool.map(plot_partial, js)
+		pool.terminate()
+		#plot_tica_and_clusters(tica_dir = tica_dir, transformed_data = transformed_data, clusterer = clusterer, lag_time = lag_time, label = "dot", active_cluster_ids = active_cluster_ids, intermediate_cluster_ids = intermediate_cluster_ids, inactive_cluster_ids = inactive_cluster_ids, component_i = i, component_j = j)
 	print "Printed all tICA coords and all requested clusters"
 
 def plot_tica_component_i_j(tica_dir, transformed_data_dir, lag_time, component_i = 0, component_j = 1):
@@ -261,7 +285,7 @@ def plot_all_tics(tica_dir, transformed_data_dir, lag_time):
 	transformed_data = verboseload(transformed_data_dir)
 	num_tics = np.shape(transformed_data[0])[1]
 	print "Looking at %d tICS" %num_tics
-	for i in range(0,num_tics):
+	for i in range(0,1):
 		for j in range(i+1,num_tics):
 			plot_tica_component_i_j(tica_dir, transformed_data_dir, lag_time, component_i = i, component_j = j)
 	print "Printed all tICA coords"
@@ -273,7 +297,7 @@ def plot_all_tics_samples(tica_coords_csv, save_dir, docking_csv = False, specif
 	if docking_csv is not False: docking_map = convert_csv_to_map_nocombine(docking_csv)
 
 	num_tics = len(tica_coords_map[tica_coords_map.keys()[0]])
-	for i in range(0, num_tics):
+	for i in range(0, 1):
 		for j in range(i + 1, num_tics):
 			print("plotting tICS %d %d" %(i, j))
 			x = []
@@ -411,41 +435,51 @@ def print_stats_map(merged_results, directory):
 	mapcsv.close()
 	return
 
-def analyze_docking_results(docking_dir, ligand, precision, docking_summary):
-	results_file = docking_summary
-	results = open(results_file, "wb")
-	logs = get_trajectory_files(docking_dir, ext = ".log")
-	scores = {}
+def analyze_log_file(log_file):
+	log = open(log_file, "rb")
+	conformation = log_file.rsplit(".", 1)[0]
+	conformation = conformation.split("/")[len(conformation.split("/"))-1 ]
+	score = 0.0
+	xp_score = None
+	lines = log.readlines()
+	for line in lines:
+		line = line.split()
+		if len(line) >= 3:
+			if (line[0] == "Best" and line[1] == "XP" and line[2] == "pose:"):
+				xp_score = float(line[6])
+				#print "%f, %f" %(xp_score, score)
+				if xp_score < score: score = xp_score
+			elif  (line[0] == "Best" and line[1] == "Emodel="):
+				xp_score = float(line[8])
+				#print "%f, %f" %(xp_score, score)
+				if xp_score < score: score = xp_score
+	score = [-1.0*score]
+	return (conformation, score)
 
-	log_num = 1
-	for log_file in logs:
-		if log_num % 1000 == 0: print log_num
-		log = open(log_file, "rb")
-		conformation = log_file.rsplit(".", 1)[0]
-		conformation = conformation.split("/")[len(conformation.split("/"))-1 ]
-		score = 0.0
-		xp_score = None
-		lines = log.readlines()
-		for line in lines:
-			line = line.split()
-			if len(line) >= 3:
-				if (line[0] == "Best" and line[1] == "XP" and line[2] == "pose:"):
-					xp_score = float(line[6])
-					#print "%f, %f" %(xp_score, score)
-					if xp_score < score: score = xp_score
-				elif  (line[0] == "Best" and line[1] == "Emodel="):
-					xp_score = float(line[8])
-					#print "%f, %f" %(xp_score, score)
-					if xp_score < score: score = xp_score
-		scores[conformation] = [-1.0*score]
-		log_num += 1
+def analyze_docking_results(docking_dir, ligand, precision, docking_summary, redo = False):
+	print("currently analyzing %s" %ligand)
+	if redo is False and os.path.exists(docking_summary):
+		print("Already collected dockking scores for this ligand.")
+		scores_map = convert_csv_to_map_nocombine(docking_summary)
+		return scores_map
+	else:
+		results_file = docking_summary
+		results = open(results_file, "wb")
+		logs = get_trajectory_files(docking_dir, ext = ".log")
+		scores_map = {}
 
-	titles = ["sample", "%s" %("%s_%s_score" %(ligand, precision))]
+		pool = mp.Pool(mp.cpu_count())
+		scores_list = pool.map(analyze_log_file, logs)
+		pool.terminate()
 
-	write_map_to_csv(results_file, scores, titles)
+		scores_map = {score[0] : score[1] for score in scores_list}
 
-	merged_results = merge_samples(scores)
-	return scores 
+		titles = ["sample", "%s" %("%s_%s_score" %(ligand, precision))]
+
+		write_map_to_csv(results_file, scores_map, titles)
+
+		merged_results = merge_samples(scores_map)
+		return scores_map
 
 def analyze_docking_results_wrapper(args):
 	return analyze_docking_results(*args)
@@ -460,25 +494,35 @@ def get_lig_names(docking_dir):
 
 	return lig_names
 
-def analyze_docking_results_multiple(docking_dir, precision, ligands, summary):
-	subdirs = [x[0] for x in os.walk(docking_dir)]
-	subdirs = subdirs[1:len(subdirs)]
+def listdirs(folder):
+    return [
+        d for d in (os.path.join(folder, d1) for d1 in os.listdir(folder))
+        if os.path.isdir(d)
+    ]
+
+def analyze_docking_results_multiple(docking_dir, precision, ligands, summary, redo = False):
+	print("Analyzing docking results")
+	print(docking_dir)
+	print(ligands)
+	subdirs = listdirs(docking_dir)
 	#print subdirs
 	results_list = []
 	lig_names = []
 	arg_tuples = []
 
 	for subdir in subdirs:
+		print(subdir)
 		lig_name = subdir.split("/")[len(subdir.split("/"))-1]
 		if lig_name not in ligands: continue
 		lig_names.append(lig_name)
+		#print lig_name
 		docking_summary = "%s/docking_summary.csv" %subdir
-		arg_tuples.append([subdir, lig_name, precision, docking_summary])
+		arg_tuples.append([subdir, lig_name, precision, docking_summary, redo])
 
 	print lig_names
-	pool = mp.Pool(mp.cpu_count())
-	results_list = pool.map(analyze_docking_results_wrapper, arg_tuples)
-	pool.terminate()
+	results_list = []
+	for arg_tuple in arg_tuples:
+		results_list.append(analyze_docking_results_wrapper(arg_tuple))
 
 	combined_map = combine_maps(results_list)
 	combined_filename = summary

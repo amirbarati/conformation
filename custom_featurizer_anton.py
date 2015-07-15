@@ -246,7 +246,7 @@ def chi2_indices(top, specified_residues = None):
 	return chi2_tuples
 
 
-def read_and_featurize_custom(traj_file, features_dir = None, condition=None, dihedral_types = ["phi", "psi", "chi1", "chi2"], dihedral_residues = None, contact_residues = None, residue_order):
+def read_and_featurize_custom(traj_file, features_dir = None, condition=None, dihedral_types = ["phi", "psi", "chi1", "chi2"], dihedral_residues = None, contact_residues = None):
 	#if "23" not in traj_file and "24" not in traj_file: return
 	top = md.load_frame(traj_file,index = 0).topology
 	#atom_indices = [a.index for a in top.atoms if a.residue.resSeq != 130]
@@ -268,26 +268,26 @@ def read_and_featurize_custom(traj_file, features_dir = None, condition=None, di
 	a = time.time()
 	dihedral_indices = []
 	residue_order = []
+	if len(dihedral_residues) > 0:
+		for dihedral_type in dihedral_types:
+			if dihedral_type == "phi": dihedral_indices.append(phi_indices(fix_topology(top), dihedral_residues))
+			if dihedral_type == "psi": dihedral_indices.append(psi_indices(fix_topology(top), dihedral_residues))
+			if dihedral_type == "chi1": dihedral_indices.append(chi1_indices(fix_topology(top), dihedral_residues))
+			if dihedral_type == "chi2": dihedral_indices.append(chi2_indices(fix_topology(top), dihedral_residues))
 
-	for dihedral_type in dihedral_types:
-		if dihedral_type == "phi": dihedral_indices.append(phi_indices(fix_topology(top), dihedral_residues))
-		if dihedral_type == "psi": dihedral_indices.append(psi_indices(fix_topology(top), dihedral_residues))
-		if dihedral_type == "chi1": dihedral_indices.append(chi1_indices(fix_topology(top), dihedral_residues))
-		if dihedral_type == "chi2": dihedral_indices.append(chi2_indices(fix_topology(top), dihedral_residues))
+		#print("new features has dim %d" %(2*len(phi_tuples) + 2*len(psi_tuples) + 2*len(chi2_tuples)))
 
-	#print("new features has dim %d" %(2*len(phi_tuples) + 2*len(psi_tuples) + 2*len(chi2_tuples)))
+		#print("feauturizing manually:")
+		dihedral_angles = []
 
-	#print("feauturizing manually:")
-	dihedral_angles = []
+		for dihedral_type in dihedral_indices:
+			angles = np.transpose(ManualDihedral.compute_dihedrals(traj=traj,indices=dihedral_type))
+			dihedral_angles.append(np.sin(angles))
+			dihedral_angles.append(np.cos(angles))
 
-	for dihedral_type in dihedral_indices:
-		angles = np.transpose(ManualDihedral.compute_dihedrals(traj=traj,indices=dihedral_type))
-		dihedral_angles.append(np.sin(angles))
-		dihedral_angles.append(np.cos(angles))
+		manual_features = np.transpose(np.concatenate(dihedral_angles))
 
-	manual_features = np.transpose(np.concatenate(dihedral_angles))
-
-	if contact_residues is not None:
+	if len(contact_residues) > 0:
 		fixed_traj = fix_traj(traj)
 		fixed_top = fixed_traj.topology
 		distance_residues = []
@@ -298,11 +298,11 @@ def read_and_featurize_custom(traj_file, features_dir = None, condition=None, di
 					#print res._atoms
 					distance_residues.append(res.index)
 		if len(contact_residues) != len(distance_residues):
-			print "SOMETHING WENT WRONG"
+			print "Residues are missing"
 			print len(contact_residues)
 			print len(distance_residues)
-			sys.exit()
-			return None
+			#sys.exit()
+			#return None
 		
 		combinations = itertools.combinations(distance_residues, 2)
 		pairs = [c for c in combinations]
@@ -310,7 +310,11 @@ def read_and_featurize_custom(traj_file, features_dir = None, condition=None, di
 		contact_features = md.compute_contacts(traj, contacts = pairs, scheme = 'closest-heavy', ignore_nonprotein=False)[0]
 		#print contact_features
 		#print(np.shape(contact_features))
-		manual_features = np.column_stack((manual_features, contact_features))
+		if len(dihedral_residues) > 0: 
+			manual_features = np.column_stack((manual_features, contact_features))
+		else:
+			manual_features = contact_features
+
 
 	b = time.time()
 
@@ -323,6 +327,74 @@ def read_and_featurize_custom(traj_file, features_dir = None, condition=None, di
 	verbosedump(manual_features, "%s/%s.h5" %(features_dir, condition))
 
 
+def read_and_featurize_iter(traj_file, features_dir = None, condition=None, dihedral_types = ["phi", "psi", "chi1", "chi2"], dihedral_residues = None, contact_residues = None):
+
+	a = time.time()
+	dihedral_indices = []
+	residue_order = []
+	if len(dihedral_residues) > 0:
+		for dihedral_type in dihedral_types:
+			if dihedral_type == "phi": dihedral_indices.append(phi_indices(fix_topology(top), dihedral_residues))
+			if dihedral_type == "psi": dihedral_indices.append(psi_indices(fix_topology(top), dihedral_residues))
+			if dihedral_type == "chi1": dihedral_indices.append(chi1_indices(fix_topology(top), dihedral_residues))
+			if dihedral_type == "chi2": dihedral_indices.append(chi2_indices(fix_topology(top), dihedral_residues))
+
+		#print("new features has dim %d" %(2*len(phi_tuples) + 2*len(psi_tuples) + 2*len(chi2_tuples)))
+
+		#print("feauturizing manually:")
+		dihedral_angles = []
+
+		for dihedral_type in dihedral_indices:
+			angles = np.transpose(ManualDihedral.compute_dihedrals(traj=traj,indices=dihedral_type))
+			dihedral_angles.append(np.sin(angles))
+			dihedral_angles.append(np.cos(angles))
+
+		manual_features = np.transpose(np.concatenate(dihedral_angles))
+
+	if len(contact_residues) > 0:
+		contact_features = []
+		for chunk in md.iterload(traj_file, chunk = 10000):
+			
+			fixed_traj = fix_traj(chunk)
+			fixed_top = fixed_traj.topology
+			distance_residues = []
+			res_objects = [r for r in fixed_top.residues]
+			for r in contact_residues:
+				for res in res_objects:
+					if res.resSeq == r and len(res._atoms) > 5:
+						#print res._atoms
+						distance_residues.append(res.index)
+			if len(contact_residues) != len(distance_residues):
+				print "Residues are missing"
+				print len(contact_residues)
+				print len(distance_residues)
+				#sys.exit()
+				#return None
+			
+			combinations = itertools.combinations(distance_residues, 2)
+			pairs = [c for c in combinations]
+			#print pairs
+			
+			contact_features.append(md.compute_contacts(fixed_traj, contacts = pairs, scheme = 'closest-heavy', ignore_nonprotein=False)[0])
+		
+		contact_features = np.concatenate(contact_features)
+
+		if len(dihedral_residues) > 0: 
+			manual_features = np.column_stack((manual_features, contact_features))
+		else:
+			manual_features = contact_features
+
+
+	b = time.time()
+
+	print("new features %s has shape: " %traj_file)
+	print(np.shape(manual_features))
+
+	if condition is None:
+		condition = get_condition(traj_file)
+
+	verbosedump(manual_features, "%s/%s.h5" %(features_dir, condition))
+
 def featurize_custom(traj_dir, features_dir, traj_ext, dihedral_residues, dihedral_types, contact_residues, residues_map):
 	if not os.path.exists(features_dir): os.makedirs(features_dir)
 
@@ -334,12 +406,12 @@ def featurize_custom(traj_dir, features_dir, traj_ext, dihedral_residues, dihedr
 		filename = traj[len(traj)-1]
 		#if agonist_bound is not False and filename[0] not in agonist_bound: continue
 		filename_noext = filename.split(".")[0]
-		if os.path.exists("%s/%s.h5" %(features_dir, filename_noext)):
+		if os.path.exists("%s/%s.h5.h5" %(features_dir, filename_noext)):
 			print("already featurized")	
 		else:
 			trajs.append(fulltraj)
 
-	pool = mp.Pool(mp.cpu_count()/2)
+	pool = mp.Pool(mp.cpu_count()/4)
 
 	if residues_map is not None:
 		dihedral_residues = map_residues(residues_map, dihedral_residues)
@@ -347,9 +419,11 @@ def featurize_custom(traj_dir, features_dir, traj_ext, dihedral_residues, dihedr
 
 	print contact_residues	
 
-	featurize_partial = partial(read_and_featurize_custom, features_dir = features_dir, dihedral_residues = dihedral_residues, dihedral_types = dihedral_types, contact_residues = contact_residues)
-	pool.map(featurize_partial, trajs)
-	pool.terminate()
+	featurize_partial = partial(read_and_featurize_iter, features_dir = features_dir, dihedral_residues = dihedral_residues, dihedral_types = dihedral_types, contact_residues = contact_residues)
+	#pool.map(featurize_partial, trajs)
+	#pool.terminate()
+	for traj in trajs:
+		featurize_partial(traj)
 
 	print("Completed featurizing")
 

@@ -7,6 +7,8 @@ import mdtraj as md
 from msmbuilder.cluster import KMeans
 from msmbuilder.cluster import MiniBatchKMeans
 from msmbuilder.cluster import KCenters
+import random
+import json
 
 def cluster(data_dir, traj_dir, n_clusters, lag_time):
 	clusterer_dir = "/scratch/users/enf/b2ar_analysis/clusterer_%d_t%d.h5" %(n_clusters, lag_time)
@@ -167,32 +169,54 @@ def dist_to_means(clusterer_dir, features_dir, n_samples = False, n_components =
 
 
 def get_samples(cluster, trajectories, clusters_map, clusterer_dir, features_dir, traj_dir, save_dir, n_samples, method):
-		for s in range(0, n_samples):
-			if s == len(clusters_map[cluster]): return
-			sample = clusters_map[cluster][s]
-			traj_id = sample[0]
-			frame = sample[1]
-			traj = trajectories[traj_id]
-			print traj
+	num_configurations = len(clusters_map[cluster])
+	if method == "random":
+		try:
+			indices = random.sample(range(num_configurations), n_samples)
+		except:
+			return(range(0, min(n_samples, num_configurations)))
+		#print indices
+	else:
+		indices = range(0, min(n_samples, num_configurations))
+	
+	for s in range(0, n_samples):
+		if s == len(clusters_map[cluster]): return(indices[0:s])
+		if method != "random":
+			k = s
+		else:
+			k = indices[s]
+		sample = clusters_map[cluster][k]
+		traj_id = sample[0]
+		frame = sample[1]
+		traj = trajectories[traj_id]
+		print("cluster %d sample %d" %(cluster, k))
+		#print traj
 
-			traj_obj = md.load(traj)
-			print traj_obj
-			print frame
+		#traj_obj = md.load(traj)
+		#print traj_obj
+		#print frame
 
-			top = md.load_frame(traj, index=frame).topology
-			indices = [a.index for a in top.atoms if str(a.residue)[0:3] != "SOD" and str(a.residue)[0:3] != "CLA" and a.residue.resSeq < 341]
-			#print indices
+		top = md.load_frame(traj, index=frame).topology
+		atom_indices = [a.index for a in top.atoms if str(a.residue)[0:3] != "SOD" and str(a.residue)[0:3] != "CLA" and a.residue.resSeq < 341]
+		#print indices
 
-			conformation = md.load_frame(traj, index=frame, atom_indices=sorted(indices))
-			conformation.save_pdb("%s/cluster%d_sample%d.pdb" %(save_dir, cluster, s))
+		conformation = md.load_frame(traj, index=frame, atom_indices=sorted(atom_indices))
+		conformation.save_pdb("%s/cluster%d_sample%d.pdb" %(save_dir, cluster, s))
+	
+	print(cluster)
+	#print(indices)
+	#print(len(indices))
+	return indices
 
 
-
-def sample_clusters(clusterer_dir, features_dir, traj_dir, traj_ext, save_dir, n_samples, method):
+def sample_clusters(clusterer_dir, features_dir, traj_dir, traj_ext, save_dir, n_samples, method, clusters_map_file = ""):
 	if method == "cos":	
 		clusters_map = cos_to_means(clusterer_dir, features_dir)
-	else:
+	elif method == "dist":
 		clusters_map = dist_to_means(clusterer_dir, features_dir)
+	elif method == "random":
+		clusters_map = dist_to_means(clusterer_dir, features_dir)
+
 	clusters = range(0, len(clusters_map.keys()))
 	if not os.path.exists(save_dir): os.makedirs(save_dir)
 	
@@ -201,12 +225,29 @@ def sample_clusters(clusterer_dir, features_dir, traj_dir, traj_ext, save_dir, n
 	sampler = partial(get_samples, trajectories = trajectories, clusters_map = clusters_map, clusterer_dir = clusterer_dir, features_dir = features_dir, traj_dir = traj_dir, save_dir = save_dir, n_samples = n_samples, method = method)
 	num_workers = mp.cpu_count()
 	pool = mp.Pool(num_workers)
-	pool.map(sampler, clusters)
+	list_of_indices = pool.map(sampler, clusters)
+	print("Done sampling, now saving clusters map")
+	for i in clusters:
+		print(i)
+		indices = list_of_indices[i]
+		if method == "random":
+			#print(len(indices))
+			#print(indices[0:5])
+			clusters_map[i] = [clusters_map[i][j] for j in indices]
+	if method == "random":
+		with open(clusters_map_file, 'w') as f:
+			json.dump(clusters_map, f)
+
+
 	pool.terminate()
 	#for cluster in clusters:
 	#	if cluster != 118: continue
 	#	sampler(cluster)
 	#	print cluster
+
+
+
+
 
 def get_pnas(cluster, clusters_map, pnas_active_distances, pnas_coords, tica_coords, n_samples):
 		distances = []
@@ -230,11 +271,21 @@ def get_pnas(cluster, clusters_map, pnas_active_distances, pnas_coords, tica_coo
 			tica_coords_list.append(tica_coord)
 		return [distances, coords, tica_coords_list]
 
-def cluster_pnas_distances(clusterer_dir, features_dir, active_pnas_dir, pnas_coords_dir, projected_features_dir, traj_dir, traj_ext, active_pnas_csv, pnas_coords_csv, tica_coords_csv, n_samples, method):
+
+
+def cluster_pnas_distances(clusterer_dir, features_dir, active_pnas_dir, pnas_coords_dir, projected_features_dir, traj_dir, traj_ext, active_pnas_csv, pnas_coords_csv, tica_coords_csv, n_samples, method, clusters_map_file = None):
 	if method == "cos":	
 		clusters_map = cos_to_means(clusterer_dir, features_dir)
-	else:
+	elif method == "random":
+		with open(clusters_map_file) as f:
+			clusters_map = json.load(f)
+			clusters_map = {int(k):v for k,v in clusters_map.items()}
+			print(clusters_map.keys())
+	elif method == "dist":
 		clusters_map = dist_to_means(clusterer_dir, features_dir)
+	else: 
+		print("method not recognized")
+		return
 	clusters = range(0, len(clusters_map.keys()))
 
 	trajectories = get_trajectory_files(traj_dir, traj_ext)
@@ -245,12 +296,12 @@ def cluster_pnas_distances(clusterer_dir, features_dir, active_pnas_dir, pnas_co
 
 	sampler = partial(get_pnas, clusters_map = clusters_map, pnas_active_distances = active_pnas_distances, pnas_coords = pnas_coords, tica_coords = tica_coords, n_samples = n_samples)
 	num_workers = mp.cpu_count()
-	pool = mp.Pool(num_workers)
+	#pool = mp.Pool(num_workers)
 	pnas_feature = []
 	for cluster in clusters: 
 		pnas_feature.append(sampler(cluster))
 	#pnas_feature = pool.map(sampler, clusters)
-	pool.terminate()
+	#pool.terminate()
 
 	pnas_distance_map = {}
 	pnas_coords_map = {}
@@ -278,6 +329,10 @@ def cluster_pnas_distances(clusterer_dir, features_dir, active_pnas_dir, pnas_co
 	for i in range(0, n_components):
 		tic_names.append("tIC_%d" %i)
 	write_map_to_csv(tica_coords_csv, tica_coords_map, ["sample"] + tic_names)
+
+
+
+
 
 
 

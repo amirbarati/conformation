@@ -1,7 +1,42 @@
 library(ggplot2)
 library(reshape2)
 
-pnas_coords_all_csv <- "/Users/evan/scratch_enf/b2ar_analysis/exacycle_data/all_pnas_features/pnas_all_coords.csv"
+get_cluster_average <- function(cluster_name, df) {
+  cluster_rows <- grep(paste(cluster_name, "_", sep=""), rownames(df))
+  cluster_df <- df[cluster_rows,]
+  cluster_averages <- apply(cluster_df, 2, mean)
+  if(cluster_name == "cluster0") {
+    print(cluster_df)
+    print(cluster_averages)
+  }
+  return(cluster_averages)
+}
+
+cluster_averages <- function(df) {
+  nrows <- dim(df)[1]
+  splitrows <- do.call(rbind, strsplit(rownames(df), "_"))
+  cluster.names <- unique(splitrows[,1])
+  df_averages <- as.data.frame(do.call(rbind,lapply(cluster.names, get_cluster_average, df)))
+  rownames(df_averages) <- cluster.names
+  return(df_averages)
+}
+
+
+is_active <- function(row) {
+  if(row["tm6_tm3_dist"] > 12.0 &  row["connector_rmsd_active"] < 1.0 & row["npxxy_rmsd_active"] < .7 & row["connector_rmsd_active"] < row["connector_rmsd_inactive"] & row["npxxy_rmsd_inactive"] > 0.8) {
+    return(TRUE)
+  } else {
+    return(FALSE)
+  }
+}
+
+find_active <- function(df) {
+  active_rows <- apply(df, 1, is_active)
+  return(active_rows)
+}
+
+#pnas_coords_all_csv <- "/Users/evan/scratch_enf/b2ar_analysis/exacycle_data/all_pnas_features/pnas_all_coords.csv"
+pnas_coords_all_csv <- "/Users/evan/Downloads/vsp/b2ar_analysis/exacycle_data/all_pnas_features/pnas_all_coords.csv"
 pnas_coords_all <- data.frame(read.csv(pnas_coords_all_csv, stringsAsFactors = F, row.names=1))
 badrows <- which(pnas_coords_all[,2] > 4.0 | pnas_coords_all[,3] > 4.0 | pnas_coords_all[,4] > 4.0 | pnas_coords_all[,5] > 4.0)
 if(length(badrows) > 0) {
@@ -54,10 +89,12 @@ find_active <- function(df) {
 #pnas_coords_csv <- "/Users/evan/scratch_enf/b2ar_analysis/tICA_t10_n_components5_switches_npxx_tm6_bp/analysis_n_clusters1000/pnas_coords_new.csv"
 #pnas_coords_csv <- "/Users/evan/vsp/b2ar_analysis/exacycle_data/tICA_t10_n_components5_switches_npxx_tm6_dihedrals_switches_pp_npxx_contact/analysis_n_clusters1000/pnas_coords_new.csv"
 #pnas_coords_csv <- "/Users/evan/vsp/b2ar_analysis/exacycle_data/tICA_t20_n_components5_switches_npxx_tm6_bp/analysis_n_clusters1000/pnas_coords_new.csv"
-pnas.coords.csv <- "/Users/evan/vsp/b2ar_analysis/exacycle_data/tICA_t10_n_components10_switches_npxx_tm6_dihedrals_switches_pp_npxx_contact/analysis_n_clusters1000/pnas_coords_new.csv"
-
+#pnas.coords.csv <- "/Users/evan/vsp/b2ar_analysis/exacycle_data/tICA_t10_n_components10_switches_npxx_tm6_dihedrals_switches_pp_npxx_contact/analysis_n_clusters1000/pnas_coords_new.csv"
+pnas_coords_csv <- "/Users/evan/Downloads/vsp/b2ar_analysis/exacycle_data/tICA_t10_n_components10_skip5_switches_pp_npxx_contact/analysis_n_clusters1000/pnas_coords_new.csv"
 
 #tica_coords_csv <- "/Users/evan/vsp/b2ar_analysis/tICA_t10_n_components5_switches_npxx_tm6_dihedrals_switches_pp_npxx_contact/analysis_n_clusters1000/tica_coords.csv"
+tica_coords_csv <- "/Users/evan/Downloads/vsp/b2ar_analysis/exacycle_data/tICA_t10_n_components10_skip5_switches_pp_npxx_contact/analysis_n_clusters1000/tica_coords.csv"
+
 
 pnas_coords <- data.frame(read.csv(pnas_coords_csv, stringsAsFactors = F, row.names=1))[,c(1,2,3,4,5)]
 pnas_coords["tm6_tm3_dist"] <- 7.14 * pnas_coords["tm6_tm3_dist"]
@@ -70,7 +107,8 @@ if(length(badrows) > 0) {
 dim(pnas_coords)
 pnas_coords[1:10,]
 
-docking_csv <- "/Users/evan/vsp/b2ar_analysis/exacycle_data/tICA_t20_n_components5_switches_npxx_tm6_bp/analysis_n_clusters1000/all_docking_combined.csv"
+#docking_csv <- "/Users/evan/vsp/b2ar_analysis/exacycle_data/tICA_t20_n_components5_switches_npxx_tm6_bp/analysis_n_clusters1000/all_docking_combined.csv"
+docking_csv <- "/Users/evan/Downloads/vsp/b2ar_analysis/exacycle_data/tICA_t10_n_components10_skip5_switches_pp_npxx_contact/analysis_n_clusters1000/all_docking_combined.csv"
 docking <- data.frame(read.csv(docking_csv, stringsAsFactors = F, row.names=1))
 docking.means <- apply(docking, 2, mean)
 docking.sds <- apply(docking, 2, sd)
@@ -104,7 +142,7 @@ print(length(all_active_rows)/(length(all_pnas_rows)))
 docking_csv <- "/Users/evan/vsp/b2ar_analysis/exacycle_data/tICA_t20_n_components5_switches_npxx_tm6_bp/analysis_n_clusters1000/aggregate_docking.csv"
 docking.python <- data.frame(read.csv(docking_csv, stringsAsFactors = F, row.names=1))
 
-docking.agonists <- docking.z[,c(1, 3, 4, 5, 7)]
+docking.agonists <- docking.z[,c(1, 3, 4, 5)]
 docking.means <- apply(docking.agonists, 1, mean)
 docking.means.sorted <- docking.means[order(-1.0*docking.means)]
 

@@ -74,11 +74,15 @@ find_active <- function(df) {
 #pnas_coords_csv <- "/Users/evan/vsp/b2ar_analysis/exacycle_data/tICA_t20_n_components5_switches_npxx_tm6_bp/analysis_n_clusters1000/pnas_coords_new.csv"
 #pnas_coords_csv <- "/Users/evan/vsp/b2ar_analysis/exacycle_data/tICA_t10_n_components5_switches_npxx_tm6_dihedrals_switches_pp_npxx_contact/analysis_n_clusters1000/pnas_coords_new.csv"
 #pnas_coords_csv <- "/Users/evan/vsp/b2ar_analysis/exacycle_data/tICA_t10_n_components10_switches_npxx_tm6_dihedrals_switches_pp_npxx_contact/analysis_n_clusters1000/pnas_coords_new.csv"
-pnas_coords_csv <- "/Users/evan/vsp/b2ar_analysis/exacycle_data/tICA_t10act_n_components10_switches_npxx_tm6_dihedrals_switches_pp_npxx_contact/analysis_n_clusters1000/pnas_coords_new.csv"
+#pnas_coords_csv <- "/Users/evan/vsp/b2ar_analysis/exacycle_data/tICA_t10_n_components10_switches_npxx_tm6_dihedrals_switches_pp_npxx_contact/analysis_n_clusters1000/pnas_coords_new.csv"
+pnas_coords_csv <- "/Users/evan/Downloads/vsp/b2ar_analysis/exacycle_data/tICA_t10_n_components10_skip5_switches_pp_npxx_contact/analysis_n_clusters3000/pnas_coords_random_new.csv"
+
 
 
 #tica_coords_csv <- "/Users/evan/vsp/b2ar_analysis/tICA_t10_n_components5_switches_npxx_tm6_dihedrals_switches_pp_npxx_contact/analysis_n_clusters1000/tica_coords.csv"
 #tica_coords_csv <- "/Users/evan/vsp/b2ar_analysis/exacycle_data/tICA_t10_n_components10_switches_npxx_tm6_dihedrals_switches_pp_npxx_contact/analysis_n_clusters1000/tica_coords.csv"
+tica_coords_csv <- "/Users/evan/Downloads/vsp/b2ar_analysis/exacycle_data/tICA_t10_n_components10_skip5_switches_pp_npxx_contact/analysis_n_clusters3000/tica_coords_random.csv"
+
 
 
 pnas_coords <- data.frame(read.csv(pnas_coords_csv, stringsAsFactors = F, row.names=1))[,c(1,2,3,4,5)]

@@ -8,6 +8,7 @@ from matplotlib import pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from io_functions import *
 from analysis import *
+from msmbuilder import lumping
 
 def plot_timescales(clusterer_dir, n_clusters, tica_dir):
 	clusterer = verboseload(clusterer_dir)
@@ -67,7 +68,7 @@ def build_msm(clusterer_dir, lag_time):
 	edges.close()
 	'''
 
-def construct_graph(msm_modeler_dir, clusterer_dir, n_clusters, tica_lag_time, msm_lag_time, graph_file, inactive = None, active = None, docking=None):
+def construct_graph(msm_modeler_dir, clusterer_dir, n_clusters, tica_lag_time, msm_lag_time, graph_file, inactive = None, active = None, docking=None, macrostate = None):
 	clusterer = verboseload(clusterer_dir)
 	n_clusters = np.shape(clusterer.cluster_centers_)[0]
 	labels = clusterer.labels_
@@ -118,6 +119,13 @@ def construct_graph(msm_modeler_dir, clusterer_dir, n_clusters, tica_lag_time, m
 				score = scores[cluster][0]
 				graph.node[cluster_id]["docking"] = score
 
+	if macrostate is not None:
+		macromodel = verboseload(macrostate)
+		for cluster_id in range(0, n_clusters):
+			if cluster_id in graph.nodes():
+				microstate_cluster_id = mapping[cluster_id]
+				macrostate_cluster_id = macromodel.microstate_mapping_[microstate_cluster_id]
+				graph.node[cluster_id]["macrostate"] = int(macrostate_cluster_id)
 
 	nx.write_graphml(graph, graph_file)
 
@@ -203,4 +211,24 @@ def compute_z_core_degrees_group(G = None, graph_file = None, cluster_ids = None
 	write_map_to_csv(degree_z_map_csv, degree_z_map, ["cluster", "z_degree"])
 
 
+def macrostate_pcca(msm_file, clusterer_file, n_macrostates, macrostate_dir):
+	if not os.path.exists(macrostate_dir):
+		msm = verboseload(msm_file)
+		clusterer = verboseload(clusterer_file)
+
+		pcca = lumping.PCCAPlus.from_msm(msm,10)
+
+		#pcca_object = lumping.PCCA(n_macrostates = 10)
+		#pcca_object.fit(sequences = clusterer.labels_)
+		#pcca_object.transform(sequences = clusterer.labels_)
+		#macrostate_model = pcca_object.from_msm(msm = msm, n_macrostates = n_macrostates)
+		print(pcca)
+		verbosedump(pcca, macrostate_dir)
+	else:
+		macrostate = verboseload(macrostate_dir)
+		print(dir(macrostate))
+
+
+def macrostate_bace(msm_file, n_macrosates):
+	return
 

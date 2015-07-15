@@ -4,6 +4,7 @@ import copy
 import csv
 from msmbuilder.utils import verbosedump, verboseload
 import numpy as np
+import mdtraj as md
 
 def get_trajectory_files(traj_dir, ext = ".pdb"):
 	traj_files = []
@@ -284,8 +285,42 @@ def generate_residues_map(csv_map):
 def map_residues(residues_map, residues):
 	new_residues = []
 	for residue in residues:
-		new_residues.append(residues_map[residue])
+		try:
+			new_residues.append(residues_map[residue])
+		except:
+			print("residue %d not in receptor" %residue)
 	return new_residues 
+
+def test_residues_map(traj_file_1, traj_file_2, residues, residues_map):
+	traj_1 = md.load_frame(traj_file_1, index = 0)
+	traj_2 = md.load_frame(traj_file_2, index = 0)
+	top1 = traj_1.topology
+	top2 = traj_2.topology
+	for residue in residues:
+		new_residue = residues_map[residue]
+		print("Original residues:")
+		residues = [r for r in top1.residues if r.resSeq == residue and r.is_protein]
+		print(residues[0])
+		print("New residues:")
+		residues = [r for r in top2.residues if r.resSeq == new_residue and r.is_protein]
+		print(residues[0])
+	return
+
+def test_residues_map_num_atoms(traj_file_1, traj_file_2, residues, residues_map):
+	traj_1 = md.load_frame(traj_file_1, index = 0)
+	traj_2 = md.load_frame(traj_file_2, index = 0)
+	top1 = traj_1.topology
+	top2 = traj_2.topology
+	for residue in residues:
+		new_residue = residues_map[residue]
+		atoms = [a.index for a in top1.atoms if a.residue.resSeq == residue and a.residue.is_protein]
+		len1 = len(atoms)
+		atoms = [a.index for a in top2.atoms if a.residue.resSeq == new_residue and a.residue.is_protein]
+		len2 = len(atoms)
+		if (len1 != len2) or (len1 == len2):
+			print("Atom number %d %d doesn't match for residue %d" %(len1, len2, residue))
+	return
+
 
 def map_residues_universal(residues, save):
 	pdb_file = "/home/enf/b2ar_analysis_sherlock_all/exacycle_data/alignment_universal_pdb.txt"

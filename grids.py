@@ -14,7 +14,7 @@ import subprocess
 from subprocess import Popen
 import sys
 from io_functions import *
-#import pytraj.io as mdio
+import pytraj.io as mdio
 #from pytraj import adict
 
 '''
@@ -30,7 +30,7 @@ Sherlock but not on Biox3.
 
 '''
 
-'''
+
 def reimage_traj(traj_file, traj_dir, save_dir, ext):
 	if ext == ".pdb":
 		file_lastname = traj_file.split("/")[len(traj_file.split("/"))-1]
@@ -82,7 +82,7 @@ def reimage_traj(traj_file, traj_dir, save_dir, ext):
 		os.remove(new_dcd_file)
 		os.remove(new_top_file)
 	return
-'''
+
 
 '''
 If sim was run under periodic boundary conditions, this will reimage all trajectories in directory traj_dir
@@ -114,10 +114,10 @@ It will prepare the protein with Schrodinger's tools (add hydrogens, SS bonds (n
 an .mae file, which is required for docking.
 '''
 
-def pprep_prot(pdb, ref):
+def pprep_prot(pdb, ref, extension = extension):
 	pdb_name = pdb.split("/")[len(pdb.split("/"))-1]
 	new_pdb = pdb_name.rsplit( ".", 1 )[ 0 ]
-	new_pdb = "%s.mae" %(new_pdb)
+	new_pdb = "%s%s" %(new_pdb, extension)
 	if os.path.exists(new_pdb): 
 		print "already prepped and mae'd protein"
 		return
@@ -126,11 +126,25 @@ def pprep_prot(pdb, ref):
 	os.system(command)
 	return
 
-def pprep(pdb_dir, ref):
+def remove_path_and_extension(directory):
+	filename = directory.split("/")[len(directory.split("/"))-1]
+	filename_no_ext = filename.split(".")[0]
+	filename_no_pv = filename_no_ext.split("_pv")[0]
+	return(filename_no_pv)
+
+def pprep(pdb_dir, ref, indices = None, chosen_receptors = None, extension = ".mae"):
 	pdbs = get_trajectory_files(pdb_dir, ext = ".pdb")
+	print(len(chosen_receptors))
+	print(len(pdbs))
+	if indices is not None:
+		pdbs = pdbs[indices[0] : indices[1]]
+	elif chosen_receptors is not None:
+		print(remove_path_and_extension(pdbs[0]))
+		pdbs = [pdb for pdb in pdbs if remove_path_and_extension(pdb) in chosen_receptors]
+	print(len(pdbs))
 	os.chdir(pdb_dir)
 	
-	pprep_partial = partial(pprep_prot, ref = ref)
+	pprep_partial = partial(pprep_prot, ref = ref, extension = extension)
 
 	num_workers = mp.cpu_count()
 	pool = mp.Pool(num_workers)
@@ -214,9 +228,10 @@ def generate_grid_input(mae, grid_center, grid_dir, remove_lig = None):
 		return
 
 	if remove_lig == None:
-		cmd = "cp %s %s" %(mae, new_mae)
-		print cmd
-		subprocess.call(cmd, shell=True)
+		if not os.path.exists(new_mae):
+			cmd = "cp %s %s" %(mae, new_mae)
+			print cmd
+			subprocess.call(cmd, shell=True)
 	else:
 		cmd = "$SCHRODINGER/run $SCHRODINGER/mmshare-v29013/python/common/delete_atoms.py -asl \"res.pt %s \" %s %s" %(remove_lig, mae, new_mae)
 		print cmd
@@ -252,17 +267,21 @@ def unzip(zip_file):
 	output_folder = "/".join(zip_file.split("/")[0:len(zip_file.split("/"))-1])
 	os.chdir(output_folder)
 	zip_file_last_name = zip_file.split("/")[len(zip_file.split("/"))-1].split(".")[0]
-	if os.path.exists("%s/%s.grd" %(output_folder, zip_file_last_name)): return
+	if os.path.exists("%s/%s.grd" %(output_folder, zip_file_last_name)): 
+		print("Already unzipped grid files")
+		return
 
 	cmd = "unzip %s" %zip_file
 	subprocess.call(cmd, shell = True)
 	return
 
-def generate_grids(mae_dir, grid_center, grid_dir, remove_lig = None):
+def generate_grids(mae_dir, grid_center, grid_dir, remove_lig = None, indices = None, chosen_receptors = None):
 	print grid_dir
 	if not os.path.exists(grid_dir): os.makedirs(grid_dir)
 
 	maes = get_trajectory_files(mae_dir, ".mae")
+	if chosen_receptors is not None:
+		maes = [mae for mae in maes if remove_path_and_extension(mae) in chosen_receptors]
 
 	generate_grid_input_partial = partial(generate_grid_input, grid_dir = grid_dir, grid_center = grid_center, remove_lig = remove_lig)
 	num_workers = mp.cpu_count()
@@ -274,9 +293,14 @@ def generate_grids(mae_dir, grid_center, grid_dir, remove_lig = None):
 
 	grid_partial = partial(generate_grid, grid_dir = grid_dir)
 
+	if indices is not None:
+		grid_files = grid_files[indices[0] : indices[1]]
+
 	num_workers = mp.cpu_count()
 	pool = mp.Pool(num_workers)
 	pool.map(grid_partial, grid_files)
+	#for grid_file in grid_files:
+	#	grid_partial(grid_file)
 	pool.terminate()
 
 	zips = get_trajectory_files(grid_dir, ".zip")

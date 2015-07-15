@@ -9,6 +9,59 @@ import sys
 from msmbuilder.featurizer import DihedralFeaturizer
 import itertools
 
+def fix_topology(topology):
+	
+	new_top = topology.copy()
+
+	residues = {}
+	for chain in new_top.chains:
+		#print chain
+		for residue in chain.residues:
+			resname = str(residue)
+			if resname in residues.keys():
+				residues[resname].append(residue)
+			else:
+				residues[resname] = [residue]
+
+	for resname in residues.keys():
+		fragments = residues[resname]
+		if len(fragments) > 1:
+			main_fragment = fragments[0]
+			new_atom_list = []
+			new_atom_list += main_fragment._atoms
+			for i in range(1,len(fragments)):
+				fragment = fragments[i]
+				for atom in fragment.atoms:
+					atom.residue = main_fragment
+				new_atom_list += fragment._atoms
+				fragment._atoms = []
+				fragment.chain = main_fragment.chain
+			main_fragment._atoms = new_atom_list
+
+	return new_top
+
+def fix_traj(traj):
+	time0 = time.time()
+	new_traj = copy.deepcopy(traj)
+	topology = new_traj.topology 
+
+	new_top = fix_topology(topology)
+	topology = new_top
+	new_traj.topology = new_top 
+
+	new_atom_sequence = [a for a in topology.atoms]
+	new_index_sequence = [a.index for a in topology.atoms]
+	
+	for i in range(0, np.shape(traj.xyz)[0]):
+		new_traj.xyz[i] = new_traj.xyz[i][new_index_sequence]
+
+	for i in range(0, len(new_index_sequence)):
+		new_atom_sequence[i].index = i
+
+	time1 = time.time()
+	print time1 - time0
+	return new_traj
+
 def phi_indices(top, residues = None):
 	residues = copy.deepcopy(residues)
 	graph = top.to_bondgraph()
@@ -195,7 +248,7 @@ def chi2_indices(top, specified_residues = None):
 	return chi2_tuples
 
 
-def read_and_featurize_custom(traj_file, features_dir = None, condition=None, dihedral_types = ["phi", "psi", "chi1", "chi2"], dihedral_residues = None, contact_residues = None):
+def read_and_featurize_custom(traj_file, features_dir = None, condition=None, dihedral_types = ["phi", "psi", "chi1", "chi2"], dihedral_residues = None, contact_residue_pairs = []):
 	#if "clone4.lh5" not in traj_file: return
 	#top = md.load_frame(traj_file,index = 0).topology
 	#atom_indices = [a.index for a in top.atoms if a.residue.resSeq != 130]
@@ -218,52 +271,39 @@ def read_and_featurize_custom(traj_file, features_dir = None, condition=None, di
 	print(np.shape(features))
 	'''		
 	a = time.time()
-	dihedral_indices = []
 
-	for dihedral_type in dihedral_types:
-		if dihedral_type == "phi": dihedral_indices.append(phi_indices(top, dihedral_residues))
-		if dihedral_type == "psi": dihedral_indices.append(psi_indices(top, dihedral_residues))
-		if dihedral_type == "chi1": dihedral_indices.append(chi1_indices(top, dihedral_residues))
-		if dihedral_type == "chi2": dihedral_indices.append(chi2_indices(top, dihedral_residues))
+	if len(dihedral_residues) > 0:
+		print "Analyzing dihedrals"
+		dihedral_indices = []
 
-	#print("new features has dim %d" %(2*len(phi_tuples) + 2*len(psi_tuples) + 2*len(chi2_tuples)))
+		for dihedral_type in dihedral_types:
+			if dihedral_type == "phi": dihedral_indices.append(phi_indices(top, dihedral_residues))
+			if dihedral_type == "psi": dihedral_indices.append(psi_indices(top, dihedral_residues))
+			if dihedral_type == "chi1": dihedral_indices.append(chi1_indices(top, dihedral_residues))
+			if dihedral_type == "chi2": dihedral_indices.append(chi2_indices(top, dihedral_residues))
 
-	#print("feauturizing manually:")
-	dihedral_angles = []
+		#print("new features has dim %d" %(2*len(phi_tuples) + 2*len(psi_tuples) + 2*len(chi2_tuples)))
 
-	for dihedral_type in dihedral_indices:
-		angles = np.transpose(ManualDihedral.compute_dihedrals(traj=traj,indices=dihedral_type))
-		dihedral_angles.append(np.sin(angles))
-		dihedral_angles.append(np.cos(angles))
+		#print("feauturizing manually:")
+		dihedral_angles = []
 
-	manual_features = np.transpose(np.concatenate(dihedral_angles))
-	print("Dihedral features for %s has shape: " %traj_file)
-	print(np.shape(manual_features)) 
+		for dihedral_type in dihedral_indices:
+			angles = np.transpose(ManualDihedral.compute_dihedrals(traj=traj,indices=dihedral_type))
+			dihedral_angles.append(np.sin(angles))
+			dihedral_angles.append(np.cos(angles))
 
-	if contact_residues is not None:
-		#fixed_traj = fix_traj(traj)
-		#fixed_top = fixed_traj.topology
-		distance_residues = []
-		res_objects = [r for r in top.residues]
-		for r in contact_residues:
-			for res in res_objects:
-				if res.resSeq == r and len(res._atoms) > 0:
-					#print res._atoms
-					distance_residues.append(res.index)
-		if len(contact_residues) != len(distance_residues):
-			print "SOMETHING WENT WRONG"
-			print len(contact_residues)
-			print len(distance_residues)
-			sys.exit()
-			return None
-		
-		combinations = itertools.combinations(distance_residues, 2)
-		pairs = [c for c in combinations]
-		#print pairs
-		contact_features = md.compute_contacts(traj, contacts = pairs, scheme = 'closest-heavy', ignore_nonprotein=False)[0]
+		manual_features = np.transpose(np.concatenate(dihedral_angles))
+		print("Dihedral features for %s has shape: " %traj_file)
+		print(np.shape(manual_features)) 
+
+	if len(contact_residue_pairs) > 0:
+		contact_features = md.compute_contacts(traj, contacts = contact_residue_pairs, scheme = 'closest-heavy', ignore_nonprotein=False)[0]
 		#print contact_features
 		#print(np.shape(contact_features))
-		manual_features = np.column_stack((manual_features, contact_features))
+		if len(dihedral_residues) > 0:
+			manual_features = np.column_stack((manual_features, contact_features))
+		else:
+			manual_features = contact_features
 
 	b = time.time()
 
@@ -276,8 +316,162 @@ def read_and_featurize_custom(traj_file, features_dir = None, condition=None, di
 
 	verbosedump(manual_features, features_file)
 
+def read_and_featurize_custom_anton(traj_file, features_dir = None, condition=None, dihedral_types = ["phi", "psi", "chi1", "chi2"], dihedral_residues = None, contact_residues = None):
+	#if "23" not in traj_file and "24" not in traj_file: return
+	top = md.load_frame(traj_file,index = 0).topology
+	#atom_indices = [a.index for a in top.atoms if a.residue.resSeq != 130]
+	atom_indices = [a.index for a in top.atoms]
+	traj = md.load(traj_file, atom_indices=atom_indices)
+	print traj_file
+	#print traj
+	#print("loaded trajectory")
 
-def featurize_custom(traj_dir, features_dir, traj_ext, dihedral_residues = None, dihedral_types = None, contact_residues = None, agonist_bound = False, residues_map = None):
+	'''
+	a = time.time()
+	featurizer = DihedralFeaturizer(types = ['phi', 'psi', 'chi2'])
+	features = featurizer.transform(traj)
+	b = time.time()
+	#print(b-a)
+	print("original features has dim")
+	print(np.shape(features))
+	'''
+	a = time.time()
+	dihedral_indices = []
+	residue_order = []
+	if len(dihedral_residues) > 0:
+		for dihedral_type in dihedral_types:
+			if dihedral_type == "phi": dihedral_indices.append(phi_indices(fix_topology(top), dihedral_residues))
+			if dihedral_type == "psi": dihedral_indices.append(psi_indices(fix_topology(top), dihedral_residues))
+			if dihedral_type == "chi1": dihedral_indices.append(chi1_indices(fix_topology(top), dihedral_residues))
+			if dihedral_type == "chi2": dihedral_indices.append(chi2_indices(fix_topology(top), dihedral_residues))
+
+		#print("new features has dim %d" %(2*len(phi_tuples) + 2*len(psi_tuples) + 2*len(chi2_tuples)))
+
+		#print("feauturizing manually:")
+		dihedral_angles = []
+
+		for dihedral_type in dihedral_indices:
+			angles = np.transpose(ManualDihedral.compute_dihedrals(traj=traj,indices=dihedral_type))
+			dihedral_angles.append(np.sin(angles))
+			dihedral_angles.append(np.cos(angles))
+
+		manual_features = np.transpose(np.concatenate(dihedral_angles))
+
+	if len(contact_residue_pairs) > 0:
+		fixed_traj = fix_traj(traj)
+		fixed_top = fixed_traj.topology
+		contact_features = md.compute_contacts(fixed_traj, contacts = contact_residues, scheme = 'closest-heavy', ignore_nonprotein=False)[0]
+		if len(dihedral_residues) > 0: 
+			manual_features = np.column_stack((manual_features, contact_features))
+		else:
+			manual_features = contact_features
+
+
+	b = time.time()
+
+	print("new features %s has shape: " %traj_file)
+	print(np.shape(manual_features))
+
+	if condition is None:
+		condition = get_condition(traj_file)
+
+	verbosedump(manual_features, "%s/%s.h5" %(features_dir, condition))
+
+
+def read_and_featurize_iter(traj_file, features_dir = None, condition=None, dihedral_types = ["phi", "psi", "chi1", "chi2"], dihedral_residues = None, contact_residue_pairs = None):
+
+	a = time.time()
+	dihedral_indices = []
+	residue_order = []
+	if len(dihedral_residues) > 0:
+		for dihedral_type in dihedral_types:
+			if dihedral_type == "phi": dihedral_indices.append(phi_indices(fix_topology(top), dihedral_residues))
+			if dihedral_type == "psi": dihedral_indices.append(psi_indices(fix_topology(top), dihedral_residues))
+			if dihedral_type == "chi1": dihedral_indices.append(chi1_indices(fix_topology(top), dihedral_residues))
+			if dihedral_type == "chi2": dihedral_indices.append(chi2_indices(fix_topology(top), dihedral_residues))
+
+		#print("new features has dim %d" %(2*len(phi_tuples) + 2*len(psi_tuples) + 2*len(chi2_tuples)))
+
+		#print("feauturizing manually:")
+		dihedral_angles = []
+
+		for dihedral_type in dihedral_indices:
+			angles = np.transpose(ManualDihedral.compute_dihedrals(traj=traj,indices=dihedral_type))
+			dihedral_angles.append(np.sin(angles))
+			dihedral_angles.append(np.cos(angles))
+
+		manual_features = np.transpose(np.concatenate(dihedral_angles))
+
+	if len(contact_residue_pairs) > 0:
+		contact_features = []
+		for chunk in md.iterload(traj_file, chunk = 10000):
+			
+			fixed_traj = fix_traj(chunk)
+			fixed_top = fixed_traj.topology
+			contact_features.append(md.compute_contacts(fixed_traj, contacts = contact_residue_pairs, scheme = 'closest-heavy', ignore_nonprotein=False)[0])
+		
+		contact_features = np.concatenate(contact_features)
+
+		if len(dihedral_residues) > 0: 
+			manual_features = np.column_stack((manual_features, contact_features))
+		else:
+			manual_features = contact_features
+
+
+	b = time.time()
+
+	print("new features %s has shape: " %traj_file)
+	print(np.shape(manual_features))
+
+	if condition is None:
+		condition = get_condition(traj_file)
+
+	verbosedump(manual_features, "%s/%s.h5" %(features_dir, condition))
+
+
+def compute_contacts_below_cutoff(traj_file, cutoff = 100000.0, contact_residues = [], anton = False):
+	frame = md.load_frame(traj_file, index = 0)
+	
+	if anton:
+		fixed_traj = fix_traj(frame)
+		fixed_top = fixed_traj.topology
+	else: 
+		fixed_traj = frame
+		fixed_top = frame.topology
+	distance_residues = []
+	res_objects = [r for r in fixed_top.residues]
+	for r in contact_residues:
+		for res in res_objects:
+			if res.resSeq == r and len(res._atoms) > 5:
+				#print res._atoms
+				distance_residues.append(res.index)
+	if len(contact_residues) != len(distance_residues):
+		print "Residues are missing"
+		print len(contact_residues)
+		print len(distance_residues)
+		#sys.exit()
+		#return None
+	
+	combinations = itertools.combinations(distance_residues, 2)
+	pairs = [c for c in combinations]
+	#print pairs
+
+	final_pairs = []
+
+	distances = md.compute_contacts(fixed_traj, contacts = pairs, scheme = 'closest-heavy', ignore_nonprotein=False)[0]
+	print(distances)
+	print(np.shape(distances))
+	for i in range(0, len(distances[0])):
+		distance = distances[0][i]
+		print(distance)
+		if distance < cutoff:
+			final_pairs.append(pairs[i])
+
+	print(final_pairs)
+	return(final_pairs)
+
+
+def featurize_custom(traj_dir, features_dir, traj_ext, dihedral_residues = None, dihedral_types = None, contact_residues = None, agonist_bound = False, residues_map = None, contact_cutoff = None):
 	if not os.path.exists(features_dir): os.makedirs(features_dir)
 
 	all_trajs = get_trajectory_files(traj_dir, traj_ext)
@@ -301,9 +495,52 @@ def featurize_custom(traj_dir, features_dir, traj_ext, dihedral_residues = None,
 
 	print contact_residues	
 
-	featurize_partial = partial(read_and_featurize_custom, features_dir = features_dir, dihedral_residues = dihedral_residues, dihedral_types = dihedral_types, contact_residues = contact_residues)
+	contact_residue_pairs = compute_contacts_below_cutoff(all_trajs[0], cutoff = contact_cutoff, contact_residues = contact_residues, anton = False)
+
+
+	featurize_partial = partial(read_and_featurize_custom, features_dir = features_dir, dihedral_residues = dihedral_residues, dihedral_types = dihedral_types, contact_residue_pairs = contact_residue_pairs)
 	pool.map(featurize_partial, trajs)
 	pool.terminate()
+	#for traj in trajs:
+	#	featurize_partial(traj)
+
+
+	print("Completed featurizing")
+
+
+def featurize_custom_anton(traj_dir, features_dir, traj_ext, dihedral_residues = None, dihedral_types = None, contact_residues = None, agonist_bound = False, residues_map = None, contact_cutoff = None):
+	if not os.path.exists(features_dir): os.makedirs(features_dir)
+
+	all_trajs = get_trajectory_files(traj_dir, traj_ext)
+	trajs = []
+	for fulltraj in all_trajs:
+		#if "clone0.lh5" not in fulltraj: continue
+		traj = fulltraj.split("/")
+		filename = traj[len(traj)-1]
+		#if agonist_bound is not False and filename[0] not in agonist_bound: continue
+		filename_noext = filename.split(".")[0]
+		if os.path.exists("%s/%s.h5.h5" %(features_dir, filename_noext)):
+			print("already featurized")	
+		else:
+			trajs.append(fulltraj)
+
+	pool = mp.Pool(mp.cpu_count()/2)
+
+	if residues_map is not None:
+		contact_residues = [r for r in contact_residues if r in residues_map.keys()]
+		dihedral_residues = [d for d in dihedral_residues if d in residues_map.keys()]		
+
+	print contact_residues	
+	
+	contact_residue_pairs = compute_contacts_below_cutoff(all_trajs[0], cutoff = contact_cutoff, contact_residues = contact_residues, anton = True)
+
+	featurize_partial = partial(read_and_featurize_iter, features_dir = features_dir, dihedral_residues = dihedral_residues, dihedral_types = dihedral_types, contact_residue_pairs = contact_residue_pairs)
+	pool.map(featurize_partial, trajs)
+	pool.terminate()
+	#for traj in trajs:
+	#	print traj
+	#	featurize_partial(traj)
+
 
 	print("Completed featurizing")
 
@@ -441,3 +678,56 @@ def featurize_pnas_distance_pdbs(traj_dir, new_filename, features_dir, inactive_
 
 def load_features(filename):
 	return np.transpose(verboseload(filename))
+
+def featurize_sasa_individual(traj_file, bp_residues, anton, stride):
+	print(traj_file)
+	traj = md.load(traj_file, stride = stride)
+	top = traj.topology
+	protein_atoms = [a.index for a in top.atoms if a.residue.is_protein]
+	traj = traj.atom_slice(protein_atoms)
+	
+	print(traj)
+
+	#try:
+	traj = fix_traj(traj)
+	top = traj.topology
+	sasa = md.shrake_rupley(traj, mode = 'atom')
+	#except:
+	#	return []
+
+	bp_atoms = [a.index for a in top.atoms if a.residue.resSeq in bp_residues]
+	print(np.shape(sasa))
+	sasa = sasa[:, bp_atoms]
+	total_sasa = sasa.sum(axis=1)
+	return(total_sasa)
+
+def featurize_sasa(traj_dir, traj_ext, bp_residues, sasa_file, residues_map = None, anton = False, skip = 1, stride = 0):
+	trajs = get_trajectory_files(traj_dir, traj_ext)
+
+	
+	print("therer are initially %d bp residues" %len(bp_residues))
+	if residues_map is not None:
+		bp_residues = map_residues(residues_map, bp_residues)
+	print("therer are now %d bp residues" %len(bp_residues))
+
+	featurize_partial = partial(featurize_sasa_individual, bp_residues = bp_residues, anton = anton, stride = stride)
+	pool = mp.Pool(mp.cpu_count())
+	sasa = pool.map(featurize_partial, [trajs[i] for i in range(0,len(trajs),skip)])
+	pool.terminate()
+	#sasa = []
+	#for traj in trajs[0:5]:
+	#	sasa.append(featurize_partial(traj))
+	sasa = np.concatenate(sasa)
+	#print("SASA is:")
+	#print(sasa)
+	sample_names = [sample.split(".")[0] for sample in trajs]
+	sasa_map = {}
+	for i in range(0, len(sasa)):
+		sasa_map[sample_names[i]] = [sasa[i]]
+	write_map_to_csv(sasa_file, sasa_map, ["sample", "sasa"])
+	#print(sasa)
+	np.savetxt(sasa_file, sasa, delimiter=",")
+	#plt.hist(sasa, bins=50)
+	
+
+	print("Completed featurizing")
