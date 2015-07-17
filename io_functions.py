@@ -5,6 +5,17 @@ import csv
 from msmbuilder.utils import verbosedump, verboseload
 import numpy as np
 import mdtraj as md
+import multiprocessing as mp
+
+def load_file(filename):
+	return(verboseload(filename))
+
+def load_file_list(files):
+	num_workers = mp.cpu_count()
+	pool = mp.Pool(num_workers)
+	features = pool.map(load_file, files)
+	pool.terminate()
+	return(features)
 
 def get_trajectory_files(traj_dir, ext = ".pdb"):
 	traj_files = []

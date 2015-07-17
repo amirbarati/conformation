@@ -39,11 +39,13 @@ from subsampling import *
 from conversions import *
 from custom_msm import *
 from grids import *
+from landmark_kernel_tica import *
 
 n_clusters = 1000
 lag_time = 5
 msm_lag_time = 10
 n_components = 10
+k_tica_components = 5
 n_samples = 10
 #feature_types = "_switches_tm6"
 #feature_types = "_switches_npxx_tm6_bp"
@@ -85,17 +87,25 @@ else:
 traj_dir = "%s/subsampled_allprot_combined_reimaged" %base
 pnas_features_dir = "%s/features_pnas" %base
 
-
-tica_dir = "%s/tICA_t%d_n_components%d%s" %(base, lag_time, n_components, feature_types)
+ori_tica_dir = "%s/tICA_t%d_n_components%d%s" %(base, lag_time, n_components, feature_types)
+tica_dir = ori_tica_dir
+tica_dir = "%s/ktICA_n_components%d_random_specified" %(tica_dir, k_tica_components)
+landmarks_dir = "%s/landmarks.h5" %tica_dir
+if not os.path.exists(tica_dir): os.makedirs(tica_dir)
 analysis_dir = "%s/analysis_n_clusters%d_%s" %(tica_dir, n_clusters, sampling_method)
 clusterer_dir = "%s/clusterer_%dclusters.h5" %(tica_dir, n_clusters)
 kmeans_csv = "%s/kmeans_csv" %analysis_dir
 #features_dir = "%s/features_allprot"
 features_dir = "%s/features%s" %(base,feature_types)
+combined_features_dir = "%s/combined_features.h5" %ori_tica_dir
 msm_model_dir = "%s/msm_model_%d_clusters_t%d.h5" %(tica_dir, n_clusters, msm_lag_time)
 features_known = "%s/features_known" %base
 model_dir = tica_dir
 projected_features_dir = "%s/phi_psi_chi2_allprot_projected.h5" %(tica_dir)
+projection_operator_dir = "%s/phi_psi_chi2_allprot_tica_coords.h5" %(tica_dir)
+ktica_fit_model_filename = "%s/ktica_model.h5" %tica_dir
+ktica_projected_data_filename = "%s/ktica_random_specified_projected_coords.h5" %tica_dir
+nystroem_data_filename = "%s/nystroem_random_specified.h5" %tica_dir
 save_dir = "%s/clusters%d_n_components%d_n_samples%d_%s" %(tica_dir, n_clusters, n_components, n_samples, sampling_method)
 #save_dir = "%s/reorder_test" %tica_dir
 #reimaged_dir = save_dir
@@ -113,7 +123,7 @@ active_pnas_dir = "%s/active_pnas_distances.csv" %analysis_dir
 inactive_pnas_dir = "%s/inactive_pnas_distances.csv" %analysis_dir
 inactive_pnas_joined = "%s/inactive_pnas_joined.csv" %analysis_dir
 active_pnas_joined = "%s/active_pnas_joined.csv" %analysis_dir
-clusters_map_file = "%s/clusters_map_%d_clusters_%s" %(tica_dir, n_clusters, sampling_method)
+clusters_map_file = "%s/clusters_map_%d_clusters_%s" %(ori_tica_dir, n_clusters, sampling_method)
 analysis_file = "%s/rmsd_analyzed.csv" %analysis_dir
 combined_file = "%s/rmsd_combined.csv" %analysis_dir
 ligand_dir = "%s/ligprep_2/ligprep_2-out.maegz" %base
@@ -254,6 +264,8 @@ residues_map = generate_residues_map(residues_map_csv)
 #plot_all_tics(tica_dir, projected_features_dir, lag_time)
 #cluster_minikmeans(tica_dir, projected_features_dir, traj_dir, n_clusters, lag_time)
 #cluster_kmeans(tica_dir, projected_features_dir, traj_dir, n_clusters, lag_time)
+
+'''
 with open(active_clusters_csv, 'rb') as f:
     reader = csv.reader(f)
     active_clusters = list(reader)[0]
@@ -267,13 +279,25 @@ with open(inactive_clusters_csv, 'rb') as f:
     reader = csv.reader(f)
     inactive_clusters = list(reader)[0]
 inactive_clusters = [int(c[7:]) for c in inactive_clusters]
-plot_all_tics_and_clusters(tica_dir, projected_features_dir, clusterer_dir, lag_time, label = "dot", active_cluster_ids = active_clusters, intermediate_cluster_ids = intermediate_clusters, inactive_cluster_ids = inactive_clusters)
+'''
+#plot_all_tics_and_clusters(tica_dir, projected_features_dir, clusterer_dir, lag_time, label = "dot", active_cluster_ids = active_clusters, intermediate_cluster_ids = intermediate_clusters, inactive_cluster_ids = inactive_clusters)
+
+
 #find_missing_features(traj_dir, features_dir)
 #sample_clusters(clusterer_dir, projected_features_dir, traj_dir, ".h5", save_dir, n_samples, method = sampling_method, clusters_map_file = clusters_map_file)
 #dist_to_means(clusterer_dir, projected_features_dir, n_samples = n_samples, n_components = n_components, tica_coords_csv = tica_coords_csv, kmeans_csv = kmeans_csv)
 #reverse_sign_csv(docking_joined)
 #plot_all_tics_samples(kmeans_csv, analysis_dir, docking_csv = docking_joined, specific_clusters = [49, 353, 994, 397, 456, 517, 51])
 #cluster_pnas_distances(clusterer_dir, projected_features_dir, active_pnas_distances_dir, pnas_coords_dir, projected_features_dir, traj_dir, ".h5", active_pnas_distances_new_csv, pnas_coords_csv, tica_coords_csv, n_samples, sampling_method, clusters_map_file = clusters_map_file)
+
+landmark_ktica(features_dir, combined_features_dir, tica_dir, clusters_map_file = clusters_map_file, landmarks_dir = landmarks_dir, nystroem_components=1000, tica_components=k_tica_components, lag_time=5, nystroem_data_filename = nystroem_data_filename, fit_model_filename = ktica_fit_model_filename, projected_data_filename = ktica_projected_data_filename)
+
+#ktica_test(features_dir, tica_dir, landmark_indices = None, nystroem_components=1000, tica_components=10, lag_time=5, nystroem_data_filename = nystroem_data_filename, fit_model_filename = ktica_fit_model_filename, projected_data_filename = ktica_projected_data_filename)
+plot_all_tics(tica_dir, ktica_projected_data_filename, lag_time)
+cluster_minikmeans(tica_dir, ktica_projected_data_filename, traj_dir, n_clusters, lag_time)
+sample_clusters(clusterer_dir, ktica_projected_data_filename, traj_dir, ".h5", save_dir, n_samples, method = sampling_method, clusters_map_file = clusters_map_file)
+cluster_pnas_distances(clusterer_dir, ktica_projected_data_filename, active_pnas_distances_dir, pnas_coords_dir, ktica_projected_data_filename, traj_dir, ".h5", active_pnas_distances_new_csv, pnas_coords_csv, tica_coords_csv, n_samples, sampling_method, clusters_map_file = clusters_map_file)
+#plot_all_tics_and_clusters(tica_dir, ktica_projected_data_filename, clusterer_dir, lag_time, label = "dot", active_cluster_ids = active_clusters, intermediate_cluster_ids = intermediate_clusters, inactive_cluster_ids = inactive_clusters)
 
 
 #featurize_pnas_distance("%s/reference_receptors" %base, "%s/reference_receptors" %base, ".pdb", inactive_ref_dir, active_ref_dir, "%s/reference_receptors/inactive_pnas_distances_ref.h5" %base, "%s/reference_receptors/active_pnas_distances_ref.h5" %base, "%s/reference_receptors/ref_coords.h5" %base, "%s/reference_receptors/inactive_distances.csv" %base, "%s/reference_receptors/active_distances.csv" %base, "%s/reference_receptors/ref_coords.csv" %base, scale = 1.0)

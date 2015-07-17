@@ -114,7 +114,7 @@ It will prepare the protein with Schrodinger's tools (add hydrogens, SS bonds (n
 an .mae file, which is required for docking.
 '''
 
-def pprep_prot(pdb, ref, extension = extension):
+def pprep_prot(pdb, ref, extension = ".mae"):
 	pdb_name = pdb.split("/")[len(pdb.split("/"))-1]
 	new_pdb = pdb_name.rsplit( ".", 1 )[ 0 ]
 	new_pdb = "%s%s" %(new_pdb, extension)
