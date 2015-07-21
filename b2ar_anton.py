@@ -43,7 +43,7 @@ from landmark_kernel_tica import *
 
 n_clusters = 1000
 lag_time = 5
-tica_regularization = 0.5
+tica_regularization = 10.0
 msm_lag_time = 10
 n_components = 10
 k_tica_components = 5
@@ -55,7 +55,7 @@ n_samples = 10
 #feature_types = "_skip5_switches_pp_npxx_contact"
 #feature_types = "_skip3_switches_pp_npxx_contact_cutoff20"
 #feature_types = "switches_pp_npxx_contact_cutoff10000"
-feature_types = "skip5_switches_pp_npxx_ser_regularization_0pt5"
+feature_types = "skip5_switches_pp_npxx_ser_regularization_10pt0"
 n_mmgbsa = 50
 #feature_types = ""
 
