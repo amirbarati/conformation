@@ -524,7 +524,7 @@ def featurize_custom_anton(traj_dir, features_dir, traj_ext, dihedral_residues =
 		else:
 			trajs.append(fulltraj)
 
-	pool = mp.Pool(mp.cpu_count()/2)
+	pool = mp.Pool(mp.cpu_count()/4)
 
 	if residues_map is not None:
 		contact_residues = [r for r in contact_residues if r in residues_map.keys()]

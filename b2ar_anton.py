@@ -43,8 +43,8 @@ from landmark_kernel_tica import *
 
 n_clusters = 1000
 lag_time = 5
-tica_regularization = 10.0
-tica_regularization_string = "10pt0"
+tica_regularization = 0.05
+tica_regularization_string = "0pt05"
 msm_lag_time = 10
 n_components = 10
 k_tica_components = 5
@@ -57,7 +57,7 @@ cutoff = 1.0
 #feature_types = "_skip5_switches_pp_npxx_contact"
 #feature_types = "_skip3_switches_pp_npxx_contact_cutoff20"
 #feature_types = "switches_pp_npxx_contact_cutoff10000"
-#feature_types = "skip5_switches_pp_npxx_ser"
+#feature_types = "skip5_switches_pp_npxx_ser_cutoff%dnm" %(int(cutoff))
 feature_types = "all_residues_under_cutoff%dnm" %(int(cutoff))
 n_mmgbsa = 50
 #feature_types = ""
@@ -271,7 +271,7 @@ residues_map = generate_residues_map(residues_map_csv)
 
 #to_dock = ["cluster0_sample1", "cluster0_sample2", "cluster0_sample3"]
 
-featurize_custom_anton(traj_dir, features_dir = features_dir, traj_ext = ".h5", dihedral_residues =  [], dihedral_types = ["phi", "psi", "chi1", "chi2"], contact_residues = all_residues, residues_map = residues_map, contact_cutoff = 1.0)
+featurize_custom_anton(traj_dir, features_dir = features_dir, traj_ext = ".h5", dihedral_residues =  [], dihedral_types = ["phi", "psi", "chi1", "chi2"], contact_residues = all_residues, residues_map = residues_map, contact_cutoff = cutoff)
 fit_and_transform(features_directory = features_dir, model_dir = tica_dir, stride=5, lag_time = lag_time, n_components = n_components,  tica_regularization = tica_regularization)
 plot_all_tics(tica_dir, projected_features_dir, lag_time)
 cluster_minikmeans(tica_dir, projected_features_dir, traj_dir, n_clusters, lag_time)
