@@ -272,7 +272,7 @@ residues_map = generate_residues_map(residues_map_csv)
 
 #to_dock = ["cluster0_sample1", "cluster0_sample2", "cluster0_sample3"]
 
-featurize_custom_anton(traj_dir, features_dir = features_dir, traj_ext = ".h5", dihedral_residues =  [], dihedral_types = ["phi", "psi", "chi1", "chi2"], contact_residues = all_residues, residues_map = residues_map, contact_cutoff = cutoff)
+featurize_custom_anton(traj_dir, features_dir = features_dir, traj_ext = ".h5", dihedral_residues =  [], dihedral_types = ["phi", "psi", "chi1", "chi2"], contact_residues = skip5_switches_pp_npxx_ser, residues_map = residues_map, contact_cutoff = cutoff)
 fit_and_transform(features_directory = features_dir, model_dir = tica_dir, stride=5, lag_time = lag_time, n_components = n_components,  tica_regularization = tica_regularization)
 plot_all_tics(tica_dir, projected_features_dir, lag_time)
 cluster_minikmeans(tica_dir, projected_features_dir, traj_dir, n_clusters, lag_time)
