@@ -44,10 +44,12 @@ from landmark_kernel_tica import *
 n_clusters = 1000
 lag_time = 5
 tica_regularization = 10.0
+tica_regularization_string = "10pt0"
 msm_lag_time = 10
 n_components = 10
 k_tica_components = 5
 n_samples = 10
+cutoff = 1.0
 #feature_types = "_switches_tm6"
 #feature_types = "_switches_npxx_tm6_bp"
 #feature_types = "_switches_npxx_tm6_dihedrals_switches_npxx_contact"
@@ -55,7 +57,8 @@ n_samples = 10
 #feature_types = "_skip5_switches_pp_npxx_contact"
 #feature_types = "_skip3_switches_pp_npxx_contact_cutoff20"
 #feature_types = "switches_pp_npxx_contact_cutoff10000"
-feature_types = "skip5_switches_pp_npxx_ser_regularization_10pt0"
+#feature_types = "skip5_switches_pp_npxx_ser"
+feature_types = "all_residues_under_cutoff%dnm" %(int(cutoff))
 n_mmgbsa = 50
 #feature_types = ""
 
@@ -70,7 +73,8 @@ skip_3_residues = range(30,340,3)
 skip5_switches_pp_npxx = list(set(skip_5_residues + list(switch_pp_npxx)))
 skip5_switches_pp_npxx_ser = list(set(skip_5_residues + list(switch_pp_npxx) + [207]))
 skip3_switches_pp_npxx = list(set(skip_3_residues + list(switch_pp_npxx)))
-print(len(skip5_switches_pp_npxx))
+#print(len(skip5_switches_pp_npxx))
+all_residues = range(30,340)
 sampling_method = "random"
 precision = "SP"
 
@@ -91,9 +95,9 @@ traj_dir = "%s/subsampled_allprot_combined_reimaged" %base
 pnas_features_dir = "%s/features_pnas" %base
 
 
-ori_tica_dir = "%s/tICA_t%d_n_components%d%s" %(base, lag_time, n_components, feature_types)
+ori_tica_dir = "%s/tICA_t%d_n_components%d%s_regularization%s" %(base, lag_time, n_components, feature_types, tica_regularization_string)
 tica_dir = ori_tica_dir
-tica_dir = "%s/ktICA_n_components%d_random_specified" %(tica_dir, k_tica_components)
+#tica_dir = "%s/ktICA_n_components%d_random_specified" %(tica_dir, k_tica_components)
 landmarks_dir = "%s/landmarks.h5" %tica_dir
 if not os.path.exists(tica_dir): os.makedirs(tica_dir)
 analysis_dir = "%s/analysis_n_clusters%d_%s" %(tica_dir, n_clusters, sampling_method)
@@ -267,7 +271,7 @@ residues_map = generate_residues_map(residues_map_csv)
 
 #to_dock = ["cluster0_sample1", "cluster0_sample2", "cluster0_sample3"]
 
-featurize_custom_anton(traj_dir, features_dir = features_dir, traj_ext = ".h5", dihedral_residues =  [], dihedral_types = ["phi", "psi", "chi1", "chi2"], contact_residues = skip5_switches_pp_npxx_ser, residues_map = residues_map, contact_cutoff = 2.0)
+featurize_custom_anton(traj_dir, features_dir = features_dir, traj_ext = ".h5", dihedral_residues =  [], dihedral_types = ["phi", "psi", "chi1", "chi2"], contact_residues = all_residues, residues_map = residues_map, contact_cutoff = 1.0)
 fit_and_transform(features_directory = features_dir, model_dir = tica_dir, stride=5, lag_time = lag_time, n_components = n_components,  tica_regularization = tica_regularization)
 plot_all_tics(tica_dir, projected_features_dir, lag_time)
 cluster_minikmeans(tica_dir, projected_features_dir, traj_dir, n_clusters, lag_time)
