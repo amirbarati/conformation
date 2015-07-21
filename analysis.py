@@ -12,7 +12,7 @@ import mdtraj as md
 import csv
 import operator
 from msmbuilder.utils import verbosedump, verboseload
-
+from custom_featurizer import compute_contacts_below_cutoff, fix_traj
 
 def calc_mean_and_stdev(rmsd_map):
 	stats_map = {}
@@ -45,13 +45,13 @@ def rmsd_connector(traj, inactive, residues_map = None):
 		residues = map_residues(residues_map, residues)
 
 	
-	npxxy_atoms = [a.index for a in traj.topology.atoms if a.residue.resSeq in residues and a.is_backbone]
-	#print npxxy_atoms
-	traj_stripped = traj.atom_slice(npxxy_atoms)
+	connector_atoms = [a.index for a in traj.topology.atoms if a.residue.resSeq in residues and a.is_backbone]
+	#print connector_atoms
+	traj_stripped = traj.atom_slice(connector_atoms)
 
-	npxxy_atoms_target = [a.index for a in inactive.topology.atoms if a.residue.resSeq in [121, 282] and a.is_backbone]
-	#print npxxy_atoms_target
-	inactive_stripped = inactive.atom_slice(npxxy_atoms_target)
+	connector_atoms_target = [a.index for a in inactive.topology.atoms if a.residue.resSeq in [121, 282] and a.is_backbone]
+	#print connector_atoms_target
+	inactive_stripped = inactive.atom_slice(connector_atoms_target)
 
 	traj_stripped_aligned = traj_stripped.superpose(inactive_stripped)
 	rmsds = md.rmsd(traj_stripped, inactive_stripped) * 10.0
@@ -771,3 +771,35 @@ def combine_rmsd_docking_maps(rmsd_csv, docking_csv):
 			docking_map.append(line[j])
 
 	print docking_map[docking_map.keys()[0]]
+
+def find_most_important_residues_in_tIC(traj_file, tica_object, top_n, contact_residues,tic_residue_csv):
+	tica = verboseload(tica_object)
+	residue_pairs = compute_contacts_below_cutoff(traj_file, cutoff = 100000.0, contact_residues = contact_residues, anton = True)
+	traj = md.load_frame(traj_file, 0)
+	traj = fix_traj(traj)
+	top = traj.topology 
+	
+	top_indices_per_tIC = {}
+	for i in range(0, np.shape(tica.components_)[0]):
+		print i
+		index_components = [(j,abs(tica.components_[i][j])) for j in range(0,np.shape(tica.components_)[1])]
+		index_components = sorted(index_components, key= lambda x: x[1],reverse=True)
+		print(index_components[0:10])
+		list_i = [index_components[j][0] for j in range(0,len(index_components))]
+		top_indices_per_tIC[i] = list_i
+	
+	top_residues_per_tIC = {}
+	for i in range(0, np.shape(tica.components_)[0]):
+		top_residues_per_tIC[i] = []
+		for index in top_indices_per_tIC[i]:
+			residue_index = residue_pairs[index]
+			residues = list(set([a.residue.resSeq for a in top.atoms if a.residue.index in residue_index]))
+			top_residues_per_tIC[i].append(residues)
+		top_residues_per_tIC[i] = [item for sublist in top_residues_per_tIC[i] for item in sublist]
+
+	write_map_to_csv(tic_residue_csv, top_residues_per_tIC, [])
+	return
+	#print(top_residues_per_tIC)
+
+
+

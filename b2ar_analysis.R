@@ -3,12 +3,13 @@ library(reshape2)
 library(RColorBrewer)
 library(classInt)
 library(maptools)
+library(mixtools)
 inverse.agonists <- c("s.atenolol", "s.carazolol")
 
 base <- "/Users/Evan/vsp/b2ar_analysis"
 #base <- "/Users/Evan/vsp/b2ar_analysis/exacycle_data"
-#tica <- "/tICA_t5_n_components10_skip5_switches_pp_npxx_contact"
-tica <- "/tICA_t5_n_components10_skip5_switches_pp_npxx_contact/ktICA_random_specified"
+tica <- "/tICA_t5_n_components10_skip5_switches_pp_npxx_contact"
+#tica <- "/tICA_t5_n_components10_skip5_switches_pp_npxx_contact/ktICA_n_components5_random_specified"
 #tica <- "/tICA_t10_n_components10_skip5_switches_pp_npxx_contact"
 #tica <- "/tICA_t10_n_components5_switches_npxx_tm6_bp"
 #tica <- "tICA_t10_n_components"
@@ -51,8 +52,8 @@ pnas.coords[1:10,]
 #colnames(pnas.coords.all) <- colnames(pnas.coords)
 #pnas.coords.all["tm6_tm3_dist"] <- 7.14 * pnas.coords.all["tm6_tm3_dist"]
 
-#docking <- data.frame(read.csv(docking.csv, stringsAsFactors = F, row.names=1))
-#docking.aggregated <- data.frame(read.csv(docking.aggregated.csv, stringsAsFactors = F, row.names=1))
+docking <- data.frame(read.csv(docking.csv, stringsAsFactors = F, row.names=1))
+docking.aggregated <- data.frame(read.csv(docking.aggregated.csv, stringsAsFactors = F, row.names=1))
 reference.docking <- data.frame(read.csv("/Users/Evan/vsp/b2ar_analysis/reference_docking/docking_SP/all_docking_combined_manual.csv", stringsAsFactors = F, row.names=1))
 
 #sasa <- data.frame(read.csv(sasa.csv, stringsAsFactors = F, row.names=1))
@@ -251,8 +252,18 @@ plot.docking.vs.reference <- function(docking, reference.docking, save.dir) {
   }
 }
 
+combine.dfs <- function(df1, df2) {
+  common.rows <- intersect(rownames(df1), rownames(df2))
+  print(length(common.rows))
+  print("rows in common")
+  df1 <- df1[common.rows, colnames(df1), drop=F]
+  df2 <- df2[common.rows, colnames(df2), drop=F]
+  new.df <- data.frame(df1,df2)
+  return(new.df)
+}
+
 plot.docking.vs.reaction.coord <- function(docking, pnas.coords, save.dir) {
-  d <- data.frame(pnas.coords, docking)
+  d <- combine.dfs(docking, pnas.coords)
   colnames(d)[dim(d)[2]] <- "aggregate.docking.score"
   d <- data.frame(log(1/pnas.coords.averages[,3]), docking.aggregated[rownames(pnas.coords.averages),1])
   colnames(d) <- c("log_inverse_npxxy_rmsd_active", "aggregate_docking_score")
@@ -263,15 +274,7 @@ plot.docking.vs.reaction.coord <- function(docking, pnas.coords, save.dir) {
   dev.off()
 }
 
-combine.dfs <- function(df1, df2) {
-  common.rows <- intersect(rownames(df1), rownames(df2))
-  print(length(common.rows))
-  print("rows in common")
-  df1 <- df1[common.rows, colnames(df1), drop=F]
-  df2 <- df2[common.rows, colnames(df2), drop=F]
-  new.df <- data.frame(df1,df2)
-  return(new.df)
-}
+
 
 plot_coords_and_docking <- function(df, ori_df, refcoords, title, save.dir) {
   colors <- brewer.pal(9, "YlGnBu")
@@ -315,18 +318,95 @@ plot.colmap <- function(docking, pnas, refcoords, title, save.dir, top=0) {
   
 }
 
+convert.docking.to.rel.probs <- function(docking) {
+  docking <- 2.718 ^ (docking/0.58)
+  docking <- docking / max(docking)
+  return(docking)
+}
+
+calc.ranks <- function(df) {
+  num.unique.residues <- length(unique(df[1,]))
+  ranks.per.tIC <- as.data.frame(matrix(0,nrow=num.unique.residues,ncol=dim(df)[2]))
+  print(dim(ranks.per.tIC))
+  rownames(ranks.per.tIC) <- sort(unique(df[1,]))
+  
+  ranks <- rep(1:(dim(df)[1]/2),each=2)
+
+  for(i in 1:dim(df)[2]) {
+    average.ranks <- aggregate(ranks,by=list(df[,i]),FUN = mean)
+    average.ranks <- average.ranks[order(average.ranks[,1]),]
+    print(average.ranks[1:10,])
+    print(dim(average.ranks))
+    print(dim(ranks.per.tIC))
+    ranks.per.tIC[,i] <- average.ranks[,2]
+  }
+  return(ranks.per.tIC)
+  
+}
+
 refcoords <- read.csv(file = "/Users/evan/vsp/b2ar_analysis/reference_receptors/ref_coords.csv", row.names = 1)
 colnames(refcoords) <- colnames(pnas.coords)
-plot_coords_and_docking(pnas.coords.docking.sorted[1:50,], pnas.coords.docking.sorted, refcoords)
+#plot_coords_and_docking(pnas.coords.docking.sorted[1:50,], pnas.coords.docking.sorted, refcoords)
 
-#plot.docking.vs.reaction.coord(docking.aggregated, pnas.coords.averages, analysis.dir)
+
 
 #all_pnas_rows <- find_active(pnas.coords.all)
 #all_active_rows <- all_pnas_rows[all_pnas_rows == T]
 
 pnas.coords.averages <- cluster_averages(pnas.coords)
 tica.coords.averages <- cluster_averages(tica.coords)
+#docking.averages <- cluster_averages(aggregate.docking)
 
+docking.subset <- docking
+#docking.subset <- docking[,which(colnames(docking) %in% inverse.agonists)]
+#docking.subset <- docking[,c("X3p0g_lig"),drop=F]
+aggregate.docking <- as.data.frame(compute.aggregate.docking(docking.subset, inverse.agonists))
+docking.averages <- cluster_averages(aggregate.docking)
+#test_method(docking.averages, pnas.rows, "Aggregate Docking Score - Co-Crystallized 3P0G Agonist", analysis.dir)
+#plot.docking.vs.reference(docking.averages, reference.docking, analysis.dir)
+
+hist(docking.averages[,1],breaks=100)
+mixmdl <- normalmixEM(docking.averages[,1],k=3, mu = c(-.5, 0, .5), maxit=5000)
+plot(mixmdl,which=2)
+lines(density(docking.averages[,1]), lty=2, lwd=2)
+docking.tica <- combine.dfs(docking.averages, tica.coords.averages)
+docking.tica <- docking.tica[order(docking.tica[,1]*-1.0),]
+
+docking.vs.tica.lm <- glm(2.718^(-1.0/0.52*df.cluster_rows...)~.,data=docking.tica)
+docking.vs.tica.lm.cv <- cv.glm(docking.tica, docking.vs.tica.lm,K=10)
+summary(docking.vs.tica.lm)
+#docking.vs.tica.lm.cv
+docking.vs.tica.lm.cv$delta
+docking.binary.tica <- docking.tica
+replacement <- rep(0,dim(docking.binary.tica)[1])
+replacement[docking.binary.tica[,1] > (mean(docking.binary.tica[,1])+1.0*sd(docking.binary.tica[,1]))] <- 1.0
+docking.binary.tica[,1] <- replacement
+docking.binary.vs.tica.glm <- glm(df.cluster_rows...~.,data=docking.binary.tica,family=binomial)
+#docking.binary.vs.tica.glm.cv <- cv.glm(docking.binary.tica, docking.binary.vs.tica.glm,K=5)
+summary(docking.vs.tica.glm)
+docking.binary.vs.tica.glm.cv
+docking.binary.tica <- docking.binary.tica[order(-1.0*docking.binary.tica[,10]),]
+docking.binary.vs.tica9.glm <- glm(df.cluster_rows...~tIC.9,data=docking.binary.tica,family=binomial)
+docking.binary.vs.tica9.glm
+predicted.glm <- predict(docking.binary.vs.tica9.glm, docking.binary.tica[,10,drop=F], type="response")
+plot(docking.binary.tica[,"tIC.9"],docking.binary.tica[,1])
+lines(docking.binary.tica[,"tIC.9"], predicted.glm)
+docking.binary.vs.tica.lm <- lm(df.cluster_rows...~.,data=docking.binary.tica)
+summary(docking.binary.vs.tica.lm)
+pairs(docking.tica)
+#
+rel.docking.tica <- docking.tica
+rel.docking.tica[,1] <- convert.docking.to.rel.probs(rel.docking.tica[,1])
+rel.docking.tica.logistic <- glm(df.cluster_rows...~.,data=rel.docking.tica,family=binomial)
+#Find which residues are most important in each tIC
+tic.residues.csv <- paste(tica, "/top_residues_per_tIC.csv", sep="")
+tic.residues <- read.csv(tic.residues.csv,stringsAsFactors=T,sep=",",header=F)[,-1]
+tic.residues <- t(tic.residues)
+tic.residue.ranks <- calc.ranks(tic.residues)
+
+
+
+plot.docking.vs.reaction.coord(docking.averages, pnas.coords.averages, analysis.dir)
 pnas.tica <- combine.dfs(pnas.coords.averages, tica.coords.averages)
 pnas.tica <- pnas.tica[,c(1,3,5,6,7,8,9,10,11,12,13,14,15)]
 pairs(pnas.tica)
@@ -335,13 +415,6 @@ summary(pnas_1_tIC_0)
 plot(pnas.tica$npxxy_rmsd_active, pnas.tica$tIC_0)
 abline(pnas_1_tIC_0)
 
-#docking.subset <- docking
-#docking.subset <- docking[,which(colnames(docking) %in% inverse.agonists)]
-#docking.subset <- docking[,c("X3p0g_lig"),drop=F]
-#aggregate.docking <- as.data.frame(compute.aggregate.docking(docking.subset, inverse.agonists))
-#docking.averages <- cluster_averages(aggregate.docking)
-#test_method(docking.averages, pnas.rows, "Aggregate Docking Score - Co-Crystallized 3P0G Agonist", analysis.dir)
-#plot.docking.vs.reference(docking.averages, reference.docking, analysis.dir)
 
 coords <- c("tm6_tm3_dist", "npxxy_rmsd_active")
 plot.colmap(docking.averages, pnas.coords.averages[,coords, drop=F], refcoords[,coords], "Docking Score All Clusters vs TM6_TM3 dist and NPxxY RMSD to Inactive", analysis.dir, top=100)
@@ -359,6 +432,8 @@ inactive.rows <- find.inactive(pnas.coords.averages)
 write.table(t(as.data.frame(names(inactive.rows[inactive.rows==T]))), file = paste(analysis.dir, "/", "inactive_clusters.csv", sep=""), row.names = F, col.names = F, sep = ",")
 #docking.aggregated <- as.data.frame(apply(docking.averages[,c(1,2,3,4),drop=F],1,mean))
 
+active.docking <- combine.dfs(docking.averages, as.data.frame(active.rows))
+active.docking.sorted <- active.docking[order(-1.0*active.docking[,1]),]
 #test_method(docking.averages, pnas.rows)
 active.rows <- pnas.rows[pnas.rows == T]
 intermediate.rows <- 
@@ -389,7 +464,7 @@ inactive.rows <- pnas.rows[pnas.rows == F]
 #active_rows <- pnas_rows[pnas_rows == T]
 #inactive_rows <- pnas_rows[pnas_rows == F]
 
-#print(length(active_rows))
+print(length(active.rows[active.rows==T]))
 #print(length(active_rows)/dim(pnas.coords)[1])
 #print(length(all_active_rows)/(length(all_pnas_rows)))
 

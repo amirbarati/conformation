@@ -47,12 +47,13 @@ def get_ligands(lig_dir, ext= ".sdf"):
 def write_map_to_csv(filename, data_map, titles):
 	csvfile = open(filename, "wb")
 	i = 0
-	for title in titles:
-		if i < (len(titles) - 1):
-			csvfile.write("%s, " %title)
-		else:
-			csvfile.write("%s \n" %title)
-		i += 1
+	if len(titles) > 0:
+		for title in titles:
+			if i < (len(titles) - 1):
+				csvfile.write("%s, " %title)
+			else:
+				csvfile.write("%s \n" %title)
+			i += 1
 
 	for key in sorted(data_map.keys()):
 		csvfile.write("%s, " %key)

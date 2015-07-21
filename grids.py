@@ -83,6 +83,14 @@ def reimage_traj(traj_file, traj_dir, save_dir, ext):
 		os.remove(new_top_file)
 	return
 
+def reimage_traj_new(traj_file, traj_dir, save_dir, ext):
+	traj = md.load(traj_file)
+	traj_pytraj = mdio.load_mdtraj(traj)
+	traj_pytraj.autoimage()
+	traj.xyz[:] = traj_pytraj.xyz/10.0
+	traj.save("%s/%s" %(traj_dir, traj_file.split("/")[len(traj_file.split("/"))-1]))
+	return 
+
 
 '''
 If sim was run under periodic boundary conditions, this will reimage all trajectories in directory traj_dir

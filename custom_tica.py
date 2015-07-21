@@ -6,7 +6,7 @@ import multiprocessing as mp
 def load_features(filename):
 	return np.transpose(verboseload(filename))
 
-def fit_and_transform(features_directory, model_dir, stride=5, lag_time=10, n_components = 5):
+def fit_and_transform(features_directory, model_dir, stride=5, lag_time=10, n_components = 5, tica_regularization = 0.05):
 	if not os.path.exists(model_dir):
 		os.makedirs(model_dir)
 
@@ -14,7 +14,7 @@ def fit_and_transform(features_directory, model_dir, stride=5, lag_time=10, n_co
 	fit_model_filename  = "%s/phi_psi_chi2_allprot_tica_coords.h5" %model_dir
 	#active_pdb_file = "/scratch/users/enf/b2ar_analysis/renamed_topologies/A-00.pdb"
 
-	tica_model = tICA(n_components = n_components, lag_time = lag_time)
+	tica_model = tICA(n_components = n_components, lag_time = lag_time, gamma = tica_regularization)
 
 	if not os.path.exists(projected_data_filename):
 		print("loading feature files")
