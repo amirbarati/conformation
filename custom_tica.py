@@ -1,12 +1,12 @@
 import os
-from msmbuilder.decomposition import tICA
+from msmbuilder.decomposition import tICA, SparseTICA
 from io_functions import *
 import multiprocessing as mp
 
 def load_features(filename):
 	return np.transpose(verboseload(filename))
 
-def fit_and_transform(features_directory, model_dir, stride=5, lag_time=10, n_components = 5, tica_regularization = 0.05):
+def fit_and_transform(features_directory, model_dir, stride=5, lag_time=10, n_components = 5, tica_regularization = 0.05, parallel=True, sparse = True):
 	if not os.path.exists(model_dir):
 		os.makedirs(model_dir)
 
@@ -14,14 +14,25 @@ def fit_and_transform(features_directory, model_dir, stride=5, lag_time=10, n_co
 	fit_model_filename  = "%s/phi_psi_chi2_allprot_tica_coords.h5" %model_dir
 	#active_pdb_file = "/scratch/users/enf/b2ar_analysis/renamed_topologies/A-00.pdb"
 
-	tica_model = tICA(n_components = n_components, lag_time = lag_time, gamma = tica_regularization)
+	if not sparse:
+		tica_model = tICA(n_components = n_components, lag_time = lag_time, gamma = tica_regularization)
+	else:
+		tica_model = SparseTICA(n_components = n_components, verbose = True, lag_time = lag_time)
 
 	if not os.path.exists(projected_data_filename):
 		print("loading feature files")
 		feature_files = get_trajectory_files(features_directory, ext = ".h5")
-		pool = mp.Pool(mp.cpu_count())
-		features = pool.map(load_features, feature_files)
-		pool.terminate()
+		if not parallel:
+			features = []
+			for feature_file in feature_files:
+				if sparse: 
+					features.append(load_features(feature_file)[0:1000,0:10])
+				else:
+					features.append(load_features(feature_file))
+		else:
+			pool = mp.Pool(mp.cpu_count())
+			features = pool.map(load_features, feature_files)
+			pool.terminate()
 		if np.shape(features[1]) != np.shape(features[1])[1]:
 			for i in range(0, len(features)):
 				features[i] = np.transpose(features[i])

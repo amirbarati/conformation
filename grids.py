@@ -16,6 +16,17 @@ import sys
 from io_functions import *
 import pytraj.io as mdio
 #from pytraj import adict
+import signal
+import czipfile
+
+class TimeoutException(Exception):   # Custom exception class
+    pass
+
+def timeout_handler(signum, frame):   # Custom signal handler
+    raise TimeoutException
+
+# Change the behavior of SIGALRM
+signal.signal(signal.SIGALRM, timeout_handler)
 
 '''
 If simulation was run under periodic boundary conditions, this will reimage the trajectory.
@@ -29,6 +40,8 @@ It requires that Pytraj be installed. This can be very annoying to do. It was ea
 Sherlock but not on Biox3. 
 
 '''
+
+
 
 
 def reimage_traj(traj_file, traj_dir, save_dir, ext):
@@ -279,9 +292,41 @@ def unzip(zip_file):
 		print("Already unzipped grid files")
 		return
 
-	cmd = "unzip %s" %zip_file
+	cmd = "unzip -u %s" %zip_file
 	subprocess.call(cmd, shell = True)
 	return
+
+def unzip_file(filename_grid_dir):
+	filename = filename_grid_dir[0]
+	grid_dir = filename_grid_dir[1]
+	gridname = filename.split("/")[len(filename.split("/"))-1]
+	print "unzipping %s" %gridname
+	try:
+		fh = open(filename, 'rb')
+		z = czipfile.ZipFile(fh)
+		for name in z.namelist():
+		    outpath = grid_dir
+		    z.extract(name, outpath)
+		fh.close()
+	except:
+		unzip(filename)
+	return
+
+def unzip_receptors(grid_dir, receptors):
+	print "Unzipping selected grid files"
+	grids = ["%s/%s.zip" %(grid_dir,receptor) for receptor in receptors if not os.path.exists("%s/%s.grd")]
+	pool = mp.Pool(mp.cpu_count())
+	pool.map(unzip, grids)
+	pool.terminate()
+
+	#filename_grid_dirs = [(grid, grid_dir) for grid in grids]
+	#num_workers = mp.cpu_count()
+	#pool = mp.Pool(num_workers)
+	#pool.map(unzip_file, filename_grid_dirs)
+	#pool.terminate()
+	print "Finishing unzipping grid files"
+	return
+
 
 def generate_grids(mae_dir, grid_center, grid_dir, remove_lig = None, indices = None, chosen_receptors = None):
 	print grid_dir
@@ -311,10 +356,10 @@ def generate_grids(mae_dir, grid_center, grid_dir, remove_lig = None, indices = 
 	#	grid_partial(grid_file)
 	pool.terminate()
 
-	zips = get_trajectory_files(grid_dir, ".zip")
-	pool = mp.Pool(num_workers)
-	pool.map(unzip, zips)
-	pool.terminate()
+	#zips = get_trajectory_files(grid_dir, ".zip")
+	#pool = mp.Pool(num_workers)
+	#pool.map(unzip, zips)
+	#pool.terminate()
 
 	return grid_dir
 
@@ -323,20 +368,30 @@ the function, dock_conformations() is to dock a single ligand to many conformati
 dock_ligands_and_receptors(), however.
 '''
 
-def dock(dock_job):
-	cmd = "$SCHRODINGER/glide %s -OVERWRITE -WAIT" %dock_job
+def run_command(cmd):
 	subprocess.call(cmd, shell = True)
-	print "Completed docking job %s" %dock_job
+
+def dock(dock_job):
+	signal.alarm(180)
+	cmd = "$SCHRODINGER/glide %s -OVERWRITE -WAIT -strict" %dock_job
+	try:
+		run_command(cmd)
+	except TimeoutException:
+		print "Docking job timed out"
+		return
+	else:
+		signal.alarm(0)
 	return
 
 
-def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP", chosen_jobs = False, parallel = False):
+def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP", chosen_jobs = False, parallel = False, grid_ext = ".zip"):
 	if not os.path.exists(docking_dir): os.makedirs(docking_dir)
 	os.chdir(docking_dir)
 
 	#grid_subdirs = [x[0] for x in os.walk(grid_dir)]
 	#grid_subdirs = grid_subdirs[1:]
-	grid_files = get_trajectory_files(grid_dir, ".grd")
+	unzip_receptors(grid_dir, chosen_jobs)
+	grid_files = get_trajectory_files(grid_dir, grid_ext)
 	dock_jobs = []
 	for grid_file in grid_files:
 		grid_filename = grid_file.split("/")[len(grid_file.split("/"))-1]
@@ -418,6 +473,8 @@ def failed_docking_jobs(docking_dir, ligand, precision):
 	failed_jobs = [j.split("/")[len(j.split("/"))-1].split(".")[0] for j in failed_jobs]
 	return failed_jobs
 
+
+
 def dock_helper(args):
 	dock_conformations(*args)
 
@@ -449,7 +506,7 @@ parallel --> if you set it to "both" it will run in parallel over both ligands a
 	if you pass "receptor": it will parallelize over receptors. Recommedned if n_receptors > n_ligands
 '''
 
-def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "SP", ext = "-out.maegz", chosen_ligands = False, chosen_receptors = False, parallel = False):
+def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "SP", ext = "-out.maegz", chosen_ligands = False, chosen_receptors = False, parallel = False, grid_ext = ".zip"):
 	ligands = get_trajectory_files(ligands_dir, ext = ext)
 
 	if parallel == "both":
@@ -465,7 +522,7 @@ def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "
 			if not os.path.exists(lig_dir): os.makedirs(lig_dir)
 			docking_dirs.append(lig_dir)
 			lig_dirs.append(ligand)
-			args.append((grid_dir, lig_dir, ligand, precision, chosen_receptors, True))
+			args.append((grid_dir, lig_dir, ligand, precision, chosen_receptors, True, grid_ext))
 		
 		num_workers = 5
 		pool = MyPool(num_workers)
@@ -485,7 +542,7 @@ def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "
 			if not os.path.exists(lig_dir): os.makedirs(lig_dir)
 			docking_dirs.append(lig_dir)
 			lig_dirs.append(ligand)
-			args.append((grid_dir, lig_dir, ligand, precision, chosen_receptors, False))
+			args.append((grid_dir, lig_dir, ligand, precision, chosen_receptors, False, grid_ext))
 		
 		num_workers = mp.cpu_count()
 		pool = mp.Pool(num_workers)
@@ -505,7 +562,7 @@ def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "
 			if not os.path.exists(lig_dir): os.makedirs(lig_dir)
 			docking_dirs.append(lig_dir)
 			lig_dirs.append(ligand)
-			args.append((grid_dir, lig_dir, ligand, precision, chosen_receptors, True))
+			args.append((grid_dir, lig_dir, ligand, precision, chosen_receptors, True, grid_ext))
 		
 		for arg in args:
 			dock_helper(arg)
@@ -518,7 +575,7 @@ def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "
 				if lig_no_ext not in chosen_ligands: continue
 			lig_dir = "%s/%s" %(docking_dir, lig_no_ext)
 			if not os.path.exists(lig_dir): os.makedirs(lig_dir)
-			dock_conformations(grid_dir, lig_dir, ligand, precision = precision, chosen_jobs = chosen_receptors)
+			dock_conformations(grid_dir, lig_dir, ligand, precision = precision, chosen_jobs = chosen_receptors, grid_ext=grid_ext)
 
 '''
 

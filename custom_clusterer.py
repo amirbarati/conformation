@@ -15,7 +15,10 @@ def cluster(data_dir, traj_dir, n_clusters, lag_time):
 	if (os.path.exists(clusterer_dir)):
 		print "Already clustered"
 	else:
-		reduced_data = verboseload(data_dir)
+		try:
+			reduced_data = verboseload(data_dir)
+		except:
+			reduced_data = load_dataset(data_dir)
 		trajs = np.concatenate(reduced_data)
 		clusterer = MiniBatchKMedoids(n_clusters = n_clusters)
 		clusterer.fit_transform(reduced_data)
@@ -39,7 +42,10 @@ def cluster_minikmeans(tica_dir, data_dir, traj_dir, n_clusters, lag_time):
 		print "Already clustered"
 	else:
 		print "Clustering by KMeans"
-		reduced_data = verboseload(data_dir)
+		try:
+			reduced_data = verboseload(data_dir)
+		except:
+			reduced_data = load_dataset(data_dir)
 		trajs = np.concatenate(reduced_data)
 		clusterer = MiniBatchKMeans(n_clusters = n_clusters)
 		clusterer.fit_transform(reduced_data)

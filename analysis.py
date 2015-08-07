@@ -13,6 +13,8 @@ import csv
 import operator
 from msmbuilder.utils import verbosedump, verboseload
 from custom_featurizer import compute_contacts_below_cutoff, fix_traj
+from sklearn.metrics import mutual_info_score
+from scipy.stats import pearsonr
 
 def calc_mean_and_stdev(rmsd_map):
 	stats_map = {}
@@ -257,11 +259,14 @@ def plot_tica_and_clusters(component_j, transformed_data, clusterer, lag_time, c
 	plt.clf()
 
 def plot_all_tics_and_clusters(tica_dir, transformed_data_dir, clusterer_dir, lag_time, label = "dot", active_cluster_ids = [], intermediate_cluster_ids = [], inactive_cluster_ids = []):
-	transformed_data = verboseload(transformed_data_dir)
+	try:
+		transformed_data = verboseload(transformed_data_dir)
+	except:
+		transformed_data = load_dataset(transformed_data_dir)
 	clusterer = verboseload(clusterer_dir)
 	num_tics = np.shape(transformed_data[0])[1]
 	print "Looking at %d tICS" %num_tics
-	for i in range(0,1):
+	for i in range(0,num_tics):
 		js = range(i+1, num_tics)
 		plot_partial = partial(plot_tica_and_clusters, tica_dir = tica_dir, transformed_data = transformed_data, clusterer = clusterer, lag_time = lag_time, label = "dot", active_cluster_ids = active_cluster_ids, intermediate_cluster_ids = intermediate_cluster_ids, inactive_cluster_ids = inactive_cluster_ids, component_i = i)
 		pool = mp.Pool(mp.cpu_count())
@@ -285,7 +290,7 @@ def plot_all_tics(tica_dir, transformed_data_dir, lag_time):
 	transformed_data = verboseload(transformed_data_dir)
 	num_tics = np.shape(transformed_data[0])[1]
 	print "Looking at %d tICS" %num_tics
-	for i in range(0,1):
+	for i in range(0,num_tics):
 		for j in range(i+1,num_tics):
 			plot_tica_component_i_j(tica_dir, transformed_data_dir, lag_time, component_i = i, component_j = j)
 	print "Printed all tICA coords"
@@ -772,17 +777,28 @@ def combine_rmsd_docking_maps(rmsd_csv, docking_csv):
 
 	print docking_map[docking_map.keys()[0]]
 
-def find_most_important_residues_in_tIC(traj_file, tica_object, top_n, contact_residues,tic_residue_csv):
-	tica = verboseload(tica_object)
-	residue_pairs = compute_contacts_below_cutoff(traj_file, cutoff = 100000.0, contact_residues = contact_residues, anton = True)
+def find_most_important_residues_in_tIC(traj_file, tica_object, contact_residues,tic_residue_csv, feature_coefs_csv, duplicated_feature_coefs_csv, cutoff):
+	try:
+		tica = verboseload(tica_object)
+	except:
+		tica = load_dataset(tica_object)
+	print traj_file
 	traj = md.load_frame(traj_file, 0)
 	traj = fix_traj(traj)
 	top = traj.topology 
+	residue_pairs = compute_contacts_below_cutoff([traj_file, [0]], cutoff = cutoff, contact_residues = contact_residues, anton = True)
+	#print traj_file
+
 	
 	top_indices_per_tIC = {}
+	feature_coefs_per_tIC = {}
+	duplicated_feature_coefs_per_tIC = {}
+
 	for i in range(0, np.shape(tica.components_)[0]):
 		print i
 		index_components = [(j,abs(tica.components_[i][j])) for j in range(0,np.shape(tica.components_)[1])]
+		feature_coefs_per_tIC[i] = [component[1] for component in index_components]
+		duplicated_feature_coefs_per_tIC[i] = [j for k in feature_coefs_per_tIC[i] for j in (k, k)] 
 		index_components = sorted(index_components, key= lambda x: x[1],reverse=True)
 		print(index_components[0:10])
 		list_i = [index_components[j][0] for j in range(0,len(index_components))]
@@ -794,12 +810,88 @@ def find_most_important_residues_in_tIC(traj_file, tica_object, top_n, contact_r
 		for index in top_indices_per_tIC[i]:
 			residue_index = residue_pairs[index]
 			residues = list(set([a.residue.resSeq for a in top.atoms if a.residue.index in residue_index]))
-			top_residues_per_tIC[i].append(residues)
+			top_residues_per_tIC[	i].append(residues)
 		top_residues_per_tIC[i] = [item for sublist in top_residues_per_tIC[i] for item in sublist]
 
+	residue_list = []
+
+	for residue_pair in residue_pairs:
+		residues = list(set([a.residue.resSeq for a in top.atoms if a.residue.index in residue_pair]))
+		residue_list.append(residues)
+
+	feature_coefs_per_tIC["residues_0"] = [pair[0] for pair in residue_list]
+	feature_coefs_per_tIC["residues_1"] = [pair[1] for pair in residue_list]
+	duplicated_feature_coefs_per_tIC["residues"] = [residue for residue_pair in residue_list for residue in residue_pair]
+
 	write_map_to_csv(tic_residue_csv, top_residues_per_tIC, [])
+	write_map_to_csv(feature_coefs_csv, feature_coefs_per_tIC, [])
+	write_map_to_csv(duplicated_feature_coefs_csv, duplicated_feature_coefs_per_tIC, [])
 	return
 	#print(top_residues_per_tIC)
 
+def save_features_to_residues_map(traj_file, contact_residues, feature_residues_csv, cutoff, residues_map = None):
+	if residues_map is not None:
+		contact_residues = [r for r in contact_residues if r in residues_map.keys()]
+	traj = md.load_frame(traj_file, 0)
+	traj = fix_traj(traj)
+	top = traj.topology 
+	residue_pairs = compute_contacts_below_cutoff([traj_file, [0]], cutoff = cutoff, contact_residues = contact_residues, anton = True)
+	print("There are: %d residue pairs" %len(residue_pairs))
+	residue_list = []
+	for residue_pair in residue_pairs:
+		residues = list(set([a.residue.resSeq for a in top.atoms if a.residue.index in residue_pair]))
+		residue_list.append(sorted(residues))
+	f = open(feature_residues_csv, "wb")
+	f.write("feature, residue.1, residue.2\n")
+	for i in range(0, len(residue_pairs)):
+		f.write("%d, %d, %d\n" %(i, residue_list[i][0], residue_list[i][1]))
+	f.close()
+	return 
+
+
+
+def calc_MI(x, y, bins):
+    c_xy = np.histogram2d(x, y, bins)[0]
+    mi = mutual_info_score(None, None, contingency=c_xy)
+    return mi
+
+def find_correlation(features_dir, tica_projected_coords_dir, mutual_information_csv = "", pearson_csv = "", bins=50):
+	try:
+		tica_coords = verboseload(tica_projected_coords_dir)
+	except:
+		tica_coords = load_dataset(tica_projected_coords_dir)
+	tica_coords = np.concatenate(tica_coords)
+	features = np.concatenate(load_file_list(get_trajectory_files(features_dir, ext = ".h5")))
+
+	if mutual_information_csv != "":
+		mutual_informations = np.zeros((np.shape(features)[1], np.shape(tica_coords)[1]))
+		for j in range(0, np.shape(tica_coords)[1]):
+			print("Calculating MI for all features in tIC %d" %j)
+			MI_partial = partial(calc_MI, y = tica_coords[:,j], bins=250)
+			pool = mp.Pool(mp.cpu_count())
+			mis = pool.map(MI_partial, features.transpose())
+			pool.terminate()
+			mutual_informations[:,j] = mis
+			#for i in range(0, np.shape(features)[1]):
+			#	mi = calc_MI(features[:,i], tica_coords[:,j],bins)
+			#	mutual_informations[i,j] = mi
+		np.savetxt(mutual_information_csv, mutual_informations, delimiter=",")
+
+	if pearson_csv != "":
+		coefs = np.zeros((np.shape(features)[1], np.shape(tica_coords)[1]))
+		for j in range(0, np.shape(tica_coords)[1]):
+			print("Calculating Pearson Coefficients for all features in tIC %d" %j)
+			pearson_partial = partial(pearsonr, y = tica_coords[:,j])
+			pool = mp.Pool(mp.cpu_count())
+			pearsons = pool.map(pearson_partial, features.transpose())
+			pool.terminate()
+			pearson_coefs = [p[0] for p in pearsons]
+			coefs[:,j] = pearson_coefs
+			#for i in range(0, np.shape(features)[1]):
+			#	pearson = pearsonr(features[:,i], tica_coords[:,j])[0]
+			#	coefs[i,j] = pearson
+		np.savetxt(pearson_csv, coefs, delimiter=",")
+
+	print("Finished computing MI and/or Pearson")
 
 

@@ -6,6 +6,23 @@ from msmbuilder.utils import verbosedump, verboseload
 import numpy as np
 import mdtraj as md
 import multiprocessing as mp
+from msmbuilder.dataset import dataset, _keynat, NumpyDirDataset
+
+def save_dataset(data, path): 
+	ds = dataset(path, 'w', 'dir-npy')
+	for i in range(0,len(data)):
+		ds[i] = data[i]
+	ds.close()
+
+def load_dataset(path):
+	ds = dataset(path, 'r', 'dir-npy')
+	data = ds[:]
+	return(data)
+
+def load_npz(filename):
+	nyx = np.load(filename)
+	nyx = [nyx[key] for key in nyx.keys()][0]
+	return(nyx)
 
 def load_file(filename):
 	return(verboseload(filename))

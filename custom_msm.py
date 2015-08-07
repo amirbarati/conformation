@@ -9,6 +9,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from io_functions import *
 from analysis import *
 from msmbuilder import lumping
+import re
 
 def plot_timescales(clusterer_dir, n_clusters, tica_dir):
 	clusterer = verboseload(clusterer_dir)
@@ -68,12 +69,12 @@ def build_msm(clusterer_dir, lag_time):
 	edges.close()
 	'''
 
-def construct_graph(msm_modeler_dir, clusterer_dir, n_clusters, tica_lag_time, msm_lag_time, graph_file, inactive = None, active = None, docking=None, macrostate = None):
+def construct_graph(msm_modeler_dir, clusterer_dir, n_clusters, tica_lag_time, msm_lag_time, graph_file, inactive = None, active = None, pnas_clusters_averages = None, tica_clusters_averages = None, docking=None, macrostate = None):
 	clusterer = verboseload(clusterer_dir)
 	n_clusters = np.shape(clusterer.cluster_centers_)[0]
 	labels = clusterer.labels_
 	if not os.path.exists(msm_modeler_dir):
-		msm_modeler = MarkovStateModel(lag_time=10, n_timescales = 5, sliding_window = True, verbose = True)
+		msm_modeler = MarkovStateModel(lag_time=msm_lag_time, n_timescales = 5, sliding_window = True, verbose = True)
 		print("fitting msm to trajectories with %d clusters and lag_time %d" %(n_clusters, msm_lag_time))
 		msm_modeler.fit_transform(labels)
 		verbosedump(msm_modeler, msm_modeler_dir)
@@ -106,10 +107,27 @@ def construct_graph(msm_modeler_dir, clusterer_dir, n_clusters, tica_lag_time, m
 	if active is not None:
 		scores = convert_csv_to_map_nocombine(active)
 		for cluster in scores.keys():
-			cluster_id = int(cluster[7:len(cluster)])
+			cluster_id = int(re.search(r'\d+',cluster).group()) 
 			if cluster_id in graph.nodes():
 				score = scores[cluster][0]
 				graph.node[cluster_id]["active_pnas"] = score
+
+	if pnas_clusters_averages is not None:
+		scores = convert_csv_to_map_nocombine(pnas_clusters_averages)
+		for cluster in scores.keys():
+			cluster_id = int(re.search(r'\d+',cluster).group()) 
+			if cluster_id in graph.nodes():
+				graph.node[cluster_id]["tm6_tm3_dist"] = scores[cluster][0]
+				graph.node[cluster_id]["rmsd_npxxy_active"] = scores[cluster][2]
+				graph.node[cluster_id]["rmsd_connector_active"] = scores[cluster][4]
+
+	if tica_clusters_averages is not None:
+		scores = convert_csv_to_map_nocombine(tica_clusters_averages)
+		for cluster in scores.keys():
+			cluster_id = int(re.search(r'\d+',cluster).group()) 
+			if cluster_id in graph.nodes():
+				for i in range(0,len(scores[cluster])):
+					graph.node[cluster_id]["tIC%d" %(i+1)] = scores[cluster][i]
 
 	if docking is not None:
 		scores = convert_csv_to_map_nocombine(docking)
@@ -125,6 +143,7 @@ def construct_graph(msm_modeler_dir, clusterer_dir, n_clusters, tica_lag_time, m
 			if cluster_id in graph.nodes():
 				microstate_cluster_id = mapping[cluster_id]
 				macrostate_cluster_id = macromodel.microstate_mapping_[microstate_cluster_id]
+				#print(macrostate_cluster_id)
 				graph.node[cluster_id]["macrostate"] = int(macrostate_cluster_id)
 
 	nx.write_graphml(graph, graph_file)
@@ -212,21 +231,22 @@ def compute_z_core_degrees_group(G = None, graph_file = None, cluster_ids = None
 
 
 def macrostate_pcca(msm_file, clusterer_file, n_macrostates, macrostate_dir):
-	if not os.path.exists(macrostate_dir):
-		msm = verboseload(msm_file)
-		clusterer = verboseload(clusterer_file)
 
-		pcca = lumping.PCCAPlus.from_msm(msm,10)
+	msm = verboseload(msm_file)
+	clusterer = verboseload(clusterer_file)
 
-		#pcca_object = lumping.PCCA(n_macrostates = 10)
-		#pcca_object.fit(sequences = clusterer.labels_)
-		#pcca_object.transform(sequences = clusterer.labels_)
-		#macrostate_model = pcca_object.from_msm(msm = msm, n_macrostates = n_macrostates)
-		print(pcca)
-		verbosedump(pcca, macrostate_dir)
-	else:
-		macrostate = verboseload(macrostate_dir)
-		print(dir(macrostate))
+	#pcca = lumping.PCCAPlus.from_msm(msm = msm,n_macrostates = n_macrostates)
+	#macrostate_model = MarkovStateModel()
+	#macrostate_model.fit(pcca.transform(labels))
+
+	pcca_object = lumping.PCCA(n_macrostates = 10)
+	pcca_object.fit(sequences = clusterer.labels_)
+	#pcca_object.transform(sequences = clusterer.labels_)
+	#macrostate_model = pcca_object.from_msm(msm = msm, n_macrostates = n_macrostates)
+	print(pcca_object)
+	print(pcca_object.microstate_mapping_)
+	verbosedump(pcca_object, macrostate_dir)
+
 
 
 def macrostate_bace(msm_file, n_macrosates):
