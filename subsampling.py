@@ -1,3 +1,40 @@
+import mdtraj as md
+from io_functions import *
+import subprocess
+import multiprocessing as mp
+
+def reimage(traj_file):
+	print("Examining %s" %traj_file)
+	traj = md.load(traj_file)
+	traj = fix_traj(traj)
+	top = traj.topology
+	traj_name = traj_file.spit(".h5")[0]
+	directory = traj_file.split("/")[len(traj_file.split("/"))-2]
+	traj.save_dcd("%s.dcd" %traj_name)
+	top.save_pdb("%s.pdb" %traj_name)
+	del(traj)
+	del(top)
+	f = open("%s.in" %traj_name, 'w')
+	f.write("parm %s" %("%s.pdb" %traj_name))
+	f.write("trajin %s" %("%s.dcd" %traj_name))
+	f.write("autoimage")
+	f.write("trajout %s" %("%s_reimaged.dcd" %traj_name))
+	f.write("trajout %s onlyframes 1" %("%s_reimaged.pdb" %traj_name))
+	f.write("go")
+	f.close()
+	subprocess.call("ml load amber/14-intel")
+	os.chdir(directory)
+	subprocess.call("cpptraj %s.in" %traj_name)
+	traj = md.load("%s_reimaged.dcd" %traj_name, top = "%s_reimaged.pdb" %traj_name)
+	traj.save("%s_reimaged.h5" %traj_name)
+
+
+def reimage_amber(traj_dir):
+	trajs = get_trajectory_files(traj_dir, ext = ".h5")
+	pool = mp.Pool(mp.cpu_count())
+	pool.map(reimage, trajs)
+	pool.close()
+	#map(reimage, trajs)
 
 def subsample_traj(traj, stride=5, top=None):
 	directory = traj.split("/")
