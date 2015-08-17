@@ -1,38 +1,51 @@
 import mdtraj as md
 from io_functions import *
+from custom_featurizer_anton import *
 import subprocess
 import multiprocessing as mp
+import os
 
 def reimage(traj_file):
 	print("Examining %s" %traj_file)
 	traj = md.load(traj_file)
-	traj = fix_traj(traj)
+	#traj = fix_traj(traj)
 	top = traj.topology
-	traj_name = traj_file.spit(".h5")[0]
-	directory = traj_file.split("/")[len(traj_file.split("/"))-2]
+	traj_name = traj_file.split(".h5")[0]
+	traj_last_name = traj_file.split("/")[len(traj_file.split("/"))-1]
+	print(traj_name)
+	directory = "/".join(traj_file.split("/")[0:len(traj_file.split("/"))-2])
+	parent_directory = "/".join(traj_file.split("/")[0:len(traj_file.split("/"))-3])
+	new_directory = "%s/subsampled_reimaged_amber" %directory
 	traj.save_dcd("%s.dcd" %traj_name)
-	top.save_pdb("%s.pdb" %traj_name)
+	traj[0].save_pdb("%s.pdb" %traj_name)
 	del(traj)
 	del(top)
 	f = open("%s.in" %traj_name, 'w')
-	f.write("parm %s" %("%s.pdb" %traj_name))
-	f.write("trajin %s" %("%s.dcd" %traj_name))
-	f.write("autoimage")
-	f.write("trajout %s" %("%s_reimaged.dcd" %traj_name))
-	f.write("trajout %s onlyframes 1" %("%s_reimaged.pdb" %traj_name))
+	f.write("parm %s\n" %("%s.pdb" %traj_name))
+	f.write("trajin %s\n" %("%s.dcd" %traj_name))
+	f.write("autoimage\n")
+	f.write("trajout %s\n" %("%s_reimaged.dcd" %traj_name))
+	f.write("trajout %s onlyframes 1\n" %("%s_reimaged.pdb" %traj_name))
 	f.write("go")
 	f.close()
-	subprocess.call("ml load amber/14-intel")
 	os.chdir(directory)
-	subprocess.call("cpptraj %s.in" %traj_name)
+	os.system("ml load amber/14-intel")
+	subprocess.call("cpptraj %s %s.in" %("%s.pdb" %traj_name, traj_name), shell=True)
+	print("loading reimaged trajectory")
 	traj = md.load("%s_reimaged.dcd" %traj_name, top = "%s_reimaged.pdb" %traj_name)
-	traj.save("%s_reimaged.h5" %traj_name)
+	traj.save("%s/%s" %(new_directory, traj_last_name))
 
 
 def reimage_amber(traj_dir):
 	trajs = get_trajectory_files(traj_dir, ext = ".h5")
+	trajs_to_reimage = trajs
+	#for traj in trajs:
+	#	if "reimage" not in traj: trajs_to_reimage.append(traj)
+	print(trajs_to_reimage)
 	pool = mp.Pool(mp.cpu_count())
-	pool.map(reimage, trajs)
+	#for traj in trajs:
+	#	reimage(traj)
+	pool.map(reimage, trajs_to_reimage)
 	pool.close()
 	#map(reimage, trajs)
 
