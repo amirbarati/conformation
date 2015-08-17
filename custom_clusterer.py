@@ -122,7 +122,10 @@ def dist_to_means(clusterer_dir, features_dir, n_samples = False, n_components =
 	clusterer = verboseload(clusterer_dir)
 	clusters_map = make_clusters_map(clusterer)
 
-	features = verboseload(features_dir)
+	try: 
+		features = verboseload(features_dir)
+	except:
+		features = load_dataset(features_dir)
 	feature_distances = {}
 
 	for i in range(0, len(clusters_map.keys())):
@@ -298,7 +301,10 @@ def cluster_pnas_distances(clusterer_dir, features_dir, active_pnas_dir, pnas_co
 
 	active_pnas_distances = verboseload(active_pnas_dir)
 	pnas_coords = verboseload(pnas_coords_dir)
-	tica_coords = verboseload(projected_features_dir)
+	try:
+		tica_coords = verboseload(projected_features_dir)
+	except:
+		tica_coords = load_dataset(projected_features_dir)
 
 	sampler = partial(get_pnas, clusters_map = clusters_map, pnas_active_distances = active_pnas_distances, pnas_coords = pnas_coords, tica_coords = tica_coords, n_samples = n_samples)
 	num_workers = mp.cpu_count()

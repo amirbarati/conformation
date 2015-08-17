@@ -169,6 +169,37 @@ def pnas_distances(traj_dir, inactive_file, active_file):
 	coordinates.close()
 	return [save_file_i, save_file_a]
 
+def plot_pnas_vs_tics(pnas_dir, tic_dir, pnas_names, directory, scale = 7.14):
+	pnas = np.concatenate(load_file(pnas_dir))
+	pnas[:,0] *= scale
+	print(np.shape(pnas))
+	print(len(pnas_names))
+	if("ktICA" in tic_dir):
+		tics = load_dataset(tic_dir)
+	else:
+		tics = verboseload(tic_dir)
+	print(np.shape(tics))
+	tics = np.concatenate(tics)
+	print(np.shape(tics))
+	if len(pnas_names) != np.shape(pnas)[1]:
+		print("Invalid pnas names")
+		return
+
+	for i in range(0,np.shape(pnas)[1]):
+		for j in range(0,np.shape(tics)[1]):
+			tic = tics[:,j]
+			pnas_coord = pnas[:,i]
+			plt.hexbin(tic, pnas_coord, bins = 'log', mincnt=1)
+			coord_name = pnas_names[i]
+			tic_name = "tIC.%d" %(j+1)
+			plt.xlabel(tic_name)
+			plt.ylabel(coord_name)
+			pp = PdfPages("%s/%s_%s_hexbin.pdf" %(directory, tic_name, coord_name))
+			pp.savefig()
+			pp.close()
+			plt.clf()
+
+	return
 
 
 def plot_hex(transformed_data_file, figure_directory, colors = None, scale = 1.0):

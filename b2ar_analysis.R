@@ -409,38 +409,33 @@ analyze.extreme.tic.values <- function(low.csv, high.csv, feature.residues.csv, 
 }
 
 analyze.tic.feature.correlations <- function(info.csv = "", feature.residues.csv = "", dir, file_string, title_string) {
-  pearson = read.csv(pearson.csv, stringsAsFactors = F, header = F, colClasses = "numeric")
-  mutual = read.csv(mutual.csv, stringsAsFactors = F, header = F, colClasses = "numeric")
-  names <- sapply(seq(1,dim(pearson)[2]), function(x) paste("tIC.", x, sep=""))
-  colnames(pearson) <- names
-  colnames(mutual) <- names
+  info = read.csv(info.csv, stringsAsFactors = F, header = F, colClasses = "numeric")
+  names <- sapply(seq(1,dim(info)[2]), function(x) paste("tIC.", x, sep=""))
+  colnames(info) <- names
   feature.residues <- data.frame(read.csv(feature.residues.csv, stringsAsFactors = F, header=T))
   feature.names <- combine.columns(feature.residues[,2],feature.residues[,3])
   print(feature.names[1:10])
-  rownames(pearson) <- feature.names
-  rownames(mutual) <- feature.names
-  print(mutual[1:10,1,drop=F])
-  for(i in 1:dim(pearson)[2]) {
+  rownames(info) <- feature.names
+  for(i in 1:dim(info)[2]) {
+    print(i)
     tic <- names[i]
-    mis <- mutual[,i,drop=F]
-    pearsons <- pearson[,i,drop=F]
-    mis <- mis[order(-1.0*mis[,1]),1,drop=F]
-    pearsons <- pearsons[order(-1.0*pearsons[,1]),1,drop=F]
-    mis.barplot <- mis[,1]
-    names(mis.barplot) <- rownames(mis)
-    pearsons.barplot <- pearsons[,1]
-    names(pearsons.barplot) <- rownames(pearsons)
+    print(tic)
+    infos <- info[,i,drop=F]
+    infos <- infos[order(-1.0*infos[,1]),1,drop=F]
+    infos.barplot <- infos[,1]
+    names(infos.barplot) <- rownames(infos)
     
-    pdf(paste(dir, "/mutual_information_per_feature_", tic, ".pdf", sep=""), width=20, height=5)
-    barplot(mis.barplot[1:50], las=2, main = paste(tic, " greatest mutual information scores per feature", sep=""))
-    dev.off()
-    
-    pdf(paste(dir, "/pearson_correlation_per_feature_", tic, ".pdf", sep=""), width=20, height=5)
-    barplot(pearsons.barplot[1:50], las=2, main = paste(tic, " greatest paerson correlation coefficients per feature", sep=""))
+    pdf(paste(dir, "/", tic, file_string, ".pdf", sep=""), width=20, height=5)
+    barplot(infos.barplot[1:50], las=2, main = paste(tic, " ", title_string, sep=""))
     dev.off()
   }
   
-  helix <- which.helix(tic.residues, only.helices=TRUE)
+  if(1 == 2) {
+  info.1 <- info
+  info.2 <- info
+  rownames(info.1) <- feature.residues[,2]
+  rownames(info.2) <- feature.residues[,3]
+  helix <- which.helix(feature.residues[,2], only.helices=TRUE)
   print("Helix:")
   print(dim(helix))
   print(helix[1:10,])
@@ -460,6 +455,7 @@ analyze.tic.feature.correlations <- function(info.csv = "", feature.residues.csv
     pdf(paste(analysis.dir, "/barplot_average_inter_helix_coefficient", i, ".pdf", sep=""))
     barplot(interhelix.averages.sorted[[i]][,i],las=2, main = paste("tIC",i, " average interhelix distance coefficient", sep=""))
     dev.off()
+  }
   }
   
 }

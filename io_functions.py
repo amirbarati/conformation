@@ -8,6 +8,21 @@ import mdtraj as md
 import multiprocessing as mp
 from msmbuilder.dataset import dataset, _keynat, NumpyDirDataset
 
+def get_base():
+	sherlock_base = "/scratch/users/enf/b2ar_analysis"
+	biox3_base = "/home/enf/b2ar_analysis"
+
+	if os.path.exists(sherlock_base):
+		print("we are operating on sherlock")
+		base = sherlock_base
+	elif os.path.exists(biox3_base):
+		print("we are operating on biox3")
+		base = biox3_base
+	else:
+		print("WHERE ARE WE?")
+		sys.exit()
+	return(base)
+
 def save_dataset(data, path): 
 	ds = dataset(path, 'w', 'dir-npy')
 	for i in range(0,len(data)):
@@ -25,7 +40,14 @@ def load_npz(filename):
 	return(nyx)
 
 def load_file(filename):
-	return(verboseload(filename))
+	try:
+		return(verboseload(filename))
+	except:
+		try:
+			return(load_dataset)
+		except:
+			return(load_npz)
+	return
 
 def load_file_list(files):
 	num_workers = mp.cpu_count()

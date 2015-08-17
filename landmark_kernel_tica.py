@@ -90,8 +90,14 @@ def landmark_ktica(features_dir, combined_features_dir, tica_dir, clusters_map_f
 	with open(clusters_map_file) as f:
 		clusters_map = json.load(f)
 		clusters_map = {int(k):v for k,v in clusters_map.items()}
+	i = 0
+	for cluster_id,sample_list in clusters_map.items():
+		for sample in sample_list:
+			i+= 1
 
-	tica_model = tICA(n_components = 5, lag_time = lag_time, gamma = gamma)
+	print i
+
+	tica_model = tICA(n_components = tica_components, lag_time = lag_time, gamma = gamma)
 	if not os.path.exists(nystroem_data_filename):
 		features = load_file_list(get_trajectory_files(features_dir, ext = ".h5"))
 		if os.path.exists(landmarks_dir):
@@ -112,12 +118,12 @@ def landmark_ktica(features_dir, combined_features_dir, tica_dir, clusters_map_f
 		#else:
 			#features = verboseload(combined_features_dir)
 		print("here's what goes into the combined class:")
-		landmarks = [landmarks[i] for i in range(0,np.shape(landmarks)[0]) if i%100==0] #%landmark_subsample == 0]
+		landmarks = [landmarks[i] for i in range(0,np.shape(landmarks)[0]) if i%landmark_subsample==0] #%landmark_subsample == 0]
 		#print(np.shape(features))
 		print(np.shape(landmarks))
 		print(type(landmarks))
 		#print(landmarks[9930:np.shape(landmarks)[0]])
-		features = [f[0:100,0:100] for f in features]
+		#features = [f[0:100,0:100] for f in features]
 		nys = Nystroem(n_components = np.shape(landmarks)[0], basis = landmarks)#np.shape(landmarks)[0])# basis=landmarks)
 		nyx = nys.fit_transform(features)
 		del features
@@ -139,15 +145,18 @@ def landmark_ktica(features_dir, combined_features_dir, tica_dir, clusters_map_f
 	print(np.shape(nyx))
 	print(dir(nyx))
 
-	fit_model = tica_model.fit(nyx)
-	verbosedump(fit_model, fit_model_filename)
-	transformed_data = fit_model.transform(nyx)
-	del(nyx)
-	try:
-		save_dataset(transformed_data, projected_data_filename)
-	except:
-		os.system("rm -rf %s" %projected_data_filename)
-		save_dataset(transformed_data, projected_data_filename)
+	if not os.path.exists(projected_data_filename):
+		fit_model = tica_model.fit(nyx)
+		verbosedump(fit_model, fit_model_filename)
+		transformed_data = fit_model.transform(nyx)
+		del(nyx)
+		try:
+			save_dataset(transformed_data, projected_data_filename)
+		except:
+			os.system("rm -rf %s" %projected_data_filename)
+			save_dataset(transformed_data, projected_data_filename)
+	else:
+		print("Already performed landmark kernel tICA.")
 	
 
 def ktica_test(features_dir, tica_dir, landmark_indices = None, nystroem_components=1000, tica_components=10, lag_time=5, nystroem_data_filename = "", fit_model_filename = "", projected_data_filename = ""):
