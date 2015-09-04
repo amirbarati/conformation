@@ -5,7 +5,6 @@ from analysis import *
 import multiprocessing as mp
 import mdtraj as md
 from msmbuilder.cluster import KMeans
-from msmbuilder.cluster import MiniBatchKMeans
 from msmbuilder.cluster import KCenters
 import random
 import json
@@ -258,10 +257,11 @@ def sample_clusters(clusterer_dir, features_dir, traj_dir, traj_ext, save_dir, n
 
 
 
-def get_pnas(cluster, clusters_map, pnas_active_distances, pnas_coords, tica_coords, n_samples):
+def get_pnas(cluster, clusters_map, pnas_active_distances, pnas_coords, tica_coords, feature_coords, n_samples):
 		distances = []
 		coords = []
 		tica_coords_list = []
+		feature_coords_list = []
 		print "cluster = %d" %cluster
 		for s in range(0, n_samples):
 			print "sample  = %d" %s
@@ -275,14 +275,16 @@ def get_pnas(cluster, clusters_map, pnas_active_distances, pnas_coords, tica_coo
 			active_pnas_distance = pnas_active_distances[traj_id][frame]
 			pnas_coord = pnas_coords[traj_id][frame]
 			tica_coord = tica_coords[traj_id][frame]
+			feature_coord = feature_coords[traj_id][frame]
 			distances.append(active_pnas_distance)
 			coords.append(pnas_coord)
 			tica_coords_list.append(tica_coord)
-		return [distances, coords, tica_coords_list]
+			feature_coords_list.append(feature_coord)
+		return [distances, coords, tica_coords_list, feature_coords_list]
 
 
 
-def cluster_pnas_distances(clusterer_dir, features_dir, active_pnas_dir, pnas_coords_dir, projected_features_dir, traj_dir, traj_ext, active_pnas_csv, pnas_coords_csv, tica_coords_csv, n_samples, method, clusters_map_file = None):
+def cluster_pnas_distances(clusterer_dir, features_dir, active_pnas_dir, pnas_coords_dir, projected_features_dir, traj_dir, traj_ext, active_pnas_csv, pnas_coords_csv, tica_coords_csv, feature_coords_csv, n_samples, method, clusters_map_file = None):
 	if method == "cos":	
 		clusters_map = cos_to_means(clusterer_dir, features_dir)
 	elif method == "random":
@@ -305,6 +307,64 @@ def cluster_pnas_distances(clusterer_dir, features_dir, active_pnas_dir, pnas_co
 		tica_coords = verboseload(projected_features_dir)
 	except:
 		tica_coords = load_dataset(projected_features_dir)
+	feature_coords = load_file_list(None, features_dir, ".npy")
+
+	sampler = partial(get_pnas, clusters_map = clusters_map, pnas_active_distances = active_pnas_distances, pnas_coords = pnas_coords, tica_coords = tica_coords, feature_coords = feature_coords, n_samples = n_samples)
+	num_workers = mp.cpu_count()
+	#pool = mp.Pool(num_workers)
+	pnas_feature = []
+	for cluster in clusters: 
+		pnas_feature.append(sampler(cluster))
+	#pnas_feature = pool.map(sampler, clusters)
+	#pool.terminate()
+
+	pnas_distance_map = {}
+	pnas_coords_map = {}
+	tica_coords_map = {}
+	feature_coords_map = {}
+
+	for i in range(0, len(clusters_map.keys())):
+		try:
+			pnas_distance = pnas_feature[i][0]
+			print pnas_distance
+			pnas_coord = pnas_feature[i][1]
+			print pnas_coord
+			tica_coord = pnas_feature[i][2]
+			feature_coord = pnas_feature[i][3]
+		except:
+			continue
+		for j in range(0, len(pnas_distance)):
+			pnas_distance_map["cluster%d_sample%d" %(i, j)] = [pnas_distance[j]]
+			pnas_coords_map["cluster%d_sample%d" %(i,j)] = pnas_coord[j]
+			tica_coords_map["cluster%d_sample%d" %(i,j)] = tica_coord[j]
+			feature_coords_map["cluster%d_sample%d" %(i,j)] = feature_coord[j]
+
+	n_components = len(tica_coords_map[tica_coords_map.keys()[0]])
+
+	write_map_to_csv(active_pnas_csv, pnas_distance_map, ["sample", "active_pnas_distance"])
+	write_map_to_csv(pnas_coords_csv, pnas_coords_map, ["sample", "tm6_tm3_dist", "npxxy_rmsd_inactive", "npxxy_rmsd_active", "connector_rmsd_inactive", "connector_rmsd_active"])
+	tic_names = []
+	for i in range(0, n_components):
+		tic_names.append("tIC_%d" %i)
+	write_map_to_csv(tica_coords_csv, tica_coords_map, ["sample"] + tic_names)
+	write_map_to_csv(feature_coords_csv, feature_coords_map, [])
+
+def sample_features(clusterer_dir, features_dir, features_ext, n_samples, method, clusters_map_file = None):
+	if method == "cos":	
+		clusters_map = cos_to_means(clusterer_dir, features_dir)
+	elif method == "random":
+		with open(clusters_map_file) as f:
+			clusters_map = json.load(f)
+			clusters_map = {int(k):v for k,v in clusters_map.items()}
+			print(clusters_map.keys())
+	elif method == "dist":
+		clusters_map = dist_to_means(clusterer_dir, features_dir)
+	else: 
+		print("method not recognized")
+		return
+	clusters = range(0, len(clusters_map.keys()))
+
+	features = load_file_list(None, features_dir, features_ext)
 
 	sampler = partial(get_pnas, clusters_map = clusters_map, pnas_active_distances = active_pnas_distances, pnas_coords = pnas_coords, tica_coords = tica_coords, n_samples = n_samples)
 	num_workers = mp.cpu_count()
@@ -341,8 +401,6 @@ def cluster_pnas_distances(clusterer_dir, features_dir, active_pnas_dir, pnas_co
 	for i in range(0, n_components):
 		tic_names.append("tIC_%d" %i)
 	write_map_to_csv(tica_coords_csv, tica_coords_map, ["sample"] + tic_names)
-
-
 
 
 

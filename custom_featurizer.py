@@ -380,8 +380,40 @@ def read_and_featurize_custom_anton(traj_file, features_dir = None, condition=No
 
 	verbosedump(manual_features, "%s/%s.h5" %(features_dir, condition))
 
+def convert_resSeq_to_resIndex(top, residue_pairs):
+	resIndices = []
+	for pair in residue_pairs:
+		resSeq0 = pair[0]
+		resSeq1 = pair[1]
+		indices = [(r.index,r) for r in top.residues if r.resSeq == resSeq0 and not r.is_water]
+		if len(indices) == 0:
+			print("FATAL: No residues in trajectory for residue %d" %resSeq0)
+			return None
+		else:
+			ind0 = indices[0][0]
+			for j in indices:
+				if j[0] != ind0: 
+					#print("Warning: multiple res objects for residue %d " %resSeq0)
+					if "CB" in [str(a) for a in r.atoms for r in top.residues if r.index == ind0]:
+						ind0 = j[0]
+		indices = [(r.index,r) for r in top.residues if r.resSeq == resSeq1 and not r.is_water]
+		if len(indices) == 0:
+			print("FATAL: No residues in trajectory for residue %d" %resSeq1)
+			return None
+		else:
+			ind1 = indices[0][0]
+			for j in indices:
+				if j[0] != ind1: 
+					#print("Warning: multiple res objects for residue %d " %resSeq1)
+					if "CB" in [str(a) for a in r.atoms for r in top.residues if r.index == ind1]:
+						ind1 = j[0]
+		resIndices.append((ind0, ind1))
+	print("looking at %d pairs for trajectory" %len(resIndices))
+	return(resIndices)
 
-def read_and_featurize_iter(traj_file, features_dir = None, condition=None, dihedral_types = ["phi", "psi", "chi1", "chi2"], dihedral_residues = None, contact_residue_pairs = None):
+
+
+def read_and_featurize_iter(traj_file, features_dir = None, condition=None, dihedral_types = ["phi", "psi", "chi1", "chi2"], dihedral_residues = None, resSeq_pairs = None):
 
 	a = time.time()
 	dihedral_indices = []
@@ -405,15 +437,25 @@ def read_and_featurize_iter(traj_file, features_dir = None, condition=None, dihe
 
 		manual_features = np.transpose(np.concatenate(dihedral_angles))
 
-	if len(contact_residue_pairs) > 0:
+	if len(resSeq_pairs) > 0:
+		top = md.load_frame(traj_file, index=0).topology
+		resIndex_pairs = convert_resSeq_to_resIndex(top, resSeq_pairs)
 		contact_features = []
-		for chunk in md.iterload(traj_file, chunk = 10000):
-			
-			fixed_traj = fix_traj(chunk)
-			fixed_top = fixed_traj.topology
-			contact_features.append(md.compute_contacts(fixed_traj, contacts = contact_residue_pairs, scheme = 'closest-heavy', ignore_nonprotein=False)[0])
-		
-		contact_features = np.concatenate(contact_features)
+		try:
+			for chunk in md.iterload(traj_file, chunk = 1000):
+			#	chunk = fix_traj(chunk)
+			#chunk = md.load(traj_file,stride=1000)
+			#print(resIndex_pairs[0:10])
+				chunk_features = md.compute_contacts(chunk, contacts = resIndex_pairs, scheme = 'closest-heavy', ignore_nonprotein=False)[0]
+				print(np.shape(chunk_features))
+				contact_features.append(chunk_features)
+			contact_features = np.concatenate(contact_features)
+		except Exception,e:
+			print str(e)
+			print("Failed")
+			return
+			#traj = md.load(traj_file)
+			#contact_features = md.compute_contacts(chunk, contacts = contact_residue_pairs, scheme = 'closest-heavy', ignore_nonprotein=False)[0]
 
 		if len(dihedral_residues) > 0: 
 			manual_features = np.column_stack((manual_features, contact_features))
@@ -427,52 +469,111 @@ def read_and_featurize_iter(traj_file, features_dir = None, condition=None, dihe
 	print(np.shape(manual_features))
 
 	if condition is None:
-		condition = get_condition(traj_file)
+		condition = traj_file.split("/")[len(traj_file.split("/"))-1]
+		condition = condition.split(".")[0]
 
-	verbosedump(manual_features, "%s/%s.h5" %(features_dir, condition))
-
+	save_dataset(manual_features, "%s/%s.dataset" %(features_dir, condition))
 
 def compute_contacts_below_cutoff(traj_file_frame, cutoff = 100000.0, contact_residues = [], anton = False):
 	traj_file = traj_file_frame[0]
 	frame = md.load_frame(traj_file, index = 0)
+	#frame = fix_traj(frame)
+	top = frame.topology
 	
-	if anton:
-		fixed_traj = fix_traj(frame)
-		fixed_top = fixed_traj.topology
-	else: 
-		fixed_traj = frame
-		fixed_top = frame.topology
 	distance_residues = []
-	res_objects = [r for r in fixed_top.residues]
-	for r in contact_residues:
-		for res in res_objects:
-			if res.resSeq == r and len(res._atoms) > 5:
-				#print res._atoms
-				distance_residues.append(res.index)
-	if len(contact_residues) != len(distance_residues):
-		print "Residues are missing"
-		print len(contact_residues)
-		print len(distance_residues)
-		#sys.exit()
-		#return None
+	res_indices = []
+	resSeq_to_resIndex = {}
+
+	for i in range(0, len(contact_residues)):
+		residue = contact_residues[i]
+		indices = [r.index for r in top.residues if r.resSeq == residue and not r.is_water]
+		if len(indices) == 0:
+			print("No residues in trajectory for residue %d" %residue)
+			continue
+		else:
+			ind = indices[0]
+			for j in indices:
+				if j != ind: 
+					#print("Warning: multiple res objects for residue %d " %residue)
+					if "CB" in [str(a) for a in r.atoms for r in top.residues if r.index == ind]:
+						ind = j
+			res_indices.append(ind)
+			distance_residues.append(residue)
+			resSeq_to_resIndex[residue] = ind
 	
-	combinations = itertools.combinations(distance_residues, 2)
-	pairs = [c for c in combinations]
-	#print pairs
+	resSeq_combinations = itertools.combinations(distance_residues, 2)
+	res_index_combinations = []
+	resSeq_pairs = [c for c in resSeq_combinations]
+	for combination in resSeq_pairs:
+		res0 = combination[0]
+		res1 = combination[1]
+		res_index0 = resSeq_to_resIndex[res0]
+		res_index1 = resSeq_to_resIndex[res1]
+		res_index_combinations.append((res_index0, res_index1))
 
-	final_pairs = []
 
-	distances = md.compute_contacts(fixed_traj, contacts = pairs, scheme = 'closest-heavy', ignore_nonprotein=False)[0]
-	print(distances)
+	final_resSeq_pairs = []
+	final_resIndex_pairs = []
+
+	distances = md.compute_contacts(frame, contacts = res_index_combinations, scheme = 'closest-heavy', ignore_nonprotein=False)[0]
+	#print(distances)
 	print(np.shape(distances))
 	for i in range(0, len(distances[0])):
 		distance = distances[0][i]
-		print(distance)
+		#print(distance)
 		if distance < cutoff:
-			final_pairs.append(pairs[i])
+			final_resIndex_pairs.append(res_index_combinations[i])
+			final_resSeq_pairs.append(resSeq_pairs[i])
 
-	print(final_pairs)
-	return(final_pairs)
+	print(len(final_resSeq_pairs))
+	print(len(final_resIndex_pairs))
+	return(final_resSeq_pairs)
+
+
+
+def featurize_custom_anton(traj_dir, features_dir, traj_ext, featurized_traj_and_frame, contact_residue_pairs_csv, dihedral_residues = None, dihedral_types = None, contact_residues = None, agonist_bound = False, residues_map = None, contact_cutoff = None):
+	if not os.path.exists(features_dir): os.makedirs(features_dir)
+
+	all_trajs = get_trajectory_files(traj_dir, traj_ext)
+	trajs = []
+	for fulltraj in all_trajs:
+		#if "H-05" not in fulltraj and "A-00" not in fulltraj: continue
+		traj = fulltraj.split("/")
+		filename = traj[len(traj)-1]
+		#if agonist_bound is not False and filename[0] not in agonist_bound: continue
+		filename_noext = filename.split(".")[0]
+		if os.path.exists("%s/%s.dataset" %(features_dir, filename_noext)):
+			print("already featurized")	
+		else:
+			trajs.append(fulltraj)
+
+	pool = mp.Pool(mp.cpu_count()/4)
+
+	if residues_map is not None:
+		contact_residues = [r for r in contact_residues if r in residues_map.keys()]
+		dihedral_residues = [d for d in dihedral_residues if d in residues_map.keys()]		
+
+	#print contact_residues	
+	
+
+	print(featurized_traj_and_frame)
+	if featurized_traj_and_frame is None: featurized_traj_and_frame = [all_trajs[0], 0]
+	if contact_residue_pairs_csv is None: 
+		contact_residue_pairs = compute_contacts_below_cutoff(featurized_traj_and_frame, cutoff = contact_cutoff, contact_residues = contact_residues, anton = False)
+	else:
+		contact_residue_pairs = generate_features(contact_residue_pairs_csv)
+	print("Number of contact pairs = %d" %len(contact_residue_pairs))
+
+
+	featurize_partial = partial(read_and_featurize_iter, features_dir = features_dir, dihedral_residues = dihedral_residues, dihedral_types = dihedral_types, resSeq_pairs = contact_residue_pairs)
+	#pool.map(featurize_partial, trajs)
+	#pool.terminate()
+	for traj in trajs:
+		print traj
+		featurize_partial(traj)
+
+
+	print("Completed featurizing")
 
 
 def featurize_custom(traj_dir, features_dir, traj_ext, dihedral_residues = None, dihedral_types = None, contact_residues = None, agonist_bound = False, residues_map = None, contact_cutoff = None, n_random_samples = 1, contact_csv=""):
@@ -517,8 +618,8 @@ def featurize_custom(traj_dir, features_dir, traj_ext, dihedral_residues = None,
 	for pair in final_contact_residue_pairs:
 		contact_set.add(pair)
 	contact_list = list(contact_set)
-	print("Final contact residue pairs for featurization:")
-	print(contact_list)
+	#print("Final contact residue pairs for featurization:")
+	#print(contact_list)
 	f = open(contact_csv, 'w')
 	f.write("\n".join(contact_list))
 	f.close()
@@ -535,43 +636,6 @@ def featurize_custom(traj_dir, features_dir, traj_ext, dihedral_residues = None,
 
 	print("Completed featurizing")
 
-def featurize_custom_anton(traj_dir, features_dir, traj_ext, dihedral_residues = None, dihedral_types = None, contact_residues = None, agonist_bound = False, residues_map = None, contact_cutoff = None):
-	if not os.path.exists(features_dir): os.makedirs(features_dir)
-
-	all_trajs = get_trajectory_files(traj_dir, traj_ext)
-	trajs = []
-	for fulltraj in all_trajs:
-		#if "clone0.lh5" not in fulltraj: continue
-		traj = fulltraj.split("/")
-		filename = traj[len(traj)-1]
-		#if agonist_bound is not False and filename[0] not in agonist_bound: continue
-		filename_noext = filename.split(".")[0]
-		if os.path.exists("%s/%s.h5.h5" %(features_dir, filename_noext)):
-			print("already featurized")	
-		else:
-			trajs.append(fulltraj)
-
-	pool = mp.Pool(mp.cpu_count()/4)
-
-	if residues_map is not None:
-		contact_residues = [r for r in contact_residues if r in residues_map.keys()]
-		dihedral_residues = [d for d in dihedral_residues if d in residues_map.keys()]		
-
-	print contact_residues	
-	
-	contact_residue_pairs = compute_contacts_below_cutoff([all_trajs[0],0], cutoff = contact_cutoff, contact_residues = contact_residues, anton = True)
-	print(len(contact_residue_pairs))
-
-
-	featurize_partial = partial(read_and_featurize_iter, features_dir = features_dir, dihedral_residues = dihedral_residues, dihedral_types = dihedral_types, contact_residue_pairs = contact_residue_pairs)
-	pool.map(featurize_partial, trajs)
-	pool.terminate()
-	#for traj in trajs:
-	#	print traj
-	#	featurize_partial(traj)
-
-
-	print("Completed featurizing")
 
 
 
@@ -599,8 +663,8 @@ def featurize_known(directory, inactive_dir, active_dir):
 		traj = fulltraj.split("/")
 		filename = traj[len(traj)-1]
 		if filename[0] in agonist_bound:
-			condition = get_condition(fulltraj)
-			if os.path.exists("%s/%s.h5" %(features_dir, condition)):
+			condition = get_condition(fulltraj).split(".h5")[0]
+			if os.path.exists("%s/%s" %(features_dir, condition)):
 				print("already featurized")
 				trajs.append(fulltraj)
 			else:
@@ -659,7 +723,7 @@ def featurize_pnas_distance(traj_dir, features_dir, ext, inactive_dir, active_di
 	pool = mp.Pool(16)
 	features = pool.map(featurize_partial, trajs)
 	#for traj in trajs:
-	#	featurize_partial(traj)
+	#cxx	featurize_partial(traj)
 	pool.terminate()
 	
 
@@ -832,8 +896,78 @@ def sample_tIC_extremes(tica_projected_coords_dir, features_dir, standardized_fe
 
 
 
+#Saves coefficients in each tIC for each feature (i.e., pair of residues)
+def find_most_important_residues_in_tIC(traj_file, tica_object, contact_residues,tic_residue_csv, feature_coefs_csv, duplicated_feature_coefs_csv, cutoff):
+	try:
+		tica = verboseload(tica_object)
+	except:
+		tica = load_dataset(tica_object)
+	print traj_file
+	traj = md.load_frame(traj_file, 0)
+	#traj = fix_traj(traj)
+	top = traj.topology 
+	residue_pairs = compute_contacts_below_cutoff([traj_file, [0]], cutoff = cutoff, contact_residues = contact_residues, anton = True)
+	#print traj_file
+
+	
+	top_indices_per_tIC = {}
+	feature_coefs_per_tIC = {}
+	duplicated_feature_coefs_per_tIC = {}
 
 
+	#for each tIC:
+		#for each feature, get the absolute component value
+		#add to feature_coefs_per_tIC dictionary the absolute coefficient for that tIC
+		#duplicate them for the analysis where we look at residues individually
+		#sort by absolute coefficient value
+
+	#for each tIC:
+		#
+
+	for i in range(0, np.shape(tica.components_)[0]):
+		print i
+		index_components = [(j,abs(tica.components_[i][j])) for j in range(0,np.shape(tica.components_)[1])]
+		feature_coefs_per_tIC[i] = [component[1] for component in index_components]
+		duplicated_feature_coefs_per_tIC[i] = [j for k in feature_coefs_per_tIC[i] for j in (k, k)] 
+		index_components = sorted(index_components, key= lambda x: x[1],reverse=True)
+		print(index_components[0:10])
+		list_i = [index_components[j][0] for j in range(0,len(index_components))]
+		top_indices_per_tIC[i] = list_i
+	
+	top_residues_per_tIC = {}
+	for i in range(0, np.shape(tica.components_)[0]):
+		top_residues_per_tIC[i] = []
+		for index in top_indices_per_tIC[i]:
+			residues = residue_pairs[index]
+			top_residues_per_tIC[i].append(residues)
+		top_residues_per_tIC[i] = [item for sublist in top_residues_per_tIC[i] for item in sublist]
+
+	residue_list = residue_pairs
+
+	feature_coefs_per_tIC["residues_0"] = [pair[0] for pair in residue_list]
+	feature_coefs_per_tIC["residues_1"] = [pair[1] for pair in residue_list]
+	duplicated_feature_coefs_per_tIC["residues"] = [residue for residue_pair in residue_list for residue in residue_pair]
+
+	write_map_to_csv(tic_residue_csv, top_residues_per_tIC, [])
+	write_map_to_csv(feature_coefs_csv, feature_coefs_per_tIC, [])
+	write_map_to_csv(duplicated_feature_coefs_csv, duplicated_feature_coefs_per_tIC, [])
+	return
+	#print(top_residues_per_tIC)
+
+def save_features_to_residues_map(traj_file, contact_residues, feature_residues_csv, cutoff, residues_map = None):
+	if residues_map is not None:
+		contact_residues = [r for r in contact_residues if r in residues_map.keys()]
+	traj = md.load_frame(traj_file, 0)
+	#traj = fix_traj(traj)
+	top = traj.topology 
+	residue_pairs = compute_contacts_below_cutoff([traj_file, [0]], cutoff = cutoff, contact_residues = contact_residues, anton = True)
+	print("There are: %d residue pairs" %len(residue_pairs))
+	f = open(feature_residues_csv, "wb")
+	f.write("feature, residue.1, residue.2\n")
+	for i in range(0, len(residue_pairs)):
+		f.write("%d, %d, %d\n" %(i, residue_pairs[i][0], residue_pairs[i][1]))
+	f.close()
+	return 
 
 
 

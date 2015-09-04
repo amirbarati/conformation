@@ -99,7 +99,7 @@ def landmark_ktica(features_dir, combined_features_dir, tica_dir, clusters_map_f
 
 	tica_model = tICA(n_components = tica_components, lag_time = lag_time, gamma = gamma)
 	if not os.path.exists(nystroem_data_filename):
-		features = load_file_list(get_trajectory_files(features_dir, ext = ".h5"))
+		features = load_file_list(get_trajectory_files(features_dir, ext = ".dataset"))
 		if os.path.exists(landmarks_dir):
 			landmarks = verboseload(landmarks_dir)
 			print(np.shape(landmarks))
@@ -139,6 +139,48 @@ def landmark_ktica(features_dir, combined_features_dir, tica_dir, clusters_map_f
 		#ds[:] = nyx
 		#f.close()
 		#np.savez_compressed(nystroem_data_filename, nyx)
+	else:
+		nyx = load_dataset(nystroem_data_filename)
+
+	print(np.shape(nyx))
+	print(dir(nyx))
+
+	if not os.path.exists(projected_data_filename):
+		fit_model = tica_model.fit(nyx)
+		verbosedump(fit_model, fit_model_filename)
+		transformed_data = fit_model.transform(nyx)
+		del(nyx)
+		try:
+			save_dataset(transformed_data, projected_data_filename)
+		except:
+			os.system("rm -rf %s" %projected_data_filename)
+			save_dataset(transformed_data, projected_data_filename)
+	else:
+		print("Already performed landmark kernel tICA.")
+
+def landmark_ktica_ticaTraj(tica_dir, clusterer_dir, ktica_dir, clusters_map_file = "", landmarks_dir = "", nystroem_components=1000, tica_components=10, lag_time=5, nystroem_data_filename = "", fit_model_filename = "", projected_data_filename = "", landmark_subsample=1, gamma = 0.05):
+	if not os.path.exists(ktica_dir): os.makedirs(ktica_dir)
+	tica_model = tICA(n_components = tica_components, lag_time = lag_time, gamma = gamma)
+	if not os.path.exists(nystroem_data_filename):
+		clusterer = verboseload(clusterer_dir)
+		tica = verboseload(tica_dir)
+		features = tica
+		clusters = clusterer.cluster_centers_
+		landmarks = clusters
+
+		print("here's what goes into the combined class:")
+		#print(np.shape(features))
+		print(np.shape(landmarks))
+		print(type(landmarks))
+		nys = Nystroem(n_components = np.shape(landmarks)[0], basis = landmarks)#np.shape(landmarks)[0])# basis=landmarks)
+		nyx = nys.fit_transform(features)
+		del features
+		del landmarks
+		try:
+			save_dataset(nyx, nystroem_data_filename)
+		except:
+			os.system("rm -rf %s" %nystroem_data_filename)
+			save_dataset(nyx, nystroem_data_filename)
 	else:
 		nyx = load_dataset(nystroem_data_filename)
 

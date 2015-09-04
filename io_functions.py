@@ -7,6 +7,9 @@ import numpy as np
 import mdtraj as md
 import multiprocessing as mp
 from msmbuilder.dataset import dataset, _keynat, NumpyDirDataset
+from functools import partial
+import scipy.io as sio
+
 
 def get_base():
 	sherlock_base = "/scratch/users/enf/b2ar_analysis"
@@ -31,7 +34,7 @@ def save_dataset(data, path):
 
 def load_dataset(path):
 	ds = dataset(path, 'r', 'dir-npy')
-	data = ds[:]
+	data = np.array(ds[:])
 	return(data)
 
 def load_npz(filename):
@@ -40,21 +43,35 @@ def load_npz(filename):
 	return(nyx)
 
 def load_file(filename):
-	try:
-		return(verboseload(filename))
-	except:
-		try:
-			return(load_dataset)
-		except:
-			return(load_npz)
-	return
+	print("loading %s" %filename)
+	if filename.split(".")[1] == "h5":
+		return np.transpose(verboseload(filename))
+	elif filename.split(".")[1] == "dataset":
+		return np.array(load_dataset(filename))
+	elif filename.split(".")[1] == "csv":
+		csv = np.genfromtxt(filename, delimiter=",")
+		return(csv)
+	elif filename.split(".")[1] == "npy":
+		return(np.load(filename))
 
-def load_file_list(files):
+def load_file_list(files, directory = None, ext = None):
+	print(directory)
+	print(ext)
+	if directory != None and ext != None:
+		files = get_trajectory_files(directory, ext)
+	print(files)
 	num_workers = mp.cpu_count()
 	pool = mp.Pool(num_workers)
 	features = pool.map(load_file, files)
 	pool.terminate()
 	return(features)
+
+def load_features(filename):
+	print("loading %s" %filename)
+	if filename.split(".")[1] == ".h5":
+		return np.transpose(verboseload(filename))
+	else:
+		return np.transpose(np.array(load_dataset(filename)))
 
 def get_trajectory_files(traj_dir, ext = ".pdb"):
 	traj_files = []
@@ -62,6 +79,32 @@ def get_trajectory_files(traj_dir, ext = ".pdb"):
 			if traj.endswith(ext):
 				traj_files.append("%s/%s" %(traj_dir,traj))
 	return sorted(traj_files)
+
+def convert_feature_to_ext(feature_file, save_ext):
+	print("Converting %s" %feature_file)
+	feature = load_file(feature_file)
+	name = feature_file.split(".")[0]
+	if save_ext == ".csv":
+		np.savetxt("%s.csv" %name, feature, delimiter=",")
+	elif save_ext == ".npy":
+		np.save("%s.npy" %name, feature)
+	elif save_ext == ".mat":
+		sio.savemat("%s.mat" %name, mdict={'arr':feature})
+	else:
+		print("ext not recognized")
+
+#def save_mat(dictionary, filename):
+#	sio.savemat(filename, dictionary)
+	
+def convert_features_to_ext(features_dir, load_ext, save_ext):
+	files = get_trajectory_files(features_dir, load_ext)
+	convert_partial = partial(convert_feature_to_ext, save_ext = save_ext)
+	pool = mp.Pool(mp.cpu_count()/4)
+	features = pool.map(convert_partial, files)
+	pool.terminate()
+	#for feature_file in files:
+	#	print("converting %s" %feature_file)
+		
 
 def get_trajectory_files_conditions(traj_dir, ext, condition_1, condition_2):
 	trajs = get_trajectory_files(traj_dir, ext)
@@ -325,6 +368,16 @@ def find_missing_features(traj_dir, features_dir):
 	features = [f.split("/")[len(f.split("/"))-1].split(".")[0] for f in features]
 	features = set(features)
 	print(trajs - features)
+
+def generate_features(features_csv):
+	reader = csv.reader(open(features_csv, "rb"))
+	features = []
+	for line in reader:
+		try:
+			features.append((int(line[0]), int(line[1])))
+		except:
+			continue
+	return(features)
 
 def generate_residues_map(csv_map):
 	reader = csv.reader(open(csv_map, "rb"))

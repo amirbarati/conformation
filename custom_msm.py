@@ -252,3 +252,5 @@ def macrostate_pcca(msm_file, clusterer_file, n_macrostates, macrostate_dir):
 def macrostate_bace(msm_file, n_macrosates):
 	return
 
+def make_trajectory(msm_file, tica_dir):
+	return

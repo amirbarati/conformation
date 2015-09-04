@@ -3,9 +3,6 @@ from msmbuilder.decomposition import tICA, SparseTICA
 from io_functions import *
 import multiprocessing as mp
 
-def load_features(filename):
-	return np.transpose(verboseload(filename))
-
 def fit_and_transform(features_directory, model_dir, stride=5, lag_time=10, n_components = 5, tica_regularization = 0.05, parallel=True, sparse = True):
 	if not os.path.exists(model_dir):
 		os.makedirs(model_dir)
@@ -22,9 +19,12 @@ def fit_and_transform(features_directory, model_dir, stride=5, lag_time=10, n_co
 	if not os.path.exists(projected_data_filename):
 		print("loading feature files")
 		feature_files = get_trajectory_files(features_directory, ext = ".h5")
+		if len(feature_files) == 0: feature_files = get_trajectory_files(features_directory, ext = ".dataset")
+
 		if not parallel:
 			features = []
 			for feature_file in feature_files:
+				print "loading %s" %feature_file
 				if sparse: 
 					features.append(load_features(feature_file)[0:1000,0:10])
 				else:
@@ -33,11 +33,14 @@ def fit_and_transform(features_directory, model_dir, stride=5, lag_time=10, n_co
 			pool = mp.Pool(mp.cpu_count())
 			features = pool.map(load_features, feature_files)
 			pool.terminate()
-		if np.shape(features[1]) != np.shape(features[1])[1]:
+		if np.shape(features[0])[1] != np.shape(features[1])[1]:
 			for i in range(0, len(features)):
 				features[i] = np.transpose(features[i])
 		print np.shape(features[0])
 		print np.shape(features[1])
+		print(features[0][0][0:10])
+		print(features[1][0][0:10])
+		print(np.shape(features))
 		if not os.path.exists(fit_model_filename):
 			print("fitting data to tICA model")
 			fit_model = tica_model.fit(features)
@@ -64,3 +67,37 @@ def fit_and_transform(features_directory, model_dir, stride=5, lag_time=10, n_co
 	#active_features = [np.transpose(verboseload("/scratch/users/enf/b2ar_analysis/A-00_custom_features.h5"))]
 	#active_pdb_projected = fit_model.transform(active_features)
 	#print(active_pdb_projected)
+
+def transform(existing_model, features_directory, tica_dir):
+	model = verboseload(existing_model)
+	feature_files = get_trajectory_files(features_directory, ext = ".dataset")
+	features = load_file_list(feature_files)
+	tica_coords = model.transform(features)
+	tica_coords = np.concatenate(tica_coords)
+
+	if not os.path.exists(tica_dir): os.makedirs(tica_dir)
+	np.savetxt("%s/refcoords.csv" %tica_dir, tica_coords, delimiter=",")
+	return
+
+	#load features into list
+	#transform it with model
+	#save to dataset or just a csv file
+	#use to make new tica coord plots with inactive and active structures 
+
+def check_tica_vs_features(tica_coords_dir, feature_dir):
+	tica_coords = verboseload(tica_coords_dir)
+	tica_coords = np.concatenate(tica_coords)
+	print(np.shape(tica_coords))
+	feature_files = get_trajectory_files(feature_dir, ext = ".h5")
+	if len(feature_files) == 0: feature_files = get_trajectory_files(feature_dir, ext = ".dataset")
+	pool = mp.Pool(mp.cpu_count())
+	features = pool.map(load_features, feature_files)
+	pool.terminate()
+	if np.shape(features[0])[1] != np.shape(features[1])[1]:
+		for i in range(0, len(features)):
+			features[i] = np.transpose(features[i])
+	features = np.concatenate(features)
+	print(np.shape(features))
+	print(np.shape(tica_coords))
+
+#print out all random forest GINI decreases:

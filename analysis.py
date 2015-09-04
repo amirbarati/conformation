@@ -12,9 +12,10 @@ import mdtraj as md
 import csv
 import operator
 from msmbuilder.utils import verbosedump, verboseload
-from custom_featurizer import compute_contacts_below_cutoff, fix_traj
 from sklearn.metrics import mutual_info_score
 from scipy.stats import pearsonr
+from scipy import stats
+from mayavi import mlab
 
 def calc_mean_and_stdev(rmsd_map):
 	stats_map = {}
@@ -46,13 +47,25 @@ def rmsd_connector(traj, inactive, residues_map = None):
 	if residues_map is not None:
 		residues = map_residues(residues_map, residues)
 
+	nonsymmetric = ["CG2", "CG1", "CD1", "CD2", "CE1", "CE2"]	
+	connector_atoms = [(a.index, str(a)) for a in traj.topology.atoms if a.residue.resSeq in [121, 282] and "hydrogen" not in a.element and not any(substring in str(a) for substring in nonsymmetric)]
 	
-	connector_atoms = [a.index for a in traj.topology.atoms if a.residue.resSeq in residues and a.is_backbone]
+ 	#print(connector_atom_names)
 	#print connector_atoms
+	connector_atoms = sorted(connector_atoms, key=operator.itemgetter(1), reverse = True)
+	#print(connector_atoms)
+	connector_atoms = [a[0] for a in connector_atoms]
 	traj_stripped = traj.atom_slice(connector_atoms)
 
-	connector_atoms_target = [a.index for a in inactive.topology.atoms if a.residue.resSeq in [121, 282] and a.is_backbone]
+
+	connector_atoms_target = [(a.index,str(a)) for a in inactive.topology.atoms if a.residue.resSeq in [121, 282] and "hydrogen" not in a.element and not any(substring in str(a) for substring in nonsymmetric)]
+	
+	#connector_atom_names = [(a, a.element, a.index, a.residue) for a in inactive.topology.atoms if a.residue.resSeq in [121, 282] and "hydrogen" not in a.element]
+	#print(connector_atom_names)
 	#print connector_atoms_target
+	connector_atoms_target = sorted(connector_atoms_target, key=operator.itemgetter(1), reverse = True)
+	#print(connector_atoms_target)
+	connector_atoms_target = [a[0] for a in connector_atoms_target]
 	inactive_stripped = inactive.atom_slice(connector_atoms_target)
 
 	traj_stripped_aligned = traj_stripped.superpose(inactive_stripped)
@@ -64,12 +77,16 @@ def rmsd_npxxy(traj, inactive, residues_map = None):
 	if residues_map is not None:
 		residues = map_residues(residues_map, residues)
 
-	
-	npxxy_atoms = [a.index for a in traj.topology.atoms if a.residue.resSeq in residues and a.is_backbone]
+	npxxy_atoms = [(a.index,str(a)) for a in traj.topology.atoms if a.residue.resSeq in residues and a.is_backbone]
+	npxxy_atoms = sorted(npxxy_atoms, key=operator.itemgetter(1), reverse = True)
+	npxxy_atoms = [a[0] for a in npxxy_atoms]
+
 	#print npxxy_atoms
 	traj_stripped = traj.atom_slice(npxxy_atoms)
 
-	npxxy_atoms_target = [a.index for a in inactive.topology.atoms if a.residue.resSeq in range(322,328) and a.is_backbone]
+	npxxy_atoms_target = [(a.index,str(a)) for a in inactive.topology.atoms if a.residue.resSeq in range(322,328) and a.is_backbone]
+	npxxy_atoms_target = sorted(npxxy_atoms_target, key=operator.itemgetter(1), reverse = True)
+	npxxy_atoms_target = [a[0] for a in npxxy_atoms_target]
 	#print npxxy_atoms_target
 	inactive_stripped = inactive.atom_slice(npxxy_atoms_target)
 
@@ -169,7 +186,7 @@ def pnas_distances(traj_dir, inactive_file, active_file):
 	coordinates.close()
 	return [save_file_i, save_file_a]
 
-def plot_pnas_vs_tics(pnas_dir, tic_dir, pnas_names, directory, scale = 7.14):
+def plot_pnas_vs_tics(pnas_dir, tic_dir, pnas_names, directory, scale = 7.14, refcoords_file = None):
 	pnas = np.concatenate(load_file(pnas_dir))
 	pnas[:,0] *= scale
 	print(np.shape(pnas))
@@ -316,6 +333,120 @@ def plot_tica_component_i_j(tica_dir, transformed_data_dir, lag_time, component_
 	pp.savefig()
 	pp.close()
 	plt.clf()
+
+def plot_column_pair(i, num_columns, save_dir, titles, data, refcoords):
+	for j in range(i+1, num_columns):
+		plt.hexbin(data[:,i],  data[:,j], bins = 'log', mincnt=1)
+		if refcoords is not None:
+			print([refcoords[0,i], refcoords[0,j]])
+			plt.scatter([refcoords[0,i]], [refcoords[0,j]], marker = 's', c='w',s=15)
+			plt.scatter([refcoords[1,i]], [refcoords[1,j]], marker = 'v', c='k',s=15)
+		if titles is not None: 
+			pp = PdfPages("%s/%s_%s.pdf" %(save_dir, titles[i], titles[j]))
+			plt.xlabel(titles[i])
+			plt.ylabel(titles[j])
+			pp.savefig()
+			pp.close()
+			plt.clf()
+		else:
+			pp = PdfPages("%s/tIC.%d_tIC.%d.pdf" %(save_dir, i+1, j+1))
+			plt.xlabel("tIC.%d" %(i+1))
+			plt.ylabel("tIC.%d" %(j+1))
+			pp.savefig()
+			pp.close()
+			plt.clf()
+
+def plot_columns(save_dir, data_file, titles = None, tICA = False, scale = 1.0, refcoords_file = None):
+	data = verboseload(data_file)
+	data = np.concatenate(data)
+	data[:,0] *= scale
+
+	if(refcoords_file is not None):
+		refcoords = load_file(refcoords_file)
+	else:
+		refcoords = None
+	print(np.shape(refcoords))
+	print(refcoords)
+
+	num_columns = np.shape(data)[1]
+	plot_column_pair_partial = partial(plot_column_pair, num_columns = num_columns, save_dir = save_dir, titles = titles, data = data, refcoords = refcoords)
+	pool = mp.Pool(mp.cpu_count())
+	pool.map(plot_column_pair_partial, range(0,num_columns))
+	pool.terminate()
+
+	print("Done plotting columns")
+	return
+
+def plot_columns_3d(save_dir, data_file, titles = None, tICA = True, scale = 1.0, refcoords_file = None, columns = []):
+	data = verboseload(data_file)[0:10]
+	data = np.concatenate(data)
+	data[:,0] *= scale
+
+	if(refcoords_file is not None):
+		refcoords = load_file(refcoords_file)
+	else:
+		refcoords = None
+	print(np.shape(refcoords))
+	print(refcoords)
+
+	x = data[:,columns[0]]
+	y = data[:,columns[1]]
+	z = data[:,columns[2]]
+	xyz = np.vstack([x,y,z])
+	kde = stats.gaussian_kde(xyz)
+	density = np.log(kde(xyz))
+
+	figure = mlab.figure('DensityPlot')
+	pts = mlab.points3d(x,y,z, density,scale_mode='none',scale_factor=0.07)
+	mlab.axes()
+	mlab.show()
+	mlab.savefig("%s/tICs_%d_%d_%d.pdf" %(save_dir, columns[0], columns[1], columns[2]), figure=figure)
+			
+def calc_kde(data, kde):
+    return kde(data.T)
+
+def plot_columns_3d_contour(save_dir, data_file, titles = None, tICA = True, scale = 1.0, refcoords_file = None, columns = []):
+	data = verboseload(data_file)[0:2]
+	data = np.concatenate(data)
+	data[:,0] *= scale
+
+	if(refcoords_file is not None):
+		refcoords = load_file(refcoords_file)
+	else:
+		refcoords = None
+	print(np.shape(refcoords))
+	print(refcoords)
+
+	x = data[:,columns[0]]
+	y = data[:,columns[1]]
+	z = data[:,columns[2]]
+	xyz = np.vstack([x,y,z])
+	kde = stats.gaussian_kde(xyz)
+	density = kde(xyz)
+
+	xmin, ymin, zmin = x.min(), y.min(), z.min()
+	xmax, ymax, zmax = x.max(), y.max(), z.max()
+
+	xi, yi, zi = np.mgrid[xmin:xmax:30j, ymin:ymax:30j, zmin:zmax:30j]
+	coords = np.vstack([item.ravel() for item in [xi, yi, zi]]) 
+
+	cores = mp.cpu_count()
+	pool = mp.Pool(processes=cores)
+	calc_kde_partial = partial(calc_kde, kde=kde)
+	results = pool.map(calc_kde_partial, np.array_split(coords.T, 2))
+	density = np.concatenate(results).reshape(xi.shape)
+
+	figure = mlab.figure('DensityPlot')
+
+	grid = mlab.pipeline.scalar_field(xi, yi, zi, density)
+	min = density.min()
+	max=density.max()
+	mlab.pipeline.volume(grid, vmin=min, vmax=min + .5*(max-min))
+
+	mlab.axes()
+	mlab.show()
+
+				
 
 def plot_all_tics(tica_dir, transformed_data_dir, lag_time):
 	transformed_data = verboseload(transformed_data_dir)
@@ -808,76 +939,7 @@ def combine_rmsd_docking_maps(rmsd_csv, docking_csv):
 
 	print docking_map[docking_map.keys()[0]]
 
-def find_most_important_residues_in_tIC(traj_file, tica_object, contact_residues,tic_residue_csv, feature_coefs_csv, duplicated_feature_coefs_csv, cutoff):
-	try:
-		tica = verboseload(tica_object)
-	except:
-		tica = load_dataset(tica_object)
-	print traj_file
-	traj = md.load_frame(traj_file, 0)
-	traj = fix_traj(traj)
-	top = traj.topology 
-	residue_pairs = compute_contacts_below_cutoff([traj_file, [0]], cutoff = cutoff, contact_residues = contact_residues, anton = True)
-	#print traj_file
 
-	
-	top_indices_per_tIC = {}
-	feature_coefs_per_tIC = {}
-	duplicated_feature_coefs_per_tIC = {}
-
-	for i in range(0, np.shape(tica.components_)[0]):
-		print i
-		index_components = [(j,abs(tica.components_[i][j])) for j in range(0,np.shape(tica.components_)[1])]
-		feature_coefs_per_tIC[i] = [component[1] for component in index_components]
-		duplicated_feature_coefs_per_tIC[i] = [j for k in feature_coefs_per_tIC[i] for j in (k, k)] 
-		index_components = sorted(index_components, key= lambda x: x[1],reverse=True)
-		print(index_components[0:10])
-		list_i = [index_components[j][0] for j in range(0,len(index_components))]
-		top_indices_per_tIC[i] = list_i
-	
-	top_residues_per_tIC = {}
-	for i in range(0, np.shape(tica.components_)[0]):
-		top_residues_per_tIC[i] = []
-		for index in top_indices_per_tIC[i]:
-			residue_index = residue_pairs[index]
-			residues = list(set([a.residue.resSeq for a in top.atoms if a.residue.index in residue_index]))
-			top_residues_per_tIC[	i].append(residues)
-		top_residues_per_tIC[i] = [item for sublist in top_residues_per_tIC[i] for item in sublist]
-
-	residue_list = []
-
-	for residue_pair in residue_pairs:
-		residues = list(set([a.residue.resSeq for a in top.atoms if a.residue.index in residue_pair]))
-		residue_list.append(residues)
-
-	feature_coefs_per_tIC["residues_0"] = [pair[0] for pair in residue_list]
-	feature_coefs_per_tIC["residues_1"] = [pair[1] for pair in residue_list]
-	duplicated_feature_coefs_per_tIC["residues"] = [residue for residue_pair in residue_list for residue in residue_pair]
-
-	write_map_to_csv(tic_residue_csv, top_residues_per_tIC, [])
-	write_map_to_csv(feature_coefs_csv, feature_coefs_per_tIC, [])
-	write_map_to_csv(duplicated_feature_coefs_csv, duplicated_feature_coefs_per_tIC, [])
-	return
-	#print(top_residues_per_tIC)
-
-def save_features_to_residues_map(traj_file, contact_residues, feature_residues_csv, cutoff, residues_map = None):
-	if residues_map is not None:
-		contact_residues = [r for r in contact_residues if r in residues_map.keys()]
-	traj = md.load_frame(traj_file, 0)
-	traj = fix_traj(traj)
-	top = traj.topology 
-	residue_pairs = compute_contacts_below_cutoff([traj_file, [0]], cutoff = cutoff, contact_residues = contact_residues, anton = True)
-	print("There are: %d residue pairs" %len(residue_pairs))
-	residue_list = []
-	for residue_pair in residue_pairs:
-		residues = list(set([a.residue.resSeq for a in top.atoms if a.residue.index in residue_pair]))
-		residue_list.append(sorted(residues))
-	f = open(feature_residues_csv, "wb")
-	f.write("feature, residue.1, residue.2\n")
-	for i in range(0, len(residue_pairs)):
-		f.write("%d, %d, %d\n" %(i, residue_list[i][0], residue_list[i][1]))
-	f.close()
-	return 
 
 
 
@@ -892,7 +954,7 @@ def find_correlation(features_dir, tica_projected_coords_dir, mutual_information
 	except:
 		tica_coords = load_dataset(tica_projected_coords_dir)
 	tica_coords = np.concatenate(tica_coords)
-	features = np.concatenate(load_file_list(get_trajectory_files(features_dir, ext = ".h5")))
+	features = np.concatenate(load_file_list(get_trajectory_files(features_dir, ext = ".dataset")))
 
 	if mutual_information_csv != "":
 		mutual_informations = np.zeros((np.shape(features)[1], np.shape(tica_coords)[1]))
