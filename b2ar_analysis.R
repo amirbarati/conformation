@@ -428,23 +428,92 @@ plot.mixture <- function(tic, best.model, n.comp, filename) {
     ggsave(filename = filename, plot = gp)
 }
 
+compute.tIC.mixture.model <- function(tIC, j, save.dir, max_components = 10, num.repeats=5) {
+  min.components <- rep(NA, num.repeats)
+  for(r in 1:num.repeats) {
+    bics <- rep(NA, max_components)
+    loglikes <- rep(NA, max_components)
+    n <- length(tIC)
+    data.points <- 1:n
+    data.points <- sample(data.points)
+    train <- data.points[1:floor(n/2)]
+    test <- data.points[-(1:floor(n/2))]
+
+    loglikes <- vector(length=max_components)
+    mu0 <- mean(tIC[train])
+    sd0 <- sd(tIC[train] * sqrt(floor(n/2)-1)/floor(n/2))
+
+    mixtures = list()
+    mixtures[[1]] <- list(x=tIC[train], mu=mu0,sigma=sd0,lambda=1,
+                    loglik=sum(dnorm(tIC[test],mu0,sd0,log=TRUE)))
+    bics[1] <- BIC.mix(mixtures[[1]])
+    loglikes[1] <- sum(dnorm(tIC[test],mu0,sd0,log=TRUE))
+    candidate.component.numbers <- 2:max_components
+    for(k in candidate.component.numbers) {
+      print(paste("fitting model for ", k, " components", sep=""))
+      mixtures[[k]] <- tryCatch({
+        if(k == 2) { 
+          ini_mu = c(mean(tIC) - 2 * sd(tIC), mean(tIC) + 2 * sd(tIC))
+        } else {
+          ini_mu=seq(mean(tIC) - 2*sd(tIC), mean(tIC) + 2*sd(tIC),4*sd(tIC)/(k-1))
+        }
+        normalmixEM(tIC[train], k=k, maxit=400,epsilon=1e-2, arbvar=FALSE, sd.constr = rep('a',k), mu=ini_mu, arbmean=TRUE)
+      }, error = function(e) {
+        print("Error in fitting normal mix EM!")
+        bics[k] <- 10000000.0
+        loglikes[k] <- -10000000.0
+        return(c(NA))
+      }, finally = {
+      })
+      if(mixtures[[k]] != c(NA)) {
+        bics[k] <- BIC.mix(mixtures[[k]])
+        loglikes[k] <- loglike.normalmix(tIC[test],mixture=mixtures[[k]])
+      }
+
+    }
+    num.components <- min(which.min(bics),which.max(loglikes))
+    min.components[r] <- num.components
+  }
+
+  print(min.components)
+  k <- min(min.components)
+  if(k == 2) { 
+    ini_mu = c(mean(tIC) - 2 * sd(tIC), mean(tIC) + 2 * sd(tIC))
+  } else {
+    ini_mu=seq(mean(tIC) - 2*sd(tIC), mean(tIC) + 2*sd(tIC),4*sd(tIC)/(k-1))
+  }
+  final.model <- normalmixEM(tIC, k=k, maxit=400, epsilon=1e-2,arbvar=FALSE, sd.constr = rep('a',k), mu=ini_mu, arbmean=TRUE)#, sd.constr = rep('a',k), mu=seq(min(tIC), max(tIC),(max(tIC)-min(tIC))/final.n.components),arbmean=TRUE)\
+  final.means <- final.model$mu
+  final.classes <- apply(final.model$posterior,1,which.max)
+
+  save(final.model, file=paste(save.dir, "/tIC_", j, "_gmm_R.RData", sep=""))
+
+  final.model.list = list()
+  final.model.list$mu = final.means
+  final.model.list$classes = final.classes
+
+  return(final.model.list)
+
+}
+
 tIC.mixture.models <- function(tics = "", tica.csv, dir) {
   tica.csv = "/home/enf/b2ar_analysis/tICA_t5_n_components25all_tm_residues_under_cutoff1nm_regularization0pt5/analysis_n_clusters1000_random/tica_coords.csv"
   dir = "/home/enf/b2ar_analysis/tICA_t5_n_components25all_tm_residues_under_cutoff1nm_regularization0pt5/analysis_n_clusters1000_random/"
   tics = ""
   if(tics == "") {
       tics = read.csv(tica.csv, stringsAsFactors = F, header = T, row.names = 1)
-    }
-    #rows <- seq(1,dim(tics)[1],1)
-    #random.rows <- sample(rows, 100000)
-    #tics <- tics[random.rows,]
-    best.components <- rep(NA,dim(tics)[2])
-    tica.classes <- tics
-    tic.names <- rep(NA, dim(tics)[2])
-    for(i in 1:dim(tics)[2]) {
-      tic.names[i] <- paste("tIC.", i, sep="")
-    }
-    colnames(tics) <- tic.names
+  }
+  
+  #rows <- seq(1,dim(tics)[1],1)
+  #random.rows <- sample(rows, 100000)
+  #tics <- tics[random.rows,]
+  best.components <- rep(NA,dim(tics)[2])
+  tica.classes <- tics
+  tic.names <- rep(NA, dim(tics)[2])
+  for(i in 1:dim(tics)[2]) {
+    tic.names[i] <- paste("tIC.", i, sep="")
+  }
+  colnames(tics) <- tic.names
 
 
   for(i in 1:dim(tics)[2]) {

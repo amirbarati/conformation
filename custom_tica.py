@@ -2,8 +2,9 @@ import os
 from msmbuilder.decomposition import tICA, SparseTICA
 from io_functions import *
 import multiprocessing as mp
+import glob
 
-def fit_and_transform(features_directory, model_dir, stride=5, lag_time=10, n_components = 5, tica_regularization = 0.05, parallel=True, sparse = True):
+def fit_and_transform(features_directory, model_dir, stride=5, lag_time=10, n_components = 5, wolf = True, shrinkage = None, rho = 0.05, parallel=True, sparse = True, traj_ext = ".h5"):
 	if not os.path.exists(model_dir):
 		os.makedirs(model_dir)
 
@@ -12,52 +13,69 @@ def fit_and_transform(features_directory, model_dir, stride=5, lag_time=10, n_co
 	#active_pdb_file = "/scratch/users/enf/b2ar_analysis/renamed_topologies/A-00.pdb"
 
 	if not sparse:
-		tica_model = tICA(n_components = n_components, lag_time = lag_time, gamma = tica_regularization)
+		if shrinkage is None:
+			tica_model = tICA(n_components = n_components, lag_time = lag_time)
+		else:
+			tica_model = tICA(n_components = n_components, lag_time = lag_time, shrinkage = shrinkage)
+		
 	else:
-		tica_model = SparseTICA(n_components = n_components, verbose = True, lag_time = lag_time)
+		if shrinkage is None:
+			tica_model = SparseTICA(n_components = n_components, lag_time = lag_time, rho = rho)
+		else:
+			tica_model = SparseTICA(n_components = n_components, lag_time = lag_time, rho = rho, shrinkage = shrinkage)
 
 	if not os.path.exists(projected_data_filename):
 		print("loading feature files")
-		feature_files = get_trajectory_files(features_directory, ext = ".h5")
+		feature_files = get_trajectory_files(features_directory, ext = traj_ext)
 		if len(feature_files) == 0: feature_files = get_trajectory_files(features_directory, ext = ".dataset")
 
 		if not parallel:
 			features = []
 			for feature_file in feature_files:
+				#if "A-00" not in feature_file and "A-01" not in feature_file: continue
+				#print("Loading feature files one at a time")
 				print "loading %s" %feature_file
-				if sparse: 
-					features.append(load_features(feature_file)[0:1000,0:10])
-				else:
-					features.append(load_features(feature_file))
+				#if sparse: 
+				#	features.append(load_features(feature_file)[0:1000,0:10])
+				#else:
+				
+				features.append(load_features(feature_file))
 		else:
 			pool = mp.Pool(mp.cpu_count())
 			features = pool.map(load_features, feature_files)
 			pool.terminate()
-		if np.shape(features[0])[1] != np.shape(features[1])[1]:
+		transpose = False
+		for i in range(0, len(features)):
+			if np.shape(features[0])[1] != np.shape(features[i])[1]:
+				transpose = True
+				break
+		if transpose: 
 			for i in range(0, len(features)):
 				features[i] = np.transpose(features[i])
 		print np.shape(features[0])
-		print np.shape(features[1])
+		#print np.shape(features[1])
 		print(features[0][0][0:10])
-		print(features[1][0][0:10])
+		#print(features[1][0][0:10])
 		print(np.shape(features))
-		if not os.path.exists(fit_model_filename):
-			print("fitting data to tICA model")
-			fit_model = tica_model.fit(features)
-			verbosedump(fit_model, fit_model_filename)
-			transformed_data = fit_model.transform(features)
-			verbosedump(transformed_data, projected_data_filename)
-		else:
-			print("loading tICA model")
-			fit_model = verboseload(fit_model_filename)
-			print("transforming")
-			transformed_data = fit_model.transform(features)
-			verbosedump(transformed_data, projected_data_filename)
-	else:
-		fit_model = verboseload(fit_model_filename)
-		transformed_data = verboseload(projected_data_filename)
 
-	print fit_model.summarize()
+		print("fitting data to tICA model")
+		fit_model = tica_model.fit(features)
+		print(fit_model.summarize())
+		#print(dir(fit_model))
+		#save_dataset(fit_model, fit_model_filename)
+		transformed_data = fit_model.transform(features)
+		print("transformed data with tICA model")
+		verbosedump(fit_model, fit_model_filename)
+		print("saved tICA model")
+		verbosedump(transformed_data, projected_data_filename)
+		print("saved data projected onto tICA coords")
+
+	else:
+		print("already computed tICA model")
+		#fit_model = load_file(fit_model_filename)
+		#transformed_data = load_file(projected_data_filename)
+
+	#print fit_model.summarize()
 
 	#active_pdb = md.load(active_pdb_file)
 	#top = active_pdb.topology

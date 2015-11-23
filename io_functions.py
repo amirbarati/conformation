@@ -142,9 +142,9 @@ def write_map_to_csv(filename, data_map, titles):
 		i = 0
 		for value in data_map[key]:
 			if i < (len(data_map[key])-1):
-				csvfile.write("%f, " %value)
+				csvfile.write("%s, " %str(value))
 			else:
-				csvfile.write("%f \n" %value)
+				csvfile.write("%s \n" %str(value))
 			i += 1
 	return
 
@@ -374,7 +374,10 @@ def generate_features(features_csv):
 	features = []
 	for line in reader:
 		try:
-			features.append((int(line[0]), int(line[1])))
+			try:
+				features.append(((int(line[1]), int(line[2]), str(line[3])), (int(line[4]), int(line[5]), str(line[6]))))
+			except:
+				features.append(((int(line[1]), int(line[2]))))
 		except:
 			continue
 	return(features)

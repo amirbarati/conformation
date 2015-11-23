@@ -1,4 +1,4 @@
-from msmbuilder.decomposition import tICA
+from msmbuilder.decomposition import tICA, SparseTICA
 from sklearn.kernel_approximation import Nystroem as ScikitNystroem
 from LandmarkNystroem import Nystroem as LandmarkNystroem
 from msmbuilder.decomposition.base import MultiSequenceDecompositionMixin
@@ -86,7 +86,7 @@ def landmark_kernel_tica(clusterer_dir, cluster_map_file, n_landmarks_per_cluste
 
 
 
-def landmark_ktica(features_dir, combined_features_dir, tica_dir, clusters_map_file = "", landmarks_dir = "", nystroem_components=1000, tica_components=10, lag_time=5, nystroem_data_filename = "", fit_model_filename = "", projected_data_filename = "", landmark_subsample=1, gamma = 0.05):
+def landmark_ktica(features_dir, combined_features_dir, tica_dir, clusters_map_file = "", landmarks_dir = "", nystroem_components=1000, n_components=10, lag_time=5, nystroem_data_filename = "", fit_model_filename = "", projected_data_filename = "", landmark_subsample=1, sparse = False, shrinkage = 0.05, wolf = True, rho = 0.01):
 	with open(clusters_map_file) as f:
 		clusters_map = json.load(f)
 		clusters_map = {int(k):v for k,v in clusters_map.items()}
@@ -97,7 +97,18 @@ def landmark_ktica(features_dir, combined_features_dir, tica_dir, clusters_map_f
 
 	print i
 
-	tica_model = tICA(n_components = tica_components, lag_time = lag_time, gamma = gamma)
+	if not sparse:
+		if shrinkage is None:
+			tica_model = tICA(n_components = n_components, lag_time = lag_time)
+		else:
+			tica_model = tICA(n_components = n_components, lag_time = lag_time, shrinkage = shrinkage)
+		
+	else:
+		if shrinkage is None:
+			tica_model = SparseTICA(n_components = n_components, lag_time = lag_time, rho = rho)
+		else:
+			tica_model = SparseTICA(n_components = n_components, lag_time = lag_time, rho = rho, shrinkage = shrinkage)
+
 	if not os.path.exists(nystroem_data_filename):
 		features = load_file_list(get_trajectory_files(features_dir, ext = ".dataset"))
 		if os.path.exists(landmarks_dir):
@@ -158,9 +169,21 @@ def landmark_ktica(features_dir, combined_features_dir, tica_dir, clusters_map_f
 	else:
 		print("Already performed landmark kernel tICA.")
 
-def landmark_ktica_ticaTraj(tica_dir, clusterer_dir, ktica_dir, clusters_map_file = "", landmarks_dir = "", nystroem_components=1000, tica_components=10, lag_time=5, nystroem_data_filename = "", fit_model_filename = "", projected_data_filename = "", landmark_subsample=1, gamma = 0.05):
+def landmark_ktica_ticaTraj(tica_dir, clusterer_dir, ktica_dir, clusters_map_file = "", landmarks_dir = "", nystroem_components=1000, n_components=10, lag_time=5, nystroem_data_filename = "", fit_model_filename = "", projected_data_filename = "", landmark_subsample=1, sparse = False, wolf = True, rho = 0.01, shrinkage = None):
 	if not os.path.exists(ktica_dir): os.makedirs(ktica_dir)
-	tica_model = tICA(n_components = tica_components, lag_time = lag_time, gamma = gamma)
+	
+	if not sparse:
+		if shrinkage is None:
+			tica_model = tICA(n_components = n_components, lag_time = lag_time)
+		else:
+			tica_model = tICA(n_components = n_components, lag_time = lag_time, shrinkage = shrinkage)
+		
+	else:
+		if shrinkage is None:
+			tica_model = SparseTICA(n_components = n_components, lag_time = lag_time, rho = rho)
+		else:
+			tica_model = SparseTICA(n_components = n_components, lag_time = lag_time, rho = rho, shrinkage = shrinkage)
+
 	if not os.path.exists(nystroem_data_filename):
 		clusterer = verboseload(clusterer_dir)
 		tica = verboseload(tica_dir)

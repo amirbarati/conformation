@@ -948,38 +948,68 @@ def calc_MI(x, y, bins):
     mi = mutual_info_score(None, None, contingency=c_xy)
     return mi
 
-def find_correlation(features_dir, tica_projected_coords_dir, mutual_information_csv = "", pearson_csv = "", bins=50):
+def find_correlation(features_dir, tica_projected_coords_dir, mutual_information_csv = "", pearson_csv = "", bins=50, exacycle=False):
+	#features = np.concatenate(load_file_list(get_trajectory_files(features_dir, ext = ".dataset")))
+	feature_files = get_trajectory_files(features_dir, ext = ".dataset")
+	#if exacycle: 
+	#	t = []
+	#	keep = range(0, len(feature_files),2)
+	#	for k in keep:
+	#		t.append(feature_files[k])
+	#	feature_files = t
+	pool = mp.Pool(mp.cpu_count())
+	features = pool.map(load_features, feature_files)
+	pool.terminate()
+	transpose = False
+	for i in range(0, len(features)):
+		if np.shape(features[0])[1] != np.shape(features[i])[1]:
+			transpose = True
+			print("transposing all featurized trajectories")
+			break
+	if transpose: 
+		for i in range(0, len(features)):
+			features[i] = np.transpose(features[i])
+	#features = np.concatenate(features)
+
+
 	try:
 		tica_coords = verboseload(tica_projected_coords_dir)
 	except:
 		tica_coords = load_dataset(tica_projected_coords_dir)
 	tica_coords = np.concatenate(tica_coords)
-	features = np.concatenate(load_file_list(get_trajectory_files(features_dir, ext = ".dataset")))
 
+	'''
 	if mutual_information_csv != "":
-		mutual_informations = np.zeros((np.shape(features)[1], np.shape(tica_coords)[1]))
+		mutual_informations = np.zeros((np.shape(features[0])[1], np.shape(tica_coords)[1]))
 		for j in range(0, np.shape(tica_coords)[1]):
 			print("Calculating MI for all features in tIC %d" %j)
 			MI_partial = partial(calc_MI, y = tica_coords[:,j], bins=250)
 			pool = mp.Pool(mp.cpu_count())
-			mis = pool.map(MI_partial, features.transpose())
+			mis = pool.map(MI_partial, np.concatenate(features))
 			pool.terminate()
 			mutual_informations[:,j] = mis
 			#for i in range(0, np.shape(features)[1]):
 			#	mi = calc_MI(features[:,i], tica_coords[:,j],bins)
 			#	mutual_informations[i,j] = mi
 		np.savetxt(mutual_information_csv, mutual_informations, delimiter=",")
+	'''
 
 	if pearson_csv != "":
-		coefs = np.zeros((np.shape(features)[1], np.shape(tica_coords)[1]))
-		for j in range(0, np.shape(tica_coords)[1]):
-			print("Calculating Pearson Coefficients for all features in tIC %d" %j)
-			pearson_partial = partial(pearsonr, y = tica_coords[:,j])
+		coefs = np.zeros((np.shape(features[0])[1], np.shape(tica_coords)[1]))
+		for i in range(0, np.shape(features[0])[1]):
+			print("Calculating Pearson Coefficients for all tICs for feature %d" %i)
+		#for j in range(0, np.shape(tica_coords)[1]):
+			#print("Calculating Pearson Coefficients for all features in tIC %d" %j)
+			feature_column = np.concatenate([f[:,i] for f in features])
+			pearson_partial = partial(pearsonr, y = feature_column)
+			#pearson_partial = partial(pearsonr, y = tica_coords[:,j])
 			pool = mp.Pool(mp.cpu_count())
-			pearsons = pool.map(pearson_partial, features.transpose())
+			pearsons = pool.map(pearson_partial, tica_coords.transpose())
 			pool.terminate()
-			pearson_coefs = [p[0] for p in pearsons]
-			coefs[:,j] = pearson_coefs
+			print(pearsons)
+			print(np.shape(pearsons))
+			print(np.shape(coefs))
+			coefs[i,:] = np.array([p[0] for p in pearsons])
 			#for i in range(0, np.shape(features)[1]):
 			#	pearson = pearsonr(features[:,i], tica_coords[:,j])[0]
 			#	coefs[i,j] = pearson

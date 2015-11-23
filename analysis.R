@@ -252,7 +252,7 @@ compute.aggregate.docking <- function(data, inverse.agonists = c()) {
 }
 
 is_active <- function(row) {
-  if(row["tm6_tm3_dist"] > 12.0 & row["npxxy_rmsd_active"] < .6 & row["npxxy_rmsd_inactive"] > 0.8 & row["connector_rmsd_active"] < 0.9 & row["connector_rmsd_inactive"] > 1.0) {
+  if(row["tm6_tm3_dist"] > 12.0 & row["npxxy_rmsd_active"] < .8 & row["npxxy_rmsd_inactive"] > 0.8 & row["connector_rmsd_active"] < 1.0 & row["connector_rmsd_inactive"] > 1.0) {
     return(TRUE)
   } else {
     return(FALSE)
