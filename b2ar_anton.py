@@ -226,11 +226,11 @@ r['analyze.tic.feature.correlations'](pearson_csv, feature_residues_csv, tica_di
 #construct_graph(msm_model_dir, clusterer_dir, n_clusters, lag_time, msm_lag_time, graph_file, inactive = None,active = active_pnas_joined, pnas_clusters_averages = pnas_clusters_averages, tica_clusters_averages = tica_clusters_averages, docking = None, macrostate = macrostate_dir) #docking=aggregate_docking_joined)
 '''
 
-compute_gmms_R(projected_features_dir, max_components=gmm_max_components, save_dir=gmm_dir, max_j=10)
-plot_tics_gmm(gmm_dir, projected_features_dir, gmm_dir, R=True, titles = None, tICA = False, scale = 1.0, refcoords_file = ref_tica_coords)
+compute_gmms_R(projected_features_dir, max_components=10, save_dir=gmm_dir, max_j=n_components)
+#plot_tics_gmm(gmm_dir, projected_features_dir, gmm_dir, R=True, titles = None, tICA = False, scale = 1.0, refcoords_file = ref_tica_coords)
 
 #compute_one_vs_all_rf_models(features_dir, projected_features_dir, gmm_dir, rf_dir, n_trees = 10, n_tica_components=25)
-#compute_overall_rf_models(features_dir, projected_features_dir, gmm_dir, rf_dir, n_trees = 5, n_tica_components=25)
+compute_overall_rf_models(features_dir, projected_features_dir, gmm_dir, rf_dir, n_trees = 500, n_tica_components=10)
 
 
 #LANDMARK Kernel tICA

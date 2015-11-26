@@ -457,19 +457,16 @@ compute.tIC.mixture.model <- function(tIC, j, save.dir, max_components = 10, num
         } else {
           ini_mu=seq(mean(tIC) - 2*sd(tIC), mean(tIC) + 2*sd(tIC),4*sd(tIC)/(k-1))
         }
-        normalmixEM(tIC[train], k=k, maxit=400,epsilon=1e-2, arbvar=FALSE, sd.constr = rep('a',k), mu=ini_mu, arbmean=TRUE)
+        model <- normalmixEM(tIC[train], k=k, maxit=400,epsilon=1e-2, arbvar=FALSE, sd.constr = rep('a',k), mu=ini_mu, arbmean=TRUE)
+        bics[k] <- BIC.mix(model)
+        loglikes[k] <- loglike.normalmix(tIC[test],mixture=model)
+        model
       }, error = function(e) {
         print("Error in fitting normal mix EM!")
         bics[k] <- 10000000.0
         loglikes[k] <- -10000000.0
-        return(c(NA))
       }, finally = {
       })
-      if(mixtures[[k]] != c(NA)) {
-        bics[k] <- BIC.mix(mixtures[[k]])
-        loglikes[k] <- loglike.normalmix(tIC[test],mixture=mixtures[[k]])
-      }
-
     }
     num.components <- min(which.min(bics),which.max(loglikes))
     min.components[r] <- num.components
@@ -482,7 +479,7 @@ compute.tIC.mixture.model <- function(tIC, j, save.dir, max_components = 10, num
   } else {
     ini_mu=seq(mean(tIC) - 2*sd(tIC), mean(tIC) + 2*sd(tIC),4*sd(tIC)/(k-1))
   }
-  final.model <- normalmixEM(tIC, k=k, maxit=400, epsilon=1e-2,arbvar=FALSE, sd.constr = rep('a',k), mu=ini_mu, arbmean=TRUE)#, sd.constr = rep('a',k), mu=seq(min(tIC), max(tIC),(max(tIC)-min(tIC))/final.n.components),arbmean=TRUE)\
+  final.model <- normalmixEM(tIC, k=k, maxit=400, epsilon=1e-2,arbvar=FALSE, sd.constr = rep('a',k), mu=ini_mu, arbmean=TRUE)
   final.means <- final.model$mu
   final.classes <- apply(final.model$posterior,1,which.max)
 

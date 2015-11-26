@@ -61,7 +61,7 @@ else:
 	parallel = False
 
 
-sparse = False
+sparse = True
 is_sparse = ""
 if(sparse): is_sparse = "sparse-"
 
@@ -79,8 +79,8 @@ elif wolf and sparse:
 	wolf_string = "_wolf_"
 	shrinkage = None
 	shrinkage_string = "autoShrinkage"
-	rho = 0.001
-	rho_string = "_rho0pt001"
+	rho = 0.1
+	rho_string = "_rho0pt1"
 else:
 	wolf_string = ""
 	shrinkage = 0.001
