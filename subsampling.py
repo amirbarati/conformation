@@ -4,6 +4,8 @@ from custom_featurizer_anton import *
 import subprocess
 import multiprocessing as mp
 import os
+from glob import glob
+from functools import partial 
 
 def reimage(traj_file):
 	print("Examining %s" %traj_file)
@@ -119,3 +121,28 @@ def subsample(directory, stride=5):
 		first_frame = md.load_frame("/scratch/users/enf/b2ar_analysis/subsampled_allprot_combined/%s.h5" %sim_dir, index=1)
 		first_frame.save_pdb("/scratch/users/enf/b2ar_analysis/%s_firstframe.pdb" %condition)
 		print("trajectory has been subsampled_allprot, combined, and saved")
+
+def combine_subsample_copy(traj_directory, new_directory):
+	head = traj_directory.split("/")[len(traj_directory.split("/"))-1]
+	subprocess.call("cd %s" %traj_directory, shell=True)
+	subprocess.call("cp $SCRATCH/md_simulations/auto_reimage.in ./", shell=True)
+	files = glob('1_thru_*_skip_10_reimaged.nc')
+	max_nc = [path.split("_")[2] for path in files]
+	latest_traj = files[np.array(max_nc).argmin()]
+
+	new_filename = "%s/%s.nc" %(new_directory, head)
+	subprocess.call("cp %s %s" %(newest, new_filename), shell=True)
+	return
+
+def subsample_amber(stem_directory, new_directory):
+	if not os.path.exists(new_directory): os.makedirs(new_directory)
+
+	paths = glob('rep_*/')
+	combine_subsample_copy_partial = partial(combine_subsample_copy, new_directory=new_directory)
+	pool = mp.Pool(mp.cpu_count())
+	pool.map(combine_subsample_copy_partial, paths)
+	pool.terminate()
+	return 
+
+
+

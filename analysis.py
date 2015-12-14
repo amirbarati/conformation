@@ -270,7 +270,7 @@ def plot_tica(transformed_data_dir, lag_time):
 	pp.close()
 
 
-def plot_tica_and_clusters(component_j, transformed_data, clusterer, lag_time, component_i, label = "dot", active_cluster_ids = [], intermediate_cluster_ids = [], inactive_cluster_ids = [], tica_dir = ""):
+def plot_tica_and_clusters(component_j, transformed_data, clusterer, lag_time, component_i, label = "dot", active_cluster_ids = [], intermediate_cluster_ids = [], inactive_cluster_ids = [], inactive_subsample=5, intermediate_subsample=5, tica_dir = ""):
 
 	trajs = np.concatenate(transformed_data)
 	plt.hexbin(trajs[:,component_i], trajs[:,component_j], bins='log', mincnt=1)
@@ -285,14 +285,14 @@ def plot_tica_and_clusters(component_j, transformed_data, clusterer, lag_time, c
 			plt.scatter([center[component_i]],[center[component_j]],  marker='v', c='k', s=10)
 		else:
 			plt.annotate('%d' %i, xy=(center[component_i],center[component_j]), xytext=(center[component_i], center[component_j]),size=6)
-	indices = [j for j in range(0,len(intermediate_cluster_ids),5)]
+	indices = [j for j in range(0,len(intermediate_cluster_ids),intermediate_subsample)]
 	for i in [intermediate_cluster_ids[j] for j in indices]:
 		center = centers[i,:]
 		if label == "dot":
 			plt.scatter([center[component_i]],[center[component_j]],  marker='8', c='m', s=10)
 		else:
 			plt.annotate('%d' %i, xy=(center[component_i],center[component_j]), xytext=(center[component_i], center[component_j]),size=6)
-	indices = [j for j in range(0,len(inactive_cluster_ids),5)]
+	indices = [j for j in range(0,len(inactive_cluster_ids),inactive_subsample)]
 	for i in [inactive_cluster_ids[j] for j in indices]:
 		center = centers[i,:]
 		if label == "dot":
@@ -306,7 +306,7 @@ def plot_tica_and_clusters(component_j, transformed_data, clusterer, lag_time, c
 	pp.close()
 	plt.clf()
 
-def plot_all_tics_and_clusters(tica_dir, transformed_data_dir, clusterer_dir, lag_time, label = "dot", active_cluster_ids = [], intermediate_cluster_ids = [], inactive_cluster_ids = []):
+def plot_all_tics_and_clusters(tica_dir, transformed_data_dir, clusterer_dir, lag_time, label = "dot", active_cluster_ids = [], intermediate_cluster_ids = [], inactive_cluster_ids = [], inactive_subsample=5, intermediate_subsample=5):
 	try:
 		transformed_data = verboseload(transformed_data_dir)
 	except:
@@ -316,7 +316,7 @@ def plot_all_tics_and_clusters(tica_dir, transformed_data_dir, clusterer_dir, la
 	print "Looking at %d tICS" %num_tics
 	for i in range(0,num_tics):
 		js = range(i+1, num_tics)
-		plot_partial = partial(plot_tica_and_clusters, tica_dir = tica_dir, transformed_data = transformed_data, clusterer = clusterer, lag_time = lag_time, label = "dot", active_cluster_ids = active_cluster_ids, intermediate_cluster_ids = intermediate_cluster_ids, inactive_cluster_ids = inactive_cluster_ids, component_i = i)
+		plot_partial = partial(plot_tica_and_clusters, tica_dir = tica_dir, transformed_data = transformed_data, clusterer = clusterer, lag_time = lag_time, label = "dot", active_cluster_ids = active_cluster_ids, intermediate_cluster_ids = intermediate_cluster_ids, inactive_cluster_ids = inactive_cluster_ids, inactive_subsample=inactive_subsample, intermediate_subsample=intermediate_subsample, component_i = i)
 		pool = mp.Pool(mp.cpu_count())
 		pool.map(plot_partial, js)
 		pool.terminate()

@@ -9,6 +9,7 @@ import multiprocessing as mp
 from msmbuilder.dataset import dataset, _keynat, NumpyDirDataset
 from functools import partial
 import scipy.io as sio
+import pickle
 
 
 def get_base():
@@ -53,6 +54,8 @@ def load_file(filename):
 		return(csv)
 	elif filename.split(".")[1] == "npy":
 		return(np.load(filename))
+	elif filename.split(".")[1] == "npz":
+		return(np.array(load_dataset(filename)))
 
 def load_file_list(files, directory = None, ext = None):
 	print(directory)
@@ -369,17 +372,23 @@ def find_missing_features(traj_dir, features_dir):
 	features = set(features)
 	print(trajs - features)
 
-def generate_features(features_csv):
-	reader = csv.reader(open(features_csv, "rb"))
-	features = []
-	for line in reader:
-		try:
+def generate_features(features_file):
+	if features_file.split(".")[1] == "csv":
+		reader = csv.reader(open(features_file, "rb"))
+		features = []
+		for line in reader:
 			try:
-				features.append(((int(line[1]), int(line[2]), str(line[3])), (int(line[4]), int(line[5]), str(line[6]))))
+				try:
+					features.append(((int(line[1]), int(line[2]), str(line[3])), (int(line[4]), int(line[5]), str(line[6]))))
+				except:
+					features.append(((int(line[1]), int(line[2]))))
 			except:
-				features.append(((int(line[1]), int(line[2]))))
-		except:
-			continue
+				continue
+	elif features_file.split(".")[1] == "pkl":
+		with open(features_file, "rb") as f:
+			features = pickle.load(f)
+	else:
+		print("Extension is not recognized for features file.")
 	return(features)
 
 def generate_residues_map(csv_map):

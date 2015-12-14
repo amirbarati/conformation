@@ -49,6 +49,7 @@ from rpy2.robjects import r
 import rpy2.robjects.numpy2ri as numpy2ri
 numpy2ri.activate()
 from detect_intermediates import *
+from interpret_tICs import *
 
 from feature_types import *
 
@@ -113,14 +114,14 @@ print to_dock
 '''
 
 
-def make_extreme_tIC_barplots(tica_extremes_dir, feature_residues_csv, n_components):
+def make_extreme_tIC_barplots(tica_extremes_dir, feature_residues_pkl, n_components):
 	feature_files = [f for f in get_trajectory_files(tica_extremes_dir, ext=".csv") if "standardized" in f]
 	feature_files = [f for f in feature_files if "standardized" in f]
 	for i in range(1, n_components+1):
 		low_file = [f for f in feature_files if "tIC.%d_" %i in f and "low" in f][0]
 		print low_file
 		high_file = [f for f in feature_files if "tIC.%d_" %i in f and "high" in f][0]
-		r['analyze.extreme.tic.values'](low_file, high_file, feature_residues_csv, i, tica_extremes_dir)
+		r['analyze.extreme.tic.values'](low_file, high_file, feature_residues_pkl, i, tica_extremes_dir)
 	return
 
 #reimage_traj_new("%s/A-00.h5" %traj_dir, base, "", ".h5")
@@ -149,18 +150,12 @@ for k,v in residues_map.iteritems():
     new_residues_map[(0, k)] = (0, v)
 residues_map = new_residues_map
 contact_residues = [res for res in contact_residues if res in residues_map.keys()]
- 
-#Featurize reference receptors
-#featurize_contacts_custom(traj_dir, features_dir = features_dir, traj_ext = traj_ext, contact_residue_pairs_csv = feature_residues_csv, featurized_traj_and_frame = None, dihedral_residues =  [], dihedral_types = ["phi", "psi", "chi1", "chi2"], contact_residues =  contact_residues, residues_map = residues_map, contact_cutoff = cutoff, parallel = parallel, exacycle = exacycle)
-#save_features_to_residues_map(get_trajectory_files(traj_dir, ext = traj_ext)[0], contact_residues, feature_residues_csv, cutoff=cutoff,residues_map = residues_map, exacycle=True)
-#featurize_contacts_custom(ref_receptors_dir, features_dir = ref_features_dir, traj_ext = ".pdb", featurized_traj_and_frame = [get_trajectory_files(traj_dir, traj_ext)[0], 0], contact_residue_pairs_csv = feature_residues_csv, dihedral_residues =  [], dihedral_types = ["phi", "psi", "chi1", "chi2"], contact_residues =  contact_residues, residues_map = residues_map, contact_cutoff = cutoff, exacycle = False)
-#if exacycle:
-#    while not os.path.exists("%s/trj39998.dataset" %features_dir): 
-#        print("Waiting for featurization to complete")
-#        time.sleep(60*10)
-#standardize_features(features_dir, ".h5", standardized_features_dir)
 
-'''
+#save_feature_residues_pkl(traj_dir, features_dir = features_dir, traj_ext = traj_ext, contact_residue_pairs_file = feature_residues_pkl, structures = [active_ref_dir, inactive_ref_dir], dihedral_residues =  [], dihedral_types = ["phi", "psi", "chi1", "chi2"], contact_residues =  contact_residues, residues_map = residues_map, contact_cutoff = cutoff, parallel = parallel, exacycle = exacycle)
+featurize_contacts_custom(traj_dir, features_dir = features_dir, traj_ext = traj_ext, contact_residue_pairs_file = feature_residues_pkl, structures = [active_ref_dir, inactive_ref_dir], dihedral_residues =  [], dihedral_types = ["phi", "psi", "chi1", "chi2"], contact_residues =  contact_residues, residues_map = residues_map, contact_cutoff = cutoff, parallel = parallel, exacycle = exacycle)
+
+featurize_contacts_custom(ref_receptors_dir, features_dir = ref_features_dir, traj_ext = ".pdb", structures = [active_ref_dir, inactive_ref_dir], contact_residue_pairs_file = feature_residues_pkl, dihedral_residues =  [], dihedral_types = ["phi", "psi", "chi1", "chi2"], contact_residues =  contact_residues, residues_map = residues_map, contact_cutoff = cutoff, exacycle = False)
+
 fit_and_transform(features_directory = features_dir, model_dir = tica_dir, stride=5, lag_time = lag_time, n_components = n_components, sparse = sparse, wolf = wolf, rho = rho, shrinkage = shrinkage, parallel=feature_parallel, traj_ext = traj_ext)
 
 plot_pnas_vs_tics(pnas_coords_dir, projected_features_dir, ["tm6_tm3_dist", "rmsd_npxxy_inactive", "rmsd_npxxy_active", "rmsd_connector_inactive", "rmsd_connector_active"], tica_dir)
@@ -173,7 +168,7 @@ transform(existing_model = projection_operator_dir, features_directory = ref_fea
 #print(np.shape(tica_coords))
 #r['tIC.mixture.models'](tica_coords, tica_dir)
 #sample_tIC_extremes(projected_features_dir, features_dir, standardized_features_dir, tica_extremes_dir, ".h5", percentile)
-#make_extreme_tIC_barplots(tica_extremes_dir, feature_residues_csv, n_components)
+#make_extreme_tIC_barplots(tica_extremes_dir, feature_residues_pkl, n_components)
 #plot_all_tics(tica_dir, projected_features_dir, lag_time)
 
 cluster_minikmeans(tica_dir, projected_features_dir, traj_dir, n_clusters, lag_time)
@@ -187,9 +182,9 @@ sample_clusters(clusterer_dir, projected_features_dir, traj_dir, traj_ext, save_
 
 cluster_pnas_distances(clusterer_dir, features_dir, active_pnas_distances_dir, pnas_coords_dir, projected_features_dir, traj_dir, traj_ext, active_pnas_distances_new_csv, pnas_coords_csv, tica_coords_csv, features_csv, n_samples, sampling_method, clusters_map_file = clusters_map_file)
 
-find_most_important_residues_in_tIC(get_trajectory_files(traj_dir, traj_ext)[0], projection_operator_dir, feature_residues_csv, contact_residues, tic_residue_csv, feature_coefs_csv, duplicated_feature_coefs_csv, cutoff = cutoff)
-#r['compute.decision.trees']("", tica_coords_csv, tica_classes_csv, ro.IntVector([2,3,4,7,9,11,24]), "", features_csv, feature_residues_csv, analysis_dir)
-#r['compute.rf']("", tica_coords_csv, tica_classes_csv, ro.IntVector([2,3,4,7,9,11,24]), "", features_csv, feature_residues_csv, analysis_dir)
+#find_most_important_residues_in_tIC(get_trajectory_files(traj_dir, traj_ext)[0], projection_operator_dir, feature_residues_pkl, contact_residues, tic_residue_csv, feature_coefs_csv, duplicated_feature_coefs_csv, cutoff = cutoff)
+#r['compute.decision.trees']("", tica_coords_csv, tica_classes_csv, ro.IntVector([2,3,4,7,9,11,24]), "", features_csv, feature_residues_pkl, analysis_dir)
+#r['compute.rf']("", tica_coords_csv, tica_classes_csv, ro.IntVector([2,3,4,7,9,11,24]), "", features_csv, feature_residues_pkl, analysis_dir)
 #for filename in [f for f in get_trajectory_files(analysis_dir, ".rda") if "rf" in f] : r['write.rf.gini'](filename, "%s.csv" %filename.split(".")[0])
 #interpret_tIC(ref_receptors_dir, inactive_ref_dir, "%s/tIC7rf_importance.csv" %analysis_dir, analysis_dir, 7)
 #r['sample.tic.ranges'](tica_coords_csv, tica_classes_csv, ro.IntVector([2,7,9]), tica_samples_csv)
@@ -214,9 +209,10 @@ inactive_clusters = [int(c[7:]) for c in inactive_clusters]
 plot_all_tics_and_clusters(tica_dir, projected_features_dir, clusterer_dir, lag_time, label = "dot", active_cluster_ids = active_clusters, intermediate_cluster_ids = intermediate_clusters, inactive_cluster_ids = inactive_clusters)
 
 
-find_correlation(features_dir, projected_features_dir, mutual_information_csv, pearson_csv, bins=50, exacycle = exacycle)
-r['analyze.tic.feature.correlations'](pearson_csv, feature_residues_csv, tica_dir, "pearson_tic_feature_coefficients", " :: Feature Pearson Correlation Coefficients")
-#r['analyze.tic.feature.correlations'](mutual_information_csv, feature_residues_csv, tica_dir, "MI_tic_feature_coefficients", " :: Feature Mutual Information Score")
+
+#find_correlation(features_dir, projected_features_dir, mutual_information_csv, pearson_csv, bins=50, exacycle = exacycle)
+#r['analyze.tic.feature.correlations'](pearson_csv, feature_residues_pkl, tica_dir, "pearson_tic_feature_coefficients", " :: Feature Pearson Correlation Coefficients")
+#r['analyze.tic.feature.correlations'](mutual_information_csv, feature_residues_pkl, tica_dir, "MI_tic_feature_coefficients", " :: Feature Mutual Information Score")
 
 #check_tica_vs_features(projected_features_dir, features_dir)
 
@@ -224,30 +220,27 @@ r['analyze.tic.feature.correlations'](pearson_csv, feature_residues_csv, tica_di
 #build_msm(clusterer_dir, msm_lag_time)
 #macrostate_pcca(msm_model_dir, clusterer_dir, n_macrostates, macrostate_dir)
 #construct_graph(msm_model_dir, clusterer_dir, n_clusters, lag_time, msm_lag_time, graph_file, inactive = None,active = active_pnas_joined, pnas_clusters_averages = pnas_clusters_averages, tica_clusters_averages = tica_clusters_averages, docking = None, macrostate = macrostate_dir) #docking=aggregate_docking_joined)
-'''
 
-compute_gmms_R(projected_features_dir, max_components=10, save_dir=gmm_dir, max_j=n_components)
+
+#compute_gmms_R(projected_features_dir, max_components=10, save_dir=gmm_dir, max_j=n_components)
 #plot_tics_gmm(gmm_dir, projected_features_dir, gmm_dir, R=True, titles = None, tICA = False, scale = 1.0, refcoords_file = ref_tica_coords)
 
-#compute_one_vs_all_rf_models(features_dir, projected_features_dir, gmm_dir, rf_dir, n_trees = 10, n_tica_components=25)
-compute_overall_rf_models(features_dir, projected_features_dir, gmm_dir, rf_dir, n_trees = 500, n_tica_components=10)
-
+#compute_one_vs_all_rf_models(features_dir, projected_features_dir, gmm_dir, rf_dir, n_trees = 500, n_tica_components=10, feature_residues_map=feature_residues_pkl)
+#compute_overall_rf_models(features_dir, projected_features_dir, gmm_dir, rf_dir, n_trees = 500, n_tica_components=10,feature_residues_map=feature_residues_pkl)
+#plot_overall_rf_importances(rf_dir, feature_residues_pkl)
 
 #LANDMARK Kernel tICA
 
 
 from ktica_variables import *
-'''
+
+
 residues_map = generate_residues_map(residues_map_csv)
 contact_residues = [res for res in contact_residues if res in residues_map.keys()]
 
-if ktica_ticaTraj:
-    landmark_ktica_ticaTraj(projected_features_dir, ori_clusterer_dir, tica_dir, clusters_map_file = clusters_map_file, landmarks_dir = landmarks_dir, nystroem_components=1000, n_components = n_components, lag_time=5, nystroem_data_filename = nystroem_data_filename, fit_model_filename = ktica_fit_model_filename, projected_data_filename = ktica_projected_data_filename, landmark_subsample=landmark_subsample, sparse = sparse, wolf = wolf, rho = rho, shrinkage = shrinkage)
-else:
-    landmark_ktica(features_dir, combined_features_dir, tica_dir, clusters_map_file = clusters_map_file, landmarks_dir = landmarks_dir, nystroem_components=1000, n_components=k_tica_components, lag_time=5, nystroem_data_filename = nystroem_data_filename, fit_model_filename = ktica_fit_model_filename, projected_data_filename = ktica_projected_data_filename, landmark_subsample=landmark_subsample, sparse = sparse, wolf = wolf, rho = rho, shrinkage = shrinkage)
+landmark_ktica(features_dir, combined_features_dir, tica_dir, clusters_map_file = clusters_map_file, landmarks_dir = landmarks_dir, nystroem_components=1000, n_components=k_tica_components, lag_time=lag_time, nystroem_data_filename = nystroem_data_filename, fit_model_filename = ktica_fit_model_filename, projected_data_filename = ktica_projected_data_filename, landmark_subsample=landmark_subsample, sparse = sparse, wolf = wolf, rho = rho, shrinkage = shrinkage)
 plot_pnas_vs_tics(pnas_coords_dir, ktica_projected_data_filename, ["tm6_tm3_dist", "rmsd_npxxy_inactive", "rmsd_npxxy_active", "rmsd_connector_inactive", "rmsd_connector_active"], tica_dir)
 
-#ktica_test(features_dir, tica_dir, landmark_indices = None, nystroem_components=1000, tica_components=10, lag_time=5, nystroem_data_filename = nystroem_data_filename, fit_model_filename = ktica_fit_model_filename, projected_data_filename = ktica_projected_data_filename)
 #plot_columns(tica_dir, projected_features_dir, titles = None, tICA = True, scale = 1.0, refcoords_file = ref_tica_coords)
 ##plot_all_tics(tica_dir, ktica_projected_data_filename, lag_time)
 cluster_minikmeans(tica_dir, ktica_projected_data_filename, traj_dir, n_clusters, lag_time)
@@ -262,26 +255,48 @@ with open(active_clusters_csv, 'rb') as f:
     reader = csv.reader(f)
     active_clusters = list(reader)[0]
 active_clusters = [int(c[7:]) for c in active_clusters]
+print(active_clusters)
 with open(intermediate_clusters_csv, 'rb') as f:
     reader = csv.reader(f)
     intermediate_clusters = list(reader)[0]
 intermediate_clusters = [int(c[7:]) for c in intermediate_clusters]
+print(intermediate_clusters)
 print(intermediate_clusters[0:10])
 with open(inactive_clusters_csv, 'rb') as f:
     reader = csv.reader(f)
     inactive_clusters = list(reader)[0]
 inactive_clusters = [int(c[7:]) for c in inactive_clusters]
+print(inactive_clusters)
 
-plot_all_tics_and_clusters(tica_dir, ktica_projected_data_filename, clusterer_dir, lag_time, label = "dot", active_cluster_ids = active_clusters, intermediate_cluster_ids = intermediate_clusters, inactive_cluster_ids = inactive_clusters)
+plot_all_tics_and_clusters(tica_dir, ktica_projected_data_filename, clusterer_dir, lag_time, label = "dot", inactive_subsample=1, intermediate_subsample=1, active_cluster_ids=active_clusters, intermediate_cluster_ids=intermediate_clusters, inactive_cluster_ids=inactive_clusters)
 
-find_correlation(features_dir, ktica_projected_data_filename, mutual_information_csv, pearson_csv, bins=50, exacycle = exacycle)
-r['analyze.tic.feature.correlations'](pearson_csv, feature_residues_csv, tica_dir, "pearson_tic_feature_coefficients", " :: Feature Pearson Correlation Coefficients")
-#r['analyze.tic.feature.correlations'](mutual_information_csv, feature_residues_csv, tica_dir, "MI_tic_feature_coefficients", " :: Feature Mutual Information Score")
-'''
+#find_correlation(features_dir, ktica_projected_data_filename, mutual_information_csv, pearson_csv, bins=50, exacycle = exacycle)
+#r['analyze.tic.feature.correlations'](pearson_csv, feature_residues_pkl, tica_dir, "pearson_tic_feature_coefficients", " :: Feature Pearson Correlation Coefficients")
+#r['analyze.tic.feature.correlations'](mutual_information_csv, feature_residues_pkl, tica_dir, "MI_tic_feature_coefficients", " :: Feature Mutual Information Score")
 
-#compute_gmms(projected_features_dir, gmm_dir, gmm_max_components)
-#plot_tics_gmm(gmm_dir, projected_features_dir, gmm_dir, titles = None, tICA = False, scale = 1.0, refcoords_file = ref_tica_coords)
-#compute_one_vs_all_rf_models(features_dir, projected_features_dir, gmm_dir, rf_dir, n_trees = 10, n_tica_components=25)
+
+compute_random_forests(features_dir, ktica_projected_data_filename, rf_dir, n_trees=500, 
+                        n_tica_components=25)
+
+
+interpret_tIC_rf(rf_dir, feature_residues_csv, active_ref_dir, n_tica_components=25)
+
+plot_top_features_per_tIC(ktica_projected_data_filename, features_dir, ".dataset", 
+                              rf_dir, n_components, normalize=False, n_features=5)
+
+
+#plot_timescales(clusterer_dir, n_clusters, tica_dir)
+#build_msm(clusterer_dir, msm_lag_time)
+#macrostate_pcca(msm_model_dir, clusterer_dir, n_macrostates, macrostate_dir)
+#construct_graph(msm_model_dir, clusterer_dir, n_clusters, lag_time, msm_lag_time, graph_file, inactive = None,active = active_pnas_joined, pnas_clusters_averages = pnas_clusters_averages, tica_clusters_averages = tica_clusters_averages, docking = None, macrostate = macrostate_dir) #docking=aggregate_docking_joined)
+
+
+#compute_gmms_R(ktica_projected_data_filename, max_components=10, save_dir=gmm_dir, max_j=n_components)
+#plot_tics_gmm(gmm_dir, ktica_projected_data_filename, gmm_dir, R=True, titles = None, tICA = False, scale = 1.0, refcoords_file = ref_tica_coords)
+
+#compute_one_vs_all_rf_models(features_dir, ktica_projected_data_filename gmm_dir, rf_dir, n_trees = 10, n_tica_components=25)
+#compute_overall_rf_models(features_dir, ktica_projected_data_filename, gmm_dir, rf_dir, n_trees = 500, n_tica_components=10,feature_residues_map=feature_residues_pkl)
+#plot_overall_rf_importances(rf_dir, feature_residues_pkl)
 
 #compute_overall_rf_models(features_dir, projected_features_dir, gmm_dir, rf_dir, n_trees = n_trees, n_tica_components=25)
 

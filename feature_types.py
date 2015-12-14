@@ -1,7 +1,3 @@
-from feature_types import *
-
-cutoff = 1.0
-
 #CHOOSE RESIDUES:
 helix_residues = {}
 helix_residues["tm1"] = range(29,61)
@@ -17,6 +13,10 @@ helix_residues["icl3"] = range(230,267)
 helix_residues["tm6"] = range(267,299)
 helix_residues["ecl3"] = range(299,305)
 helix_residues["tm7"] = range(305,330)
+
+cutoff = 1.0
+
+
 helix_residues["tm8"] = range(330,340)
 
 switch_residues = [130, 131, 208, 211, 219, 268, 272, 286, 288, 316, 322, 323, 326]
@@ -31,7 +31,7 @@ skip5_switches_pp_npxx = list(set(skip_5_residues + list(switch_pp_npxx)))
 skip5_switches_pp_npxx_ser = list(set(skip_5_residues + list(switch_pp_npxx) + [207]))
 skip3_switches_pp_npxx = list(set(skip_3_residues + list(switch_pp_npxx)))
 #print(len(skip5_switches_pp_npxx))
-all_residues = range(30,340)
+all_residues = range(29,340)
 tm_residues = helix_residues["tm1"] + helix_residues["tm2"] + helix_residues["tm3"] + helix_residues["tm4"] + helix_residues["tm5"] + helix_residues["tm6"] + helix_residues["tm7"] + helix_residues["tm8"]
 sampling_method = "random"
 precision = "SP"
@@ -48,6 +48,11 @@ precision = "SP"
 #feature_types = "all_residues_under_cutoff%dnm" %(int(cutoff))
 #feature_types = "all_residues_under_cutoff%dnm_allframes" %(int(cutoff))
 #feature_types = "all_tm_residues_under_cutoff%dnm" %(int(cutoff))
-feature_types = "reimaged_notrajfix_tm_residues_under_cutoff%dnm" %(int(cutoff))
+#feature_types = "reimaged_notrajfix_tm_residues_under_cutoff%dnm" %(int(cutoff))
+#feature_types = "reimaged_notrajfix_tm_residues_2rh1_3sn6_under_cutoff%dnm" %(int(cutoff))
+#feature_types = "reimaged_notrajfix_all_residues_under_cutoff%dnm" %(int(cutoff))
+#feature_types = "all_residues_2rh1_3sn6_under_cutoff%dnm" %(int(cutoff))
+feature_types = "tm_residues_2rh1_3sn6_under_cutoff%dnm" %(int(cutoff))
 #feature_types = "reference_receptors"
 contact_residues = [(0, res) for res in tm_residues]
+#contact_residues = [(0, res) for res in all_residues]

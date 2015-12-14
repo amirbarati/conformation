@@ -17,7 +17,8 @@ import tables
 class Nystroem(MultiSequenceDecompositionMixin, LandmarkNystroem):
 	pass
 
-def ktica(features, landmarks, projected_data_filename, nystroem_data_filename, fit_model_filename, sparse = False, shrinkage = 0.05, wolf = True, rho = 0.01):
+def ktica(features, landmarks, projected_data_filename, nystroem_data_filename, fit_model_filename, sparse = False, shrinkage = 0.05, wolf = True, rho = 0.01,
+					n_components=25, lag_time=5):
 	if not sparse:
 		if shrinkage is None:
 			tica_model = tICA(n_components = n_components, lag_time = lag_time)
@@ -63,35 +64,38 @@ def ktica(features, landmarks, projected_data_filename, nystroem_data_filename, 
 	else:
 		print("Already performed landmark kernel tICA.")
 
-def landmark_ktica(features_dir, combined_features_file=None, feature_ext = ".dataset", use_clusters_as_landmarks=True, clusters_map_file = "", 
+def landmark_ktica(features_dir, combined_features_file=None, ktica_dir="", feature_ext="dataset", use_clusters_as_landmarks=True, clusters_map_file = "", 
 	landmarks_dir = "", nystroem_components=1000, n_components=10, lag_time=5, nystroem_data_filename = "", 
 	fit_model_filename = "", projected_data_filename = "", landmark_subsample=10, 
 	sparse = False, shrinkage = 0.05, wolf = False, rho = 0.01):
-'''
-features_dir: string, directory where your featurized trajectories are kept. 
-combined_features_dir: if you have a file containing all featurized trajectories in one file, i.e. as a list of np arrays, this is it.
-feature_ext: if instead of a combined file of features they are in separate files, what is the extension of your feature files? 
-use_clusters_as_landmarks: this is if you are doing a composition of tICA --> clustering --> Nystroem --> tICA. this is what I do. 
-	if true, you need to feed it a json file containing a dictionary that maps cluster name --> list of 2-tuples, where each tuple has 
-	(trajectory_id, frame_number pairs). So this way, instead of choosing landmark points at random in the Nystroem approximation, you
-	are using regular linear tICA-driven clustering to choose your landmark points more efficiently. 
-landmarks_dir: directory where you will save the landmarks. this should be a file containing a list of 1d np arrays or a 2d array
-nystroem_components: the number of landmarks to use. 
-n_components: the number of ktICA components to compute.
-lag_time: lag time of tICA 
-nystroem_data_filename: where you will save Nystroem object
-fit_model_filename: the filename of the ktICA object to save.
-projected_data_filename: where you will save the features projected with kernel tICA 
-landmark_subsample= how frequently to subsample the landmarks if you are doing use_clusters_as_landmarks.
-sparse: set to False. 
-shrinkage: same as gamma in old version of tICA. you might want to mess with this. 
-wolf = False: keep this as true unless you're using Robert's branch of msmbuilder
-rho = Ignore this. 
+	'''
+	features_dir: string, directory where your featurized trajectories are kept. 
+	combined_features_dir: if you have a file containing all featurized trajectories in one file, i.e. as a list of np arrays, this is it.
+	feature_ext: if instead of a combined file of features they are in separate files, what is the extension of your feature files? 
+	use_clusters_as_landmarks: this is if you are doing a composition of tICA --> clustering --> Nystroem --> tICA. this is what I do. 
+		if true, you need to feed it a json file containing a dictionary that maps cluster name --> list of 2-tuples, where each tuple has 
+		(trajectory_id, frame_number pairs). So this way, instead of choosing landmark points at random in the Nystroem approximation, you
+		are using regular linear tICA-driven clustering to choose your landmark points more efficiently. 
+	landmarks_dir: directory where you will save the landmarks. this should be a file containing a list of 1d np arrays or a 2d array
+	nystroem_components: the number of landmarks to use. 
+	n_components: the number of ktICA components to compute.
+	lag_time: lag time of tICA 
+	nystroem_data_filename: where you will save Nystroem object
+	fit_model_filename: the filename of the ktICA object to save.
+	projected_data_filename: where you will save the features projected with kernel tICA 
+	landmark_subsample= how frequently to subsample the landmarks if you are doing use_clusters_as_landmarks.
+	sparse: set to False. 
+	shrinkage: same as gamma in old version of tICA. you might want to mess with this. 
+	wolf = False: keep this as true unless you're using Robert's branch of msmbuilder
+	rho = Ignore this. 
 
-'''
+	'''
+	print(landmark_subsample)
+	if not os.path.exists(ktica_dir): os.makedirs(ktica_dir)
+
 
 	if not os.path.exists(nystroem_data_filename):
-		if combined_features_dir is not None: 
+		if combined_features_file is not None and os.path.exists(combined_features_file): 
 			features = verboseload(combined_features_file)
 		else:
 			features = load_file_list(get_trajectory_files(features_dir, ext = feature_ext))
@@ -101,6 +105,7 @@ rho = Ignore this.
 			print(np.shape(landmarks))
 		else:
 			if use_clusters_as_landmarks:
+				print("Using cluster centers as landmarks")
 				with open(clusters_map_file) as f:
 					clusters_map = json.load(f)
 					clusters_map = {int(k):v for k,v in clusters_map.items()}
@@ -111,8 +116,11 @@ rho = Ignore this.
 							frame = sample[1]
 							landmark = features[traj][frame]
 							landmarks.append(landmark)
-							landmarks = [landmarks[i] for i in range(0,np.shape(landmarks)[0]) if i%landmark_subsample==0] #%landmark_subsample == 0]
+					landmarks = [landmarks[i] for i in range(0,np.shape(landmarks)[0]) if i%landmark_subsample==0] #%landmark_subsample == 0]
 
+					print("Landmarks have shape: ")
+					print(len(landmarks))
+					print(np.shape(landmarks))
 					verbosedump(landmarks, landmarks_dir)
 			else: 
 				n = np.shape(features)[0]
@@ -121,7 +129,8 @@ rho = Ignore this.
 				landmarks = features_concatenated[indices,:]
 				verbosedump(landmarks, landmarks_dir)
 
-		ktica(features, landmarks, projected_data_filename, nystroem_data_filename, fit_model_filename, sparse, shrinkage, wolf, rho)
+		ktica(features, landmarks, projected_data_filename, nystroem_data_filename, fit_model_filename, sparse, shrinkage, wolf, rho,
+					n_components=n_components, lag_time=lag_time)
 
 
 def landmark_ktica_ticaTraj(tica_dir, clusterer_dir, ktica_dir, clusters_map_file = "", landmarks_dir = "", nystroem_components=1000, n_components=10, lag_time=5, nystroem_data_filename = "", fit_model_filename = "", projected_data_filename = "", landmark_subsample=1, sparse = False, wolf = True, rho = 0.01, shrinkage = None):

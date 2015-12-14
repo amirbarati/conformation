@@ -13,7 +13,6 @@ ktica_ticaTraj = False
 
 k_tica_components = 25
 landmark_subsample=5
-msm_lag_time = 10
 n_components = 25
 
 if exacycle:
@@ -29,7 +28,6 @@ else:
 
 
 n_clusters = 1000
-lag_time = 5
 if exacycle:
 	lag_time *= 2
 #tica_regularization = 1000.0    
@@ -43,31 +41,33 @@ else:
 	parallel = False
 
 
-'''
+sparse = False
+is_sparse = ""
+if(sparse): is_sparse = "sparse-"
+
 shrinkage_string = ""
 rho_string = ""
 
-sparse = False
-if sparse:
-	sparse_string = "sparse-"
-else:
-	sparse_string = ""
 wolf = True
 if wolf and not sparse:
 	wolf_string = "_wolf_"
-	shrinkage = 0.5
-	shrinkage_string = "0pt5"
+	shrinkage = None
+	shrinkage_string = "autoShrinkage"
+	rho = None
+	rho_string = ""
 elif wolf and sparse:
 	wolf_string = "_wolf_"
-	shrinkage = 0.01
-	shrinkage_string = "0pt01"
-	rho = 0.01
-	rho_string = "_0pt01"
+	shrinkage = None
+	shrinkage_string = "autoShrinkage"
+	rho = 0.1
+	rho_string = "_rho0pt1"
 else:
 	wolf_string = ""
 	shrinkage = 0.001
 	shrinkage_string = "0pt001"
-'''
+	rho = None
+	rho_string = ""
+
 
 if ktica: tica_dir = "%s/%sktICA_n_components%d_random_specified_regularization%s%s%s" %(ori_tica_dir, is_sparse, k_tica_components, wolf_string, shrinkage_string, rho_string)
 if ktica_ticaTraj: tica_dir = "%s/%sktICA_n_components%d_ticaTraj_regularization%s%s%s" %(ori_tica_dir, is_sparse, k_tica_components, wolf_string, shrinkage_string, rho_string)

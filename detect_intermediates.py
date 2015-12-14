@@ -118,7 +118,7 @@ def compute_gmm_R(tIC_j_x_tuple, max_components, save_dir):
 
 def compute_gmms_R(projected_tica_coords, max_components, save_dir, max_j=10):
   tics = np.concatenate(load_file(projected_tica_coords))
-  tics = tics[range(0,np.shape(tics)[0],100),:]
+  #tics = tics[range(0,np.shape(tics)[0],10),:]
   compute_gmm_partial = partial(compute_gmm_R, max_components = max_components, save_dir = save_dir)
   #for pair in [(j, tics[:,j]) for j in range(0,np.shape(tics)[1])]:
    # compute_gmm_partial(pair)
@@ -143,17 +143,60 @@ def compute_gmms_R(projected_tica_coords, max_components, save_dir, max_j=10):
 def compute_rf_model(features, gmm):
   return
 
-def plot_importances(feature_importances, save_dir, i):
-  plt.bar(np.arange(50), [f[1] for f in feature_importances[0:50]], bar_width, alpha=opacity, color='b',label='Feature importance')
-  bar_width = 0.2
-  plt.xlabel('Feature')
-  plt.ylabel('Overall Importance')
-  plt.title('Random-Forest + GMM Model of tIC Feature Importance')
-  plt.xticks(index + bar_width, [f[0] for f in feature_importances[0:50]], rotation='vertical')
+def plot_importances(feature_importances, save_dir, i, percentile=True):
+  bar_width = 0.4
+  opacity = 0.8
+  index = np.arange(50)
+  
+  feature_importance_dict = {}
+
+  if percentile:
+    for feature_importance in feature_importances:
+      residue_i = feature_importance[0].split("_")[0]
+      residue_j = feature_importance[0].split("_")[1]
+      importance = feature_importance[1]
+      if residue_i not in feature_importance_dict.keys():
+        feature_importance_dict[residue_i] = []
+      if residue_j not in feature_importance_dict.keys():
+        feature_importance_dict[residue_j] = []
+
+      feature_importance_dict[residue_i].append(importance)
+      feature_importance_dict[residue_j].append(importance)
+    for residue in feature_importance_dict.keys():
+      feature_importance_dict[residue] = np.percentile(feature_importance_dict[residue], 95.0)
+
+    feature_importances = [(key, value) for key, value in feature_importance_dict.iteritems()]
+    feature_importances.sort(key=operator.itemgetter(1),reverse=True)
+
+  
+  plt.barh(np.arange(50), [f[1] for f in feature_importances[0:50]], bar_width, alpha=opacity, color='b',label='Feature importance')
+  plt.ylabel('Feature')
+  plt.xlabel('Overall Importance')
+  plt.title("Random-Forest + GMM Model of tIC %d Feature Importance" %(i+1))
+  plt.yticks(index + bar_width, [f[0] for f in feature_importances[0:50]],fontsize=8)
   pp = PdfPages("%s/tIC%d_overall_importances.pdf" %(save_dir, i))
   pp.savefig()
   pp.close()
   plt.clf()
+
+def plot_overall_rf_importances(rf_dir, feature_residues_map):
+  filename = "%s/tIC%d_overall_rf.pkl" %(rf_dir, 0)
+  j = 0
+  feature_names = generate_features(feature_residues_map)
+  feature_names = ["%d_%d" %(f[0], f[1]) for f in feature_names]
+  
+  while(os.path.exists(filename)):
+    print("Examining tIC %d" %(j+1))
+    with gzip.open(filename, "rb") as f:
+      rf = pickle.load(f)
+
+    feature_importances = zip(feature_names, rf.feature_importances_.astype(float).tolist())
+    feature_importances.sort(key=operator.itemgetter(1),reverse=True)
+    print(feature_importances[0:10])
+    plot_importances(feature_importances, rf_dir, j)
+    j += 1
+    filename = "%s/tIC%d_overall_rf.pkl" %(rf_dir, j)
+
 
 def plot_component_importances(df, save_dir, tic_i, component):
   df = df.sort_values(by="feature_importance")
@@ -165,16 +208,18 @@ def plot_component_importances(df, save_dir, tic_i, component):
 
 
   bar_width = 0.2
-  plt.bar(np.arange(50), top_df["feature_importance"].tolist(), bar_width, alpha=opacity, color='b',label='Feature importance')
+  plt.barh(np.arange(50), top_df["feature_importance"].tolist(), bar_width, alpha=opacity, color='b',label='Feature importance')
   bar_width = 0.2
   plt.xlabel('Feature')
   plt.ylabel('Overall Importance')
-  plt.title('Random-Forest + GMM Model of tIC Feature Importance')
+  plt.title("Random-Forest + GMM Model of tIC %d Feature Importance" %(tic_i+1))
   plt.xticks(index + bar_width, top_df["feature_name"].tolist(), rotation='vertical')
   pp = PdfPages("%s/tIC%d_c%d_vs_all_importances.pdf" %(save_dir, (tic_i+1), component))
   pp.savefig()
   pp.close()
   plt.clf()
+
+
 
 def plot_column_pair(i, num_columns, save_dir, titles, data, gmm_means, refcoords):
   for j in range(i+1, num_columns):
@@ -205,11 +250,9 @@ def plot_column_pair(i, num_columns, save_dir, titles, data, gmm_means, refcoord
       plt.clf()
 
 def plot_tics_gmm(save_dir, data_file, gmm_dir, R=True, titles = None, tICA = False, scale = 1.0, refcoords_file = None):
-  data = verboseload(data_file)
-  data = np.concatenate(data)
-  data[:,0] *= scale
+  data = np.concatenate(load_file(data_file))
 
-  if(refcoords_file is not None):
+  if(refcoords_file is not None and os.path.exists(refcoords_file)):
     refcoords = load_file(refcoords_file)
   else:
     refcoords = None
@@ -271,21 +314,36 @@ def plot_tics_gmm_R(save_dir, data_file, gmm_dir, titles = None, tICA = False, s
   return
 
 
-def compute_one_vs_all_rf_models(features_dir, projected_tica_coords, gmm_dir, save_dir, n_trees = 10, n_tica_components=25):
+def compute_one_vs_all_rf_models(features_dir, projected_tica_coords, gmm_dir, save_dir, R=True, n_trees = 10, n_tica_components=25, feature_residues_map=""):
   features = np.concatenate(load_file_list(None, directory = features_dir, ext = ".dataset"))
   tics = np.concatenate(load_file(projected_tica_coords))
-  feature_names = generate_features("/home/enf/b2ar_analysis/featuresreimaged_notrajfix_tm_residues_under_cutoff1nm/feature_residues_map.csv")
+  feature_names = generate_features(feature_residues_map)
+  feature_names = ["%d_%d" %(f[0], f[1]) for f in feature_names]
+
   for i in range(0, n_tica_components):
     print("Computing random forest model for tIC.%d" %(i+1))
-    gmm = pickle.load(gzip.open("%s/tIC%d_gmm.pkl.gz" %(gmm_dir, i), "rb"))
+    
+    if R:
+      with gzip.open("%s/tIC.%d_classes.pkl.gz" %(gmm_dir, i), "rb") as f:
+        Y = pickle.load(f)
+    else:
+      with gzip.open("%s/tIC%d_gmm.pkl.gz" %(gmm_dir, i), "rb") as f:
+        gmm = pickle.load(f)
+      Y = gmm.predict(tics[:,i].reshape(-1,1))
 
-    if len(gmm.means_) == 1: continue
-    Y = gmm.predict(tics[:,i].reshape(-1,1))
-    for component in range(0,len(gmm.means_)):
+    n_components = len(np.unique(Y).tolist())
+    print(np.unique(Y).tolist())
+    print("n_components %d" %n_components)
+
+    for component in np.unique(Y).tolist():
       print("Analyzing component %d" %component)
       all_indices = range(0,np.shape(tics)[0])
-      component_indices = [k for k in all_indices if Y[k] == component]
-      non_component_indices = list(set(all_indices)-set(component_indices)).sort()
+      component_indices = [k for k in all_indices if int(Y[k]) == component]
+      non_component_indices = list(set(all_indices)-set(component_indices))
+      non_component_indices.sort()
+      print(len(component_indices))
+      print(len(non_component_indices))
+      print(len(component_indices)+len(non_component_indices))
       print("Found indices")
       Z = copy.deepcopy(Y)
       Z[component_indices] = 0
@@ -293,42 +351,48 @@ def compute_one_vs_all_rf_models(features_dir, projected_tica_coords, gmm_dir, s
       rf = RandomForestClassifier(max_features="sqrt",bootstrap=True,n_estimators=n_trees,n_jobs=-1)
       print("fitting random forest model")
       r = rf.fit(features, Z)
-      print("fit random forest model, dumping now.")
+      print("fit random forest model, saving now.")
       with gzip.open("%s/tIC%d_c%d_vs_all_rf.pkl.gz" %(save_dir, i, component), "wb") as f:
-        pickle.dump(rf, f)
+        pickle.dump(rf.feature_importances_.astype(float), f)
+      print("Finished saving")
 
       feature_component_means = np.mean(features[component_indices,:], axis=0)
       print(np.shape(feature_component_means))
       print(feature_component_means[0:100])
       feature_non_component_means = np.mean(features[non_component_indices,:], axis=0)
 
-      feature_importances = [[i, feature_names[i], rf.feature_importances_[i]] for i in range(0,len(rf.feature_importances_))]
-      feature_importances = feature_importances.sort(key=operator.itemgetter(2))
+      feature_importances = zip(feature_names, rf.feature_importances_.astype(float).tolist())
       pickle.dump(feature_importances, open("%s/tIC%d_c%d_importances_list.pkl" %(save_dir, i, component), "wb"))
-      print(feature_importances[0:20])
+      '''
+      df = pd.DataFrame(columns=('feature_name', 'feature_importance', 'component_mean', 'non_component_mean'))
 
-      df = pd.DataFrame(columns=('feature_name', 'feature_index', 'feature_importance', 'component_mean', 'non_component_mean'))
-
-      for feature_importance in feature_importances:
-        print("Adding to df: %s" %feature_importance)
-        df.iloc[k] = [feature_importance[1], feature_importance[0], feature_importance[2], feature_component_means[feature_importance[0]], feature_non_component_means[feature_importance[0]]]
+      for i, feature_importance in enumerate(feature_importances):
+        df.iloc[k] = [feature_importance[0], feature_importance[1], feature_component_means[i], feature_non_component_means[i]]
 
       pickle.dump(df, open("%s/tIC%d_c%d_vs_all_df.pkl" %(save_dir, (i+1), component), "wb"))
-      plot_component_importances(df, save_dir, i, component)
+      try:
+        plot_component_importances(df, save_dir, i, component)
+      except:
+        continue
+    '''
 
 
   return
 
-def compute_overall_rf_models(features_dir, projected_tica_coords, gmm_dir, save_dir, R=True, n_trees = 10, n_tica_components=25):
+def compute_overall_rf_models(features_dir, projected_tica_coords, gmm_dir, save_dir, R=True, n_trees = 10, n_tica_components=25, feature_residues_map = ""):
+  '''
   if not os.path.exists("%s/feature_subset.h5" %save_dir):
     features = np.concatenate(load_file_list(None, directory = features_dir, ext = ".dataset"))
     features = features[range(0,np.shape(features)[0],100),:]
     verbosedump(features, "%s/feature_subset.h5" %save_dir)
   else:
     features = verboseload("%s/feature_subset.h5" %save_dir)
+  '''
+
+  features = np.concatenate(load_file_list(None, directory = features_dir, ext = ".dataset"))
 
   tics = np.concatenate(load_file(projected_tica_coords))
-  feature_names = generate_features("/home/enf/b2ar_analysis/featuresreimaged_notrajfix_tm_residues_under_cutoff1nm/feature_residues_map.csv")
+  feature_names = generate_features(feature_residues_map)
   feature_names = ["%d_%d" %(f[0], f[1]) for f in feature_names]
 
   for i in range(0, n_tica_components):
@@ -358,6 +422,7 @@ def compute_overall_rf_models(features_dir, projected_tica_coords, gmm_dir, save
       plot_importances(feature_importances, save_dir, i)
     except:
       continue
+
 
 
 

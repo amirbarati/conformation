@@ -61,7 +61,7 @@ else:
 	parallel = False
 
 
-sparse = True
+sparse = False
 is_sparse = ""
 if(sparse): is_sparse = "sparse-"
 
@@ -71,7 +71,7 @@ rho_string = ""
 wolf = True
 if wolf and not sparse:
 	wolf_string = "_wolf_"
-	shrinkage = False
+	shrinkage = None
 	shrinkage_string = "autoShrinkage"
 	rho = None
 	rho_string = ""
@@ -90,7 +90,7 @@ else:
 
 ktica = False
 k_tica_components = 25
-landmark_subsample=1
+landmark_subsample=5
 k_tica_sparse = False
 k_tica_shrinkage = 0.01
 k_tica_shrinkage_string = ""
@@ -104,11 +104,9 @@ else:
 	k_tica_regularization = 0.25
 	k_tica_regularization_string = "0pt25"
 
-msm_lag_time = 10
+msm_lag_time = 5
 n_components = 25
 n_samples = 10
-#cutoff = 1.0
-cutoff = 1.0
 n_macrostates = 25
 n_mmgbsa=100
 gmm_max_components = 10
@@ -138,6 +136,7 @@ kmeans_csv = "%s/kmeans_csv" %analysis_dir
 features_dir = "%s/features%s" %(base,feature_types)
 standardized_features_dir = "%s_standardized" %features_dir 
 feature_residues_csv = "%s/feature_residues_map.csv" %features_dir 
+feature_residues_pkl = "%s/feature_residues.pkl" %features_dir
 contact_csv = "%s/contact_residue_pairs.csv" %features_dir
 combined_features_dir = "%s/combined_features.h5" %ori_tica_dir
 msm_model_dir = "%s/msm_model_%d_clusters_t%d.h5" %(tica_dir, n_clusters, msm_lag_time)

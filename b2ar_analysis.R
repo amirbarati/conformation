@@ -222,7 +222,8 @@ do.analysis <- function(tica, analysis.dir, pnas.coords.csv, tica.coords.csv, fe
   #pnas.coords.all["tm6_tm3_dist"] <- 7.14 * pnas.coords.all["tm6_tm3_dist"]
   
   #Find which residues are most important in each tIC
-  if(length(grep("ktICA", tica)) < 1) {
+
+  if(length(grep("ktICA", tica)) == 100000) {
     tic.residues <- get.tic.residues.pairs(analysis.dir = analysis.dir, features.dir = features.dir, tica = tica)
     #print(tic.residues[1:10,])
     residue.names <- combine.columns(tic.residues[,dim(tic.residues)[2]-1], tic.residues[,dim(tic.residues)[2]])
