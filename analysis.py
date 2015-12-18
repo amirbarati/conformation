@@ -42,8 +42,7 @@ def find_cos(index, k_mean, features):
 		b = k_mean
 		return (traj, frame, np.dot(a,b) / (np.linalg.norm(a) * np.linalg.norm(b)))
 
-def rmsd_connector(traj, inactive, residues_map = None):
-	residues = [121, 282]
+def rmsd_connector(traj, inactive, residues=[121,282], residues_map = None):
 	if residues_map is not None:
 		residues = map_residues(residues_map, residues)
 
@@ -72,8 +71,7 @@ def rmsd_connector(traj, inactive, residues_map = None):
 	rmsds = md.rmsd(traj_stripped, inactive_stripped) * 10.0
 	return rmsds
 
-def rmsd_npxxy(traj, inactive, residues_map = None):
-	residues = range(322,328)
+def rmsd_npxxy(traj, inactive, residues=range(322,328) residues_map = None):
 	if residues_map is not None:
 		residues = map_residues(residues_map, residues)
 
@@ -94,8 +92,7 @@ def rmsd_npxxy(traj, inactive, residues_map = None):
 	rmsds = md.rmsd(traj_stripped, inactive_stripped) * 10.0
 	return rmsds
 
-def helix6_helix3_dist(traj, residues_map = None):
-	residues = [131, 272]
+def helix6_helix3_dist(traj, residues=[131,272], residues_map = None):
 	if residues_map is not None:
 		residues = map_residues(residues_map, residues)
 

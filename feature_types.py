@@ -1,3 +1,12 @@
+from residue import Residue
+
+def convert_list_to_resobject_list(contact_residues):
+  resobject_list = []
+  for residue in contact_residues:
+    new_residue = Residue(resSeq = residue[1], chain_id = residue[0])
+    resobject_list.append(new_residue)
+  return(resobject_list)
+
 #CHOOSE RESIDUES:
 helix_residues = {}
 helix_residues["tm1"] = range(29,61)
@@ -56,3 +65,5 @@ feature_types = "tm_residues_2rh1_3sn6_under_cutoff%dnm" %(int(cutoff))
 #feature_types = "reference_receptors"
 contact_residues = [(0, res) for res in tm_residues]
 #contact_residues = [(0, res) for res in all_residues]
+
+contact_residues = convert_list_to_resobject_list(contact_residues)

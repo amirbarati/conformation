@@ -1,6 +1,5 @@
 import mdtraj as md
 from io_functions import *
-from custom_featurizer_anton import *
 import subprocess
 import multiprocessing as mp
 import os

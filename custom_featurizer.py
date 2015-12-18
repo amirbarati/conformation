@@ -538,12 +538,15 @@ def featurize_known(directory, inactive_dir, active_dir):
 
 	print("Completed featurizing")
 
-def compute_pnas_coords_and_distance(traj_file, inactive, active, scale = 7.14, residues_map = None):
+def compute_pnas_coords_and_distance(traj_file, inactive, active, scale = 7.14, residues_map = None, structure=None, connector_residues=[], npxxy_residues=[], tm6_tm3_residues=[]):
 	print "featurizing %s" %traj_file
-	traj = md.load(traj_file)
-	inactive_tuple = np.array([helix6_helix3_dist(inactive) / scale, rmsd_npxxy(inactive, inactive)])
-	active_tuple = np.array([helix6_helix3_dist(active) / scale, rmsd_npxxy(active, inactive)])
-	traj_coords = [helix6_helix3_dist(traj, residues_map) / scale, rmsd_npxxy(traj, inactive, residues_map), rmsd_npxxy(traj, active, residues_map), rmsd_connector(traj, inactive, residues_map), rmsd_connector(traj, active, residues_map)]
+	if structure is not None:
+		traj = md.load(traj_file, top=structure)
+	else:
+		traj = md.load(traj_file)
+	inactive_tuple = np.array([helix6_helix3_dist(inactive, residues=tm6_tm3_residues) / scale, rmsd_npxxy(inactive, inactive, residues=npxxy_residues)])
+	active_tuple = np.array([helix6_helix3_dist(active, residues=tm6_tm3_residues) / scale, rmsd_npxxy(active, inactive, residues=npxxy_residues)])
+	traj_coords = [helix6_helix3_dist(traj, residues_map, residues=tm6_tm3_residues) / scale, rmsd_npxxy(traj, inactive, residues_map, residues=npxxy_residues), rmsd_npxxy(traj, active, residues_map, resiudes=npxxy_residues), rmsd_connector(traj, inactive, residues_map, residues=connector_residues), rmsd_connector(traj, active, residues_map, residues=connector_residues)]
 	traj_coords = np.transpose(np.vstack(traj_coords))
 	active_vectors = traj_coords[:,[0,1]] - np.transpose(active_tuple)
 	inactive_vectors = traj_coords[:,[0,1]] - np.transpose(inactive_tuple)
@@ -569,7 +572,7 @@ def convert_np_to_map(data):
 				data_map["traj%d_frame%d" %(i,j)] = [traj_data[j]]
 	return data_map
 
-def featurize_pnas_distance(traj_dir, features_dir, ext, inactive_dir, active_dir, inactive_distances_dir, active_distances_dir, coords_dir, inactive_distances_csv, active_distances_csv, coords_csv, scale = 7.14, residues_map = None):
+def featurize_pnas_distance(traj_dir, features_dir, ext, inactive_dir, active_dir, inactive_distances_dir, active_distances_dir, coords_dir, inactive_distances_csv, active_distances_csv, coords_csv, scale = 7.14, residues_map = None, structure=None, connector_residues=[], npxxy_residues=[], tm6_tm3_residues=[]):
 	if not os.path.exists(features_dir): os.makedirs(features_dir)
 
 	inactive = md.load(inactive_dir)
@@ -579,7 +582,9 @@ def featurize_pnas_distance(traj_dir, features_dir, ext, inactive_dir, active_di
 	trajs = get_trajectory_files(traj_dir, ext = ext)
 	#trajs = [t for t in trajs if "clone0.lh5" in t]
 	#traj_objs = md.load(trajs)
-	featurize_partial = partial(compute_pnas_coords_and_distance, inactive = inactive, active = active, scale = scale, residues_map = residues_map)
+	featurize_partial = partial(compute_pnas_coords_and_distance, inactive = inactive, 
+															active = active, scale = scale, residues_map = residues_map, structure=structure, 
+															connector_residues=[], npxxy_residues=[], tm6_tm3_residues=[])
 	pool = mp.Pool(16)
 	features = pool.map(featurize_partial, trajs)
 	#for traj in trajs:
