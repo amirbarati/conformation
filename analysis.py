@@ -71,7 +71,7 @@ def rmsd_connector(traj, inactive, residues=[121,282], residues_map = None):
 	rmsds = md.rmsd(traj_stripped, inactive_stripped) * 10.0
 	return rmsds
 
-def rmsd_npxxy(traj, inactive, residues=range(322,328) residues_map = None):
+def rmsd_npxxy(traj, inactive, residues=range(322,328), residues_map = None):
 	if residues_map is not None:
 		residues = map_residues(residues_map, residues)
 
