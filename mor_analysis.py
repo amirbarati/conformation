@@ -32,29 +32,27 @@ from landmark_kernel_tica import *
 
 import scipy as sp
 from pandas import *
+
 from rpy2.robjects.packages import importr
 import rpy2.robjects as ro
 import pandas.rpy.common as com
 from rpy2.robjects import r
 import rpy2.robjects.numpy2ri as numpy2ri
 numpy2ri.activate()
+
 from detect_intermediates import *
 from interpret_tICs import *
 
 from feature_types import *
 
 
-
-base = get_base()
-
 R_functions = "%s/conformation/analysis.R" %base
 R_analysis = "%s/conformation/b2ar_analysis.R" %base
 ro.r.source(R_functions)
 ro.r.source(R_analysis)
 
-grid_center = "64.4, 16.9, 11.99"
 
-base = get_base()
+grid_center = "64.4, 16.9, 11.99"
 
 #reimage_traj_new("%s/A-00.h5" %traj_dir, base, "", ".h5")
 #featurize_pnas_distance(base, base, "-00.h5", inactive_ref_dir, active_ref_dir, "%s/pnas_inactive_dist_test.csv" %base, "%s/pnas_active_dist_test.csv" %base, "%s/pnas_coords_dir.csv" %base, None, "%s/pnas_active_dist_test.csv" %base, "%s/pnas_all_dist_test.csv" %base, scale = 7.14, residues_map = None)
