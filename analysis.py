@@ -42,28 +42,25 @@ def find_cos(index, k_mean, features):
 		b = k_mean
 		return (traj, frame, np.dot(a,b) / (np.linalg.norm(a) * np.linalg.norm(b)))
 
-def rmsd_connector(traj, inactive, residues=[121,282], residues_map = None):
+def rmsd_connector(traj, inactive, residues=[], residues_map = None):
 	if residues_map is not None:
 		residues = map_residues(residues_map, residues)
 
 	nonsymmetric = ["CG2", "CG1", "CD1", "CD2", "CE1", "CE2"]	
-	connector_atoms = [(a.index, str(a)) for a in traj.topology.atoms if a.residue.resSeq in [121, 282] and "hydrogen" not in a.element and not any(substring in str(a) for substring in nonsymmetric)]
-	
- 	#print(connector_atom_names)
-	#print connector_atoms
+
+	connector_atoms = []
+	for residue in residues:
+		connector_atoms += [(a.index, str(a)) for a in traj.topology.atoms if residue.is_mdtraj_res_equivalent(a.residue) and "hydrogen" not in a.element and not any(substring in str(a) for substring in nonsymmetric)]
+
 	connector_atoms = sorted(connector_atoms, key=operator.itemgetter(1), reverse = True)
-	#print(connector_atoms)
 	connector_atoms = [a[0] for a in connector_atoms]
 	traj_stripped = traj.atom_slice(connector_atoms)
 
-
-	connector_atoms_target = [(a.index,str(a)) for a in inactive.topology.atoms if a.residue.resSeq in [121, 282] and "hydrogen" not in a.element and not any(substring in str(a) for substring in nonsymmetric)]
+	connector_atoms_target = []
+	for residue in residues:
+		connector_atoms_target += [(a.index, str(a)) for a in inactive.topology.atoms if residue.is_mdtraj_res_equivalent(a.residue) and "hydrogen" not in a.element and not any(substring in str(a) for substring in nonsymmetric)]
 	
-	#connector_atom_names = [(a, a.element, a.index, a.residue) for a in inactive.topology.atoms if a.residue.resSeq in [121, 282] and "hydrogen" not in a.element]
-	#print(connector_atom_names)
-	#print connector_atoms_target
 	connector_atoms_target = sorted(connector_atoms_target, key=operator.itemgetter(1), reverse = True)
-	#print(connector_atoms_target)
 	connector_atoms_target = [a[0] for a in connector_atoms_target]
 	inactive_stripped = inactive.atom_slice(connector_atoms_target)
 
@@ -71,11 +68,13 @@ def rmsd_connector(traj, inactive, residues=[121,282], residues_map = None):
 	rmsds = md.rmsd(traj_stripped, inactive_stripped) * 10.0
 	return rmsds
 
-def rmsd_npxxy(traj, inactive, residues=range(322,328), residues_map = None):
+def rmsd_npxxy(traj, inactive, residues=[], residues_map = None):
 	if residues_map is not None:
 		residues = map_residues(residues_map, residues)
 
-	npxxy_atoms = [(a.index,str(a)) for a in traj.topology.atoms if a.residue.resSeq in residues and a.is_backbone]
+	npxxy_atoms = []
+	for residue in residues:
+		npxxy_atoms += [(a.index,str(a)) for a in traj.topology.atoms if residue.is_mdtraj_res_equivalent(a.residue) and a.is_backbone]
 	npxxy_atoms = sorted(npxxy_atoms, key=operator.itemgetter(1), reverse = True)
 	npxxy_atoms = [a[0] for a in npxxy_atoms]
 
@@ -92,15 +91,15 @@ def rmsd_npxxy(traj, inactive, residues=range(322,328), residues_map = None):
 	rmsds = md.rmsd(traj_stripped, inactive_stripped) * 10.0
 	return rmsds
 
-def helix6_helix3_dist(traj, residues=[131,272], residues_map = None):
+def helix6_helix3_dist(traj, residues=[], residues_map = None):
 	if residues_map is not None:
 		residues = map_residues(residues_map, residues)
 
 	print "New residues = "
 	print [r for r in traj.topology.residues if r.resSeq == residues[1]]
 
-	atom_3 = [a.index for a in traj.topology.atoms if a.residue.resSeq == residues[0] and a.name == "CA"][0]
-	atom_6 = [a.index for a in traj.topology.atoms if a.residue.resSeq == residues[1] and a.name == "CA"][0]
+	atom_3 = [a.index for a in traj.topology.atoms if residues[0].is_mdtraj_res_equivalent(a.residue) and a.name == "CA"][0]
+	atom_6 = [a.index for a in traj.topology.atoms if residues[1].is_mdtraj_res_equivalent(a.residue) and a.name == "CA"][0]
 	indices = np.empty([1,2])
 	indices[0] = [atom_3, atom_6]
 	dist = md.compute_distances(traj, indices) * 10.0
@@ -1014,4 +1013,13 @@ def find_correlation(features_dir, tica_projected_coords_dir, mutual_information
 
 	print("Finished computing MI and/or Pearson")
 
+def make_extreme_tIC_barplots(tica_extremes_dir, feature_residues_pkl, n_components):
+	feature_files = [f for f in get_trajectory_files(tica_extremes_dir, ext=".csv") if "standardized" in f]
+	feature_files = [f for f in feature_files if "standardized" in f]
+	for i in range(1, n_components+1):
+		low_file = [f for f in feature_files if "tIC.%d_" %i in f and "low" in f][0]
+		print low_file
+		high_file = [f for f in feature_files if "tIC.%d_" %i in f and "high" in f][0]
+		r['analyze.extreme.tic.values'](low_file, high_file, feature_residues_pkl, i, tica_extremes_dir)
+	return
 

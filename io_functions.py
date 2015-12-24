@@ -538,7 +538,22 @@ def map_residues_condition(residues, condition):
 
 	return new_residues
 
-
-
-
+def get_cluster_ids(active_clusters_csv, intermediate_clusters_csv, inactive_clusters_csv):
+	with open(active_clusters_csv, 'rb') as f:
+	    reader = csv.reader(f)
+	    active_clusters = list(reader)[0]
+	active_clusters = [int(c[7:]) for c in active_clusters]
+	print(active_clusters)
+	with open(intermediate_clusters_csv, 'rb') as f:
+	    reader = csv.reader(f)
+	    intermediate_clusters = list(reader)[0]
+	intermediate_clusters = [int(c[7:]) for c in intermediate_clusters]
+	print(intermediate_clusters)
+	print(intermediate_clusters[0:10])
+	with open(inactive_clusters_csv, 'rb') as f:
+	    reader = csv.reader(f)
+	    inactive_clusters = list(reader)[0]
+	inactive_clusters = [int(c[7:]) for c in inactive_clusters]
+	print(inactive_clusters)
+	return active_clusters_csv, intermediate_clusters_csv, inactive_clusters_csv
 
