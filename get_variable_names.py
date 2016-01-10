@@ -1,3 +1,9 @@
+import os 
+import csv
+import mdtraj as md
+from residue import Residue
+
+
 def get_base(exacycle=False):
   possible_bases = ["/scratch/users/enf/b2ar_analysis",
                     "/home/enf/b2ar_analysis", "/Users/evan/vsp/b2ar_analysis",
@@ -54,7 +60,7 @@ def get_rf_dir(tica_dir):
   make_directory_if_not_exist(rf_dir)
   return rf_dir
 
-def get_tica_files(tica_dir, n_clusters):
+def get_tica_files(base, tica_dir, n_clusters, msm_lag_time, n_macrostates):
   clusterer_dir = "%s/clusterer_%dclusters.h5" %(tica_dir, n_clusters)
   msm_model_dir = "%s/msm_model_%d_clusters_t%d.h5" %(tica_dir, n_clusters, msm_lag_time)
   macrostate_dir = "%s/msm_modeL%d_clusters_t%d_macrostate_states%d" %(tica_dir, n_clusters, msm_lag_time,  n_macrostates)
@@ -68,9 +74,20 @@ def get_tica_files(tica_dir, n_clusters):
   mutual_information_csv = "%s/mutual_information.csv" %tica_dir
   pearson_csv = "%s/pearson.csv" %tica_dir
 
- return (clusterer_dir, msm_model_dir, macrostate_dir, features_known, model_dir, projected_features_dir,
+  return (clusterer_dir, msm_model_dir, macrostate_dir, features_known, model_dir, projected_features_dir,
          projection_operator_dir, ktica_fit_model_filename, ktica_projected_data_filename, nystroem_data_filename,
          mutual_information_csv, pearson_csv)
+
+def get_msm_dir(tica_dir, lag_time, n_clusters):
+  msm_dir = "%s/msm_lag-time%d_n_states%d" % (tica_dir, lag_time, n_clusters)
+  make_directory_if_not_exist(msm_dir)
+  return msm_dir
+
+def get_gmm_clusterer_files(tica_dir, n_clusters):
+  model_file = "%s/gmm_%d_components.h5" % (tica_dir, n_clusters)
+  means_file = "%s/gmm_%d_components_means.h5" % (tica_dir, n_clusters)
+  labels_file = "%s/gmm_%d_components_labels.h5" % (tica_dir, n_clusters)
+  return (model_file, means_file, labels_file)
 
 def get_feature_files(features_dir):
   standardized_features_dir = "%s_standardized" %features_dir 
@@ -82,8 +99,9 @@ def get_feature_files(features_dir):
   return (standardized_features_dir, feature_residues_csv, feature_residues_pkl,
           contact_csv, ref_features_dir)
 
-def get_analysis_files(analysis_dir, n_clusters, ori_tica_dir, sampling_method, n_samples, precision,
+def get_analysis_files(analysis_dir, n_clusters, ori_tica_dir, tica_dir, sampling_method, n_samples, precision,
                        msm_lag_time):
+  n_mmgbsa=100
   kmeans_csv = "%s/kmeans_csv" %analysis_dir
   tica_coords_csv = "%s/tica_coords.csv" %analysis_dir
   features_csv = "%s/features.csv" %analysis_dir
@@ -150,6 +168,7 @@ def get_pnas_files(whole_trajectory_pnas, pnas_features_dir):
   inactive_pnas_distances_dir = "%s/inactive_pnas_distances.h5" %pnas_features_dir
   active_pnas_distances_dir = "%s/active_pnas_distances.h5" %whole_trajectory_pnas
   active_pnas_all_distances_dir = "%s/active_pnas_all_distances.csv" %whole_trajectory_pnas
+  inactive_pnas_distances_new_csv = "%s/inactive_pnas_distances_new.csv" %pnas_features_dir
   active_pnas_distances_new_csv = "%s/active_pnas_distances_new.csv" %pnas_features_dir
   active_pnas_joined = "%s/active_pnas_joined.csv" %pnas_features_dir
   active_pnas_means = "%s/active_pnas_means.csv" %pnas_features_dir
@@ -160,14 +179,17 @@ def get_pnas_files(whole_trajectory_pnas, pnas_features_dir):
   pnas_coords_hexbin_dir = "%s/pnas_coords_figure.pdf" %pnas_features_dir
   pnas_coords_co_crystallized_docking_dir = "%s/co_crystallized_docking.pdf" %pnas_features_dir
   pnas_coords_active_colors_dir = "%s/pnas_coords_active_colors_figure.pdf" %pnas_features_dir
-  return (inactive_pnas_distances_dir, active_pnas_distances_dir, active_pnas_all_distances_dir,
+  user_defined_feature_file = "%s/user_defined_features.h5" % whole_trajectory_pnas
+  reaction_coordinates_trajs_file = "%s/reaction_coordinates_trajs.csv" % whole_trajectory_pnas
+  return (inactive_pnas_distances_dir, active_pnas_distances_dir, active_pnas_all_distances_dir, inactive_pnas_distances_new_csv,
           active_pnas_distances_new_csv, active_pnas_joined, active_pnas_means, pnas_coords_dir,
           pnas_coords_csv, pnas_all_coords_csv, pnas_coords_hexbin_dir, pnas_coords_co_crystallized_docking_dir,
-          pnas_coords_active_colors_dir)
+          pnas_coords_active_colors_dir, user_defined_feature_file, reaction_coordinates_trajs_file)
 
 def get_features_dir(base, feature_types):
   features_dir = "%s/features%s" %(base,feature_types)
   make_directory_if_not_exist(features_dir)
+  print(features_dir)
   return features_dir
 
 def get_base_files(base):
@@ -194,7 +216,7 @@ def get_script_dir(scripts_dir):
   pymol_fixpdb_dir = "%s/pymol_fixpdb.py" %scripts_dir
   return (scripts_dir, pymol_fixpdb_dir)
 
-def get_docking_dirs(tica_dir, n_clusters, n_components, n_samples, sampling_method):
+def get_docking_dirs(tica_dir, n_clusters, n_components, n_samples, sampling_method, precision):
   save_dir = "%s/clusters%d_n_components%d_n_samples%d_%s" %(tica_dir, n_clusters, n_components, n_samples, sampling_method)
   reimaged_dir = "%s/clusters%d_n_components%d_n_samples%d_%s_reimaged" %(tica_dir, n_clusters, n_components, n_samples, sampling_method)
   mae_dir = reimaged_dir
@@ -212,6 +234,37 @@ def get_ref_tica_dirs(tica_dir):
 def get_common_residues(residues_map_csv, contact_residues):
   residues_map = generate_residues_map(residues_map_csv)
   contact_residues = [res for res in contact_residues if res.resSeq in residues_map.keys()]
+  return contact_residues
+
+def get_common_residues_pkl(base):
+  common_residues_pkl = "%s/common_residues.pkl" % base
+  return common_residues_pkl
+
+def find_common_residues(structures, save_file):
+  if 1==2:
+    with open(safe_file, "rb") as f:
+      common_residues = pickle.load(f)
+    return common_residues
+  else:
+    all_residues = []
+    for structure in structures: 
+      structure_residues = set()
+      top = md.load(structure).topology 
+      for residue in top.residues:
+        if residue.is_protein: 
+          res = Residue(resSeq = residue.resSeq, chain_id=residue.chain.id)
+          #res = Residue(resSeq = residue.resSeq)
+          structure_residues.add(res)
+      all_residues.append(structure_residues)
+    common_residues = list(set.intersection(*all_residues))
+    print(sorted([r.resSeq for r in common_residues]))
+    print("There are %d common residues between input structures" %len(common_residues))
+    import pickle
+    with open(save_file, "wb") as f:
+      pickle.dump(common_residues, f)
+
+    return common_residues
+
 
 def get_residues_map_csv(base):
   residues_map_csv = "%s/exacycle_data/residues_map.csv" %base
@@ -219,10 +272,10 @@ def get_residues_map_csv(base):
 
 def get_trajectory_info(exacycle, base):
   if exacycle:
-  traj_dir = "%s/exacycle_data/b2ar3p0g2rh1_bi/Trajectories" %base
-  traj_ext = ".lh5"
-  feature_parallel = True
-else:
-  traj_dir = "%s/subsampled_reimaged_amber" %base
-  traj_ext = ".h5"
-  feature_parallel = False 
+    traj_dir = "%s/exacycle_data/b2ar3p0g2rh1_bi/Trajectories" %base
+    traj_ext = ".lh5"
+    feature_parallel = True
+  else:
+    traj_dir = "%s/subsampled_reimaged_amber" %base
+    traj_ext = ".h5"
+    feature_parallel = False 

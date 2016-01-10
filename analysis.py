@@ -81,7 +81,10 @@ def rmsd_npxxy(traj, inactive, residues=[], residues_map = None):
 	#print npxxy_atoms
 	traj_stripped = traj.atom_slice(npxxy_atoms)
 
-	npxxy_atoms_target = [(a.index,str(a)) for a in inactive.topology.atoms if a.residue.resSeq in range(322,328) and a.is_backbone]
+	npxxy_atoms_target = []
+	for residue in residues: 
+		npxxy_atoms_target += [(a.index,str(a)) for a in inactive.topology.atoms if residue.is_mdtraj_res_equivalent(a.residue) and a.is_backbone]
+
 	npxxy_atoms_target = sorted(npxxy_atoms_target, key=operator.itemgetter(1), reverse = True)
 	npxxy_atoms_target = [a[0] for a in npxxy_atoms_target]
 	#print npxxy_atoms_target
@@ -91,12 +94,35 @@ def rmsd_npxxy(traj, inactive, residues=[], residues_map = None):
 	rmsds = md.rmsd(traj_stripped, inactive_stripped) * 10.0
 	return rmsds
 
-def helix6_helix3_dist(traj, residues=[], residues_map = None):
+def compute_distance(traj, inactive, residues=[], residues_map = None):
 	if residues_map is not None:
 		residues = map_residues(residues_map, residues)
 
-	print "New residues = "
-	print [r for r in traj.topology.residues if r.resSeq == residues[1]]
+	motif_atoms = []
+	for residue in residues:
+		motif_atoms += [(a.index,str(a)) for a in traj.topology.atoms if residue.is_mdtraj_res_equivalent(a.residue) and "H" not in a.name]
+	motif_atoms = sorted(motif_atoms, key=operator.itemgetter(1), reverse = True)
+	motif_atoms = [a[0] for a in motif_atoms]
+
+	#print motif_atoms
+	traj_stripped = traj.atom_slice(motif_atoms)
+
+	motif_atoms_target = []
+	for residue in residues: 
+		motif_atoms_target += [(a.index,str(a)) for a in inactive.topology.atoms if residue.is_mdtraj_res_equivalent(a.residue) and "H" not in a.name]
+
+	motif_atoms_target = sorted(motif_atoms_target, key=operator.itemgetter(1), reverse = True)
+	motif_atoms_target = [a[0] for a in motif_atoms_target]
+	#print motif_atoms_target
+	inactive_stripped = inactive.atom_slice(motif_atoms_target)
+
+	traj_stripped_aligned = traj_stripped.superpose(inactive_stripped)
+	rmsds = md.rmsd(traj_stripped, inactive_stripped) * 10.0
+	return rmsds
+
+def helix6_helix3_dist(traj, residues=[], residues_map = None):
+	if residues_map is not None:
+		residues = map_residues(residues_map, residues)
 
 	atom_3 = [a.index for a in traj.topology.atoms if residues[0].is_mdtraj_res_equivalent(a.residue) and a.name == "CA"][0]
 	atom_6 = [a.index for a in traj.topology.atoms if residues[1].is_mdtraj_res_equivalent(a.residue) and a.name == "CA"][0]
@@ -266,7 +292,9 @@ def plot_tica(transformed_data_dir, lag_time):
 	pp.close()
 
 
-def plot_tica_and_clusters(component_j, transformed_data, clusterer, lag_time, component_i, label = "dot", active_cluster_ids = [], intermediate_cluster_ids = [], inactive_cluster_ids = [], inactive_subsample=5, intermediate_subsample=5, tica_dir = ""):
+
+
+def plot_tica_and_clusters(component_j, transformed_data, clusterer, lag_time, component_i, label = "dot", active_cluster_ids = [], intermediate_cluster_ids = [], inactive_cluster_ids = [], inactive_subsample=5, intermediate_subsample=5, tica_dir = "", center_i=None, center_j=None):
 
 	trajs = np.concatenate(transformed_data)
 	plt.hexbin(trajs[:,component_i], trajs[:,component_j], bins='log', mincnt=1)
@@ -275,26 +303,31 @@ def plot_tica_and_clusters(component_j, transformed_data, clusterer, lag_time, c
 	centers = clusterer.cluster_centers_
 	indices = [j for j in range(0,len(active_cluster_ids),1)]
 
+	if center_i is None:
+		center_i = component_i
+	if center_j is None:
+		center_j = component_j
+
 	for i in [active_cluster_ids[j] for j in indices]:
-		center = centers[i,:]
+		center = centers[int(i),:]
 		if label == "dot":
-			plt.scatter([center[component_i]],[center[component_j]],  marker='v', c='k', s=10)
+			plt.scatter([center[center_i]],[center[center_j]],  marker='v', c='k', s=10)
 		else:
-			plt.annotate('%d' %i, xy=(center[component_i],center[component_j]), xytext=(center[component_i], center[component_j]),size=6)
+			plt.annotate('%d' %i, xy=(center[center_i],center[center_j]), xytext=(center[center_i], center[center_j]),size=6)
 	indices = [j for j in range(0,len(intermediate_cluster_ids),intermediate_subsample)]
 	for i in [intermediate_cluster_ids[j] for j in indices]:
-		center = centers[i,:]
+		center = centers[int(i),:]
 		if label == "dot":
-			plt.scatter([center[component_i]],[center[component_j]],  marker='8', c='m', s=10)
+			plt.scatter([center[center_i]],[center[center_j]],  marker='8', c='m', s=10)
 		else:
-			plt.annotate('%d' %i, xy=(center[component_i],center[component_j]), xytext=(center[component_i], center[component_j]),size=6)
+			plt.annotate('%d' %i, xy=(center[center_i],center[center_j]), xytext=(center[center_i], center[center_j]),size=6)
 	indices = [j for j in range(0,len(inactive_cluster_ids),inactive_subsample)]
 	for i in [inactive_cluster_ids[j] for j in indices]:
-		center = centers[i,:]
+		center = centers[int(i),:]
 		if label == "dot":
-			plt.scatter([center[component_i]],[center[component_j]],  marker='s', c='w', s=10)
+			plt.scatter([center[center_i]],[center[center_j]],  marker='s', c='w', s=10)
 		else:
-			plt.annotate('%d' %i, xy=(center[component_i],center[component_j]), xytext=(center[component_i], center[component_j]),size=6)
+			plt.annotate('%d' %i, xy=(center[center_i],center[center_j]), xytext=(center[center_i], center[center_j]),size=6)
 
 
 	pp = PdfPages("%s/c%d_c%d_clusters%d.pdf" %(tica_dir, component_i, component_j, np.shape(centers)[0]))

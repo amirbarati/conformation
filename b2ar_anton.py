@@ -41,7 +41,6 @@ numpy2ri.activate()
 from detect_intermediates import *
 from interpret_tICs import *
 
-from feature_types import *
 
 
 
@@ -59,19 +58,23 @@ base = get_base()
 #reimage_traj_new("%s/A-00.h5" %traj_dir, base, "", ".h5")
 #featurize_pnas_distance(base, base, "-00.h5", inactive_ref_dir, active_ref_dir, "%s/pnas_inactive_dist_test.csv" %base, "%s/pnas_active_dist_test.csv" %base, "%s/pnas_coords_dir.csv" %base, None, "%s/pnas_active_dist_test.csv" %base, "%s/pnas_all_dist_test.csv" %base, scale = 7.14, residues_map = None)
 
-from feature_types import contact_residues, feature_name
+from b2ar_feature_types import contact_residues, feature_name #, tm6_tm3_residues, npxxy_residues, connector_residues, feature_name_residues_dict, coords_bounds_dict
 from get_variable_names import *
-base = get_base(exacycle)
+residues_map_csv =  get_residues_map_csv(base)
+
 
 
 #do tICA
-from tica_config import *
+from b2ar_tica_config import *
 
+(active_ref_dir, inactive_ref_dir, simulation_ref_dir, scripts_dir,
+          ligand_dir, agonist_dir, inverse_agonist_dir, ref_receptors_dir, whole_trajectory_pnas,
+          sasa_file) = get_base_files(base)
 
-tica_dir = get_tica_dir(base, is_sparse, lag_time, n_components, feature_types, 
+tica_dir = get_tica_dir(base, is_sparse, lag_time, n_components, feature_name, 
                                  wolf_string, shrinkage_string, rho_string)
-traj_dir, traj_ext, feature_parallel = get_trajectory_info(exacycle, base)
-features_dir = get_features_dir(base, feature_types)
+ori_tica_dir = copy.deepcopy(tica_dir)
+features_dir = get_features_dir(base, feature_name)
 
 landmarks_dir = get_landmarks_dir(tica_dir)
 analysis_dir = get_analysis_dir(tica_dir, n_clusters, sampling_method)
@@ -89,7 +92,7 @@ pnas_features_dir = analysis_dir
 
 (clusterer_dir, msm_model_dir, macrostate_dir, features_known, model_dir, projected_features_dir,
          projection_operator_dir, ktica_fit_model_filename, ktica_projected_data_filename, nystroem_data_filename,
-         mutual_information_csv, pearson_csv) = get_tica_files(tica_dir, n_clusters)
+         mutual_information_csv, pearson_csv) = get_tica_files(base, tica_dir, n_clusters, msm_lag_time, n_macrostates)
 
 (standardized_features_dir, feature_residues_csv, feature_residues_pkl,
           contact_csv, ref_features_dir) = get_feature_files(features_dir)
@@ -101,34 +104,52 @@ pnas_features_dir = analysis_dir
         aggregate_mmgbsa_joined, aggregate_mmgbsa_pnas_joined, mmgbsa_z_scores_csv, active_clusters_csv, intermediate_clusters_csv,
         inactive_clusters_csv, pnas_clusters_averages, tica_clusters_averages, tica_classes_csv, tica_samples_csv, subgraph_save_base,
         degree_save_base, degree_map_csv, degree_z_map_csv, aggregate_docking_pnas_degree_z_joined, tic_residue_csv, feature_coefs_csv,
-        duplicated_feature_coefs_csv) = get_analysis_files(analysis_dir, n_clusters, tica_dir, sampling_method, n_samples, precision,
+        duplicated_feature_coefs_csv) = get_analysis_files(analysis_dir, n_clusters, tica_dir, tica_dir, sampling_method, n_samples, precision,
                                                            msm_lag_time)
 
 (inactive_pnas_distances_dir, active_pnas_distances_dir, active_pnas_all_distances_dir,
-          active_pnas_distances_new_csv, active_pnas_joined, active_pnas_means, pnas_coords_dir,
+          inactive_pnas_distances_new_csv, active_pnas_distances_new_csv, active_pnas_joined, active_pnas_means, pnas_coords_dir,
           pnas_coords_csv, pnas_all_coords_csv, pnas_coords_hexbin_dir, pnas_coords_co_crystallized_docking_dir,
-          pnas_coords_active_colors_dir) = get_pnas_files(whole_trajectory_pnas, pnas_features_dir)
+          pnas_coords_active_colors_dir, user_defined_features_file, reaction_coordinates_trajs_file) = get_pnas_files(whole_trajectory_pnas, pnas_features_dir)
 
-features_dir = get_features_dir(base, feature_types)
+features_dir = get_features_dir(base, feature_name)
 
-(active_ref_dir, inactive_ref_dir, simulation_ref_dir, scripts_dir,
-          ligand_dir, agonist_dir, inverse_agonist_dir, ref_receptors_dir, whole_trajectory_pnas,
-          sasa_file) = get_base_files(base)
+
 
 graph_file = get_graph_file(tica_dir, msm_lag_time, n_clusters)
 (scripts_dir, pymol_fixpdb_dir) = get_script_dir(scripts_dir)
-(save_dir, reimaged_dir, mae_dir, combined_reimaged_dir, grid_dir, docking_dir) = get_docking_dirs(tica_dir, n_clusters, n_components, n_samples, sampling_method)
+(save_dir, reimaged_dir, mae_dir, combined_reimaged_dir, grid_dir, docking_dir) = get_docking_dirs(tica_dir, n_clusters, n_components, n_samples, sampling_method, precision)
 
 contact_residues = get_common_residues(residues_map_csv, contact_residues)
 
 print("BEGINNING tICA ANALYSIS")
 
-save_feature_residues_pkl(traj_dir, features_dir = features_dir, traj_ext = traj_ext, contact_residue_pairs_file = feature_residues_pkl, structures = [active_ref_dir, inactive_ref_dir], dihedral_residues =  [], dihedral_types = ["phi", "psi", "chi1", "chi2"], contact_residues =  contact_residues, residues_map = residues_map, contact_cutoff = cutoff, parallel = parallel, exacycle = exacycle)
-featurize_contacts_custom(traj_dir, features_dir = features_dir, traj_ext = traj_ext, contact_residue_pairs_file = feature_residues_pkl, structures = [active_ref_dir, inactive_ref_dir], dihedral_residues =  [], dihedral_types = ["phi", "psi", "chi1", "chi2"], contact_residues =  contact_residues, residues_map = residues_map, contact_cutoff = cutoff, parallel = parallel, exacycle = exacycle)
+from b2ar_tica_config import *
+print feature_name
+'''
+featurize_pnas_distance(traj_dir, pnas_features_dir, traj_ext, inactive_dir,
+                            active_dir, inactive_pnas_distances_dir,
+                            active_pnas_distances_dir, pnas_coords_dir,
+                            inactive_pnas_distances_new_csv, active_pnas_distances_new_csv,
+                            pnas_coords_csv, scale = 7.14, residues_map = None,
+                            structure=structure, connector_residues=connector_residues, 
+                            npxxy_residues=npxxy_residues, tm6_tm3_residues=tm6_tm3_residues)
+'''
+#plot_columns(analysis_dir, pnas_coords_dir, titles = pnas_titles, tICA = False, scale = 7.14, refcoords_file = None)
 
-featurize_contacts_custom(ref_receptors_dir, features_dir = ref_features_dir, traj_ext = ".pdb", structures = [active_ref_dir, inactive_ref_dir], contact_residue_pairs_file = feature_residues_pkl, dihedral_residues =  [], dihedral_types = ["phi", "psi", "chi1", "chi2"], contact_residues =  contact_residues, residues_map = residues_map, contact_cutoff = cutoff, exacycle = False)
+#compute_user_defined_features_wrapper(traj_dir, traj_ext, inactive_dir, active_dir, structure,
+#                                          feature_name_residues_dict, user_defined_features_file)
+#plot_columns(pnas_features_dir, user_defined_features_file, titles = feature_name_residues_dict.keys(), tICA=False, scale=1.0, refcoords_file=None)
+#reaction_coordinate_sampler(traj_dir, traj_ext, user_defined_features_file, 
+ #                               feature_name_residues_dict, coords_bounds_dict, reaction_coordinates_trajs_file)
 
-fit_and_transform(features_directory = features_dir, model_dir = tica_dir, stride=5, lag_time = lag_time, n_components = n_components, sparse = sparse, wolf = wolf, rho = rho, shrinkage = shrinkage, parallel=feature_parallel, traj_ext = traj_ext)
+#save_feature_residues_pkl(traj_dir, features_dir = features_dir, traj_ext = traj_ext, contact_residue_pairs_file = feature_residues_pkl, structures = [active_ref_dir, inactive_ref_dir], dihedral_residues =  [], dihedral_types = ["phi", "psi", "chi1", "chi2"], contact_residues =  contact_residues, residues_map = residues_map, contact_cutoff = cutoff, parallel = parallel, exacycle = exacycle)
+
+#featurize_contacts_custom(traj_dir, features_dir = features_dir, traj_ext = traj_ext, contact_residue_pairs_file = feature_residues_pkl, structures = [active_ref_dir, inactive_ref_dir], dihedral_residues =  [], dihedral_types = ["phi", "psi", "chi1", "chi2"], contact_residues =  contact_residues, residues_map = None, contact_cutoff = cutoff, parallel = parallel_featurize, exacycle = exacycle)
+'''
+#featurize_contacts_custom(ref_receptors_dir, features_dir = ref_features_dir, traj_ext = ".pdb", structures = [active_ref_dir, inactive_ref_dir], contact_residue_pairs_file = feature_residues_pkl, dihedral_residues =  [], dihedral_types = ["phi", "psi", "chi1", "chi2"], contact_residues =  contact_residues, residues_map = None, contact_cutoff = cutoff, exacycle = False)
+
+fit_and_transform(features_directory = features_dir, model_dir = tica_dir, stride=5, lag_time = lag_time, n_components = n_components, sparse = sparse, wolf = wolf, rho = rho, shrinkage = shrinkage, parallel=load_feature_parallel, traj_ext = traj_ext)
 
 plot_pnas_vs_tics(pnas_coords_dir, projected_features_dir, ["tm6_tm3_dist", "rmsd_npxxy_inactive", "rmsd_npxxy_active", "rmsd_connector_inactive", "rmsd_connector_active"], tica_dir)
 
@@ -146,7 +167,7 @@ r['do.analysis'](tica_dir, analysis_dir, pnas_coords_csv, tica_coords_csv, featu
 active_clusters, intermediate_clusters, inactive_clusters = get_cluster_ids(active_clusters_csv, intermediate_clusters_csv, inactive_clusters_csv)
 
 plot_all_tics_and_clusters(tica_dir, projected_features_dir, clusterer_dir, lag_time, label = "dot", active_cluster_ids = active_clusters, intermediate_cluster_ids = intermediate_clusters, inactive_cluster_ids = inactive_clusters)
-
+'''
 #find_correlation(features_dir, projected_features_dir, mutual_information_csv, pearson_csv, bins=50, exacycle = exacycle)
 #r['analyze.tic.feature.correlations'](pearson_csv, feature_residues_pkl, tica_dir, "pearson_tic_feature_coefficients", " :: Feature Pearson Correlation Coefficients")
 #r['analyze.tic.feature.correlations'](mutual_information_csv, feature_residues_pkl, tica_dir, "MI_tic_feature_coefficients", " :: Feature Mutual Information Score")
@@ -165,11 +186,13 @@ plot_all_tics_and_clusters(tica_dir, projected_features_dir, clusterer_dir, lag_
 #plot_overall_rf_importances(rf_dir, feature_residues_pkl)
 
 #LANDMARK Kernel tICA
-from ktica_config import *
+from b2ar_ktica_config import *
 print("BEGINNING kernel tICA ANALYSIS")
 
-tica_dir = get_ktica_dir(tica_dir, n_components, feature_types, 
-                                    wolf_string, shrinkage_string)
+print feature_name
+tica_dir = get_ktica_dir(tica_dir, n_components, feature_name, 
+                         wolf_string, shrinkage_string)
+features_dir = get_features_dir(base, feature_name)
 
 landmarks_dir = get_landmarks_dir(tica_dir)
 analysis_dir = get_analysis_dir(tica_dir, n_clusters, sampling_method)
@@ -187,7 +210,7 @@ pnas_features_dir = analysis_dir
 
 (clusterer_dir, msm_model_dir, macrostate_dir, features_known, model_dir, projected_features_dir,
          projection_operator_dir, ktica_fit_model_filename, ktica_projected_data_filename, nystroem_data_filename,
-         mutual_information_csv, pearson_csv) = get_tica_files(tica_dir, n_clusters)
+         mutual_information_csv, pearson_csv) = get_tica_files(base, tica_dir, n_clusters, msm_lag_time, n_macrostates)
 
 (standardized_features_dir, feature_residues_csv, feature_residues_pkl,
           contact_csv, ref_features_dir) = get_feature_files(features_dir)
@@ -199,25 +222,25 @@ pnas_features_dir = analysis_dir
         aggregate_mmgbsa_joined, aggregate_mmgbsa_pnas_joined, mmgbsa_z_scores_csv, active_clusters_csv, intermediate_clusters_csv,
         inactive_clusters_csv, pnas_clusters_averages, tica_clusters_averages, tica_classes_csv, tica_samples_csv, subgraph_save_base,
         degree_save_base, degree_map_csv, degree_z_map_csv, aggregate_docking_pnas_degree_z_joined, tic_residue_csv, feature_coefs_csv,
-        duplicated_feature_coefs_csv) = get_analysis_files(analysis_dir, n_clusters, tica_dir, sampling_method, n_samples, precision,
+        duplicated_feature_coefs_csv) = get_analysis_files(analysis_dir, n_clusters, ori_tica_dir, tica_dir, sampling_method, n_samples, precision,
                                                            msm_lag_time)
 
 (inactive_pnas_distances_dir, active_pnas_distances_dir, active_pnas_all_distances_dir,
-          active_pnas_distances_new_csv, active_pnas_joined, active_pnas_means, pnas_coords_dir,
+          inactive_pnas_distances_new_csv, active_pnas_distances_new_csv, active_pnas_joined, active_pnas_means, pnas_coords_dir,
           pnas_coords_csv, pnas_all_coords_csv, pnas_coords_hexbin_dir, pnas_coords_co_crystallized_docking_dir,
-          pnas_coords_active_colors_dir) = get_pnas_files(whole_trajectory_pnas, pnas_features_dir)
+          pnas_coords_active_colors_dir, user_defined_features_file, reaction_coordinates_trajs_file) = get_pnas_files(whole_trajectory_pnas, pnas_features_dir)
 
-features_dir = get_features_dir(base, feature_types)
+features_dir = get_features_dir(base, feature_name)
+print(features_dir)
+print(feature_residues_pkl)
 
-(active_ref_dir, inactive_ref_dir, simulation_ref_dir, scripts_dir,
-          ligand_dir, agonist_dir, inverse_agonist_dir, ref_receptors_dir, whole_trajectory_pnas,
-          sasa_file) = get_base_files(base)
+
 
 graph_file = get_graph_file(tica_dir, msm_lag_time, n_clusters)
 (scripts_dir, pymol_fixpdb_dir) = get_script_dir(scripts_dir)
-(save_dir, reimaged_dir, mae_dir, combined_reimaged_dir, grid_dir, docking_dir) = get_docking_dirs(tica_dir, n_clusters, n_components, n_samples, sampling_method)
-
-landmark_ktica(features_dir, combined_features_dir, tica_dir, clusters_map_file = clusters_map_file, landmarks_dir = landmarks_dir, nystroem_components=1000, n_components=k_tica_components, lag_time=lag_time, nystroem_data_filename = nystroem_data_filename, fit_model_filename = ktica_fit_model_filename, projected_data_filename = ktica_projected_data_filename, landmark_subsample=landmark_subsample, sparse = sparse, wolf = wolf, rho = rho, shrinkage = shrinkage)
+(save_dir, reimaged_dir, mae_dir, combined_reimaged_dir, grid_dir, docking_dir) = get_docking_dirs(tica_dir, n_clusters, n_components, n_samples, sampling_method, precision)
+'''
+landmark_ktica(features_dir, None, tica_dir, clusters_map_file = clusters_map_file, landmarks_dir = landmarks_dir, nystroem_components=1000, n_components=n_components, lag_time=lag_time, nystroem_data_filename = nystroem_data_filename, fit_model_filename = ktica_fit_model_filename, projected_data_filename = ktica_projected_data_filename, landmark_subsample=landmark_subsample, sparse = sparse, wolf = wolf, rho = rho, shrinkage = shrinkage)
 plot_pnas_vs_tics(pnas_coords_dir, ktica_projected_data_filename, ["tm6_tm3_dist", "rmsd_npxxy_inactive", "rmsd_npxxy_active", "rmsd_connector_inactive", "rmsd_connector_active"], tica_dir)
 
 #plot_columns(tica_dir, projected_features_dir, titles = None, tICA = True, scale = 1.0, refcoords_file = ref_tica_coords)
@@ -241,14 +264,63 @@ plot_all_tics_and_clusters(tica_dir, ktica_projected_data_filename, clusterer_di
 #r['analyze.tic.feature.correlations'](mutual_information_csv, feature_residues_pkl, tica_dir, "MI_tic_feature_coefficients", " :: Feature Mutual Information Score")
 
 
+'''
 compute_random_forests(features_dir, ktica_projected_data_filename, rf_dir, n_trees=500, 
-                        n_tica_components=25)
+                        n_tica_components=25, start_tIC=5)
 
 
-interpret_tIC_rf(rf_dir, feature_residues_csv, active_ref_dir, n_tica_components=25)
+interpret_tIC_rf(rf_dir, feature_residues_pkl, n_tica_components=25, percentile=99.9999)
 
-plot_top_features_per_tIC(ktica_projected_data_filename, features_dir, ".dataset", 
-                              rf_dir, n_components, normalize=False, n_features=5)
+#plot_top_features_per_tIC(ktica_projected_data_filename, features_dir, ".dataset", 
+#                              rf_dir, n_components, normalize=False, n_features=10)
+
+n_clusters=25
+n_samples=10
+
+tics_to_cluster = [1,10]
+clusterer_dir = "%s/clusterer_%dclusters_tICs-2-11.h5" %  (tica_dir, n_clusters)
+analysis_dir = get_analysis_dir(tica_dir, n_clusters, sampling_method)
+
+(save_dir, reimaged_dir, mae_dir, combined_reimaged_dir, grid_dir, docking_dir) = get_docking_dirs(tica_dir, n_clusters, 2, n_samples, sampling_method, precision)
+(kmeans_csv, tica_coords_csv, features_csv, active_rmsd_dir, inactive_rmsd_dir, active_pnas_dir, inactive_pnas_joined, active_pnas_joined,
+        clusters_map_file, ktica_clusters_map_file, analysis_file, combined_file, docking_summary, docking_joined, docking_z_scores_csv,
+        aggregate_docking, aggregate_docking_joined, docking_pnas_joined, aggregate_docking_pnas, aggregate_docking_pnas_joined, docking_multiple_ligands,
+        docking_distances_file, docking_pdf, mmgbsa_docking_distances, pnas_coords, mmgbsa_dir, mmgbsa_csv, mmgbsa_pdf, aggregate_mmgbsa,
+        aggregate_mmgbsa_joined, aggregate_mmgbsa_pnas_joined, mmgbsa_z_scores_csv, active_clusters_csv, intermediate_clusters_csv,
+        inactive_clusters_csv, pnas_clusters_averages, tica_clusters_averages, tica_classes_csv, tica_samples_csv, subgraph_save_base,
+        degree_save_base, degree_map_csv, degree_z_map_csv, aggregate_docking_pnas_degree_z_joined, tic_residue_csv, feature_coefs_csv,
+        duplicated_feature_coefs_csv) = get_analysis_files(analysis_dir, n_clusters, ori_tica_dir, tica_dir, sampling_method, n_samples, precision,
+                                                           msm_lag_time)
+
+pnas_features_dir = analysis_dir
+(inactive_pnas_distances_dir, active_pnas_distances_dir, active_pnas_all_distances_dir,
+          inactive_pnas_distances_new_csv, active_pnas_distances_new_csv, active_pnas_joined, active_pnas_means, pnas_coords_dir,
+          pnas_coords_csv, pnas_all_coords_csv, pnas_coords_hexbin_dir, pnas_coords_co_crystallized_docking_dir,
+          pnas_coords_active_colors_dir, user_defined_features_file, reaction_coordinates_trajs_file) = get_pnas_files(whole_trajectory_pnas, pnas_features_dir)
+
+#cluster_minikmeans(tica_dir, ktica_projected_data_filename, traj_dir, n_clusters=n_clusters, clusterer_dir=clusterer_dir,tICs=tics_to_cluster)
+#cluster_gmm(ktica_projected_data_filename, clusterer_dir, tICs=[1,10], n_components=25)
+#sample_clusters(clusterer_dir, ktica_projected_data_filename, traj_dir, traj_ext, save_dir, n_samples=n_samples, method = sampling_method, clusters_map_file = ktica_clusters_map_file, tICs=[1,10])
+#cluster_pnas_distances(clusterer_dir, None, active_pnas_distances_dir, pnas_coords_dir, ktica_projected_data_filename, traj_dir, traj_ext, active_pnas_distances_new_csv, pnas_coords_csv, tica_coords_csv, features_csv, 3, sampling_method, clusters_map_file = ktica_clusters_map_file)
+#r['do.analysis'](tica_dir, analysis_dir, pnas_coords_csv, tica_coords_csv, features_dir)
+#active_clusters, intermediate_clusters, inactive_clusters = get_cluster_ids(active_clusters_csv, intermediate_clusters_csv, inactive_clusters_csv)
+#plot_tica_and_clusters(component_j=10, transformed_data=load_file(ktica_projected_data_filename), clusterer=verboseload(clusterer_dir), lag_time=5, component_i=1, label = "dot", active_cluster_ids = active_clusters, intermediate_cluster_ids = intermediate_clusters, inactive_cluster_ids = inactive_clusters, inactive_subsample=1, intermediate_subsample=1, tica_dir = tica_dir, center_i=0, center_j=1)
+
+#plot_timescales(clusterer_dir, n_clusters, tica_dir)
+msm_lag_time=25
+(clusterer_dir, msm_model_dir, macrostate_dir, features_known, model_dir, projected_features_dir,
+         projection_operator_dir, ktica_fit_model_filename, ktica_projected_data_filename, nystroem_data_filename,
+         mutual_information_csv, pearson_csv) = get_tica_files(base, tica_dir, n_clusters, msm_lag_time, n_macrostates)
+clusterer_dir = "%s/clusterer_%dclusters_tICs-2-11.h5" %  (tica_dir, n_clusters)
+#build_msm(clusterer_dir, lag_time=25, msm_model_dir=msm_model_dir)
+#construct_graph(msm_model_dir, clusterer_dir, n_clusters, lag_time, msm_lag_time, graph_file, inactive = None, active = None, pnas_clusters_averages = pnas_clusters_averages, tica_clusters_averages = tica_clusters_averages, docking=None, macrostate = None)
+msm_analysis_dir = get_msm_dir(tica_dir, msm_lag_time, n_clusters)
+#compute_one_vs_all_rf_models_MSM(features_dir, ktica_projected_data_filename, clusterer_dir, msm_analysis_dir, feature_residues_pkl, n_trees=500, states_to_analyze=range(14,25))
+interpret_msm_rf(msm_analysis_dir, feature_residues_pkl, n_msm_states=25, percentile=99.9999)
+
+(model_file, means_file, labels_file) = get_gmm_clusterer_files(tica_dir, n_clusters)
+#cluster_gmm(projected_features_file, tICs=[1,10], n_components=25,
+#                model_file, means_file, labels_file):
 
 
 #plot_timescales(clusterer_dir, n_clusters, tica_dir)
@@ -265,6 +337,7 @@ plot_top_features_per_tIC(ktica_projected_data_filename, features_dir, ".dataset
 #plot_overall_rf_importances(rf_dir, feature_residues_pkl)
 
 #compute_overall_rf_models(features_dir, projected_features_dir, gmm_dir, rf_dir, n_trees = n_trees, n_tica_components=25)
+
 
 
 #while(not os.path.exists(pearson_csv)):
@@ -297,7 +370,7 @@ mae_dir = reimaged_dir
 
 
 #plot_all_tics_and_clusters(tica_dir, projected_features_dir, clusterer_dir, lag_time)
-indices = [800,1000]
+indices = [750,1000]
 chosen_receptors = []
 for i in range(indices[0], indices[1]):
 	for j in range(0, n_samples):
@@ -344,13 +417,14 @@ for i in range(indices[0], indices[1]):
 #unzip_receptors(grid_dir, chosen_receptors)
 inverse_ligands = get_ligands(inverse_agonist_dir)
 agonist_ligands = get_ligands(agonist_dir)
+agonist_ligands = [a for a in agonist_ligands if ("epinephrine" in a or "BI" in a)]
 #prepare_ligands(inverse_agonist_dir, ext = ".sdf")
 
 #dock_ligands_and_receptors(grid_dir, docking_dir, agonist_dir, precision = precision, ext = "-out.maegz", chosen_ligands = agonist_ligands, chosen_receptors = chosen_receptors, parallel = "receptor", grid_ext = ".grd")
 #dock_ligands_and_receptors(grid_dir, docking_dir, inverse_agonist_dir, precision = precision, ext = "-out.maegz", chosen_ligands = inverse_ligands, chosen_receptors = chosen_receptors, parallel = "receptor", grid_ext = ".grd")
 
-#analyze_docking_results_multiple(docking_dir, precision = "SP", ligands = (inverse_ligands + agonist_ligands), summary = docking_multiple_ligands, redo = True)
-#compute_aggregate_scores(docking_multiple_ligands, inverse_agonists = inverse_ligands, summary = aggregate_docking, z_scores_csv = docking_z_scores_csv)
+analyze_docking_results_multiple(docking_dir, precision = "SP", ligands = agonist_ligands, summary = docking_multiple_ligands, redo = True)
+compute_aggregate_scores(docking_multiple_ligands, inverse_agonists = inverse_ligands, summary = aggregate_docking, z_scores_csv = docking_z_scores_csv)
 #combine_csv_list([docking_joined, active_pnas_joined], aggregate_docking_pnas_joined)
 
 #aggregate_docking_joined_map = convert_csv_to_joined_map(aggregate_docking, aggregate_docking_joined)[0]

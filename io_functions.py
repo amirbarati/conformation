@@ -385,6 +385,8 @@ def generate_features(features_file):
 			except:
 				continue
 	elif features_file.split(".")[1] == "pkl":
+		print("Loading pickle file of features.")
+		print(features_file)
 		with open(features_file, "rb") as f:
 			features = pickle.load(f)
 	else:
@@ -555,5 +557,5 @@ def get_cluster_ids(active_clusters_csv, intermediate_clusters_csv, inactive_clu
 	    inactive_clusters = list(reader)[0]
 	inactive_clusters = [int(c[7:]) for c in inactive_clusters]
 	print(inactive_clusters)
-	return active_clusters_csv, intermediate_clusters_csv, inactive_clusters_csv
+	return active_clusters, intermediate_clusters, inactive_clusters
 

@@ -43,5 +43,3 @@ else:
   shrinkage_string = "0pt001"
   rho = None
   rho_string = ""
-
-if not os.path.exists(analysis_dir): os.makedirs(analysis_dir)

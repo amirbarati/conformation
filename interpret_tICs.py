@@ -2,6 +2,7 @@ from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 import numpy as np 
 import matplotlib.pyplot as plt
 import pickle
+import gzip
 import mdtraj as md
 from copy import deepcopy
 from io_functions import *
@@ -35,14 +36,14 @@ interpret_tIC_rf:
 '''
 
 def compute_random_forests(features_dir, projected_tica_coords, rf_dir, R=True, n_trees=500, 
-  n_tica_components=25):
+  n_tica_components=25, start_tIC=0):
 
   features = np.concatenate(load_file_list(None, directory = features_dir, ext = ".dataset"))
   tics = np.concatenate(load_file(projected_tica_coords))
 
-  for j in range(0, np.shape(tics)[1]):
+  for j in range(start_tIC, np.shape(tics)[1]):
     rfr = RandomForestRegressor(n_estimators=n_trees, max_features="sqrt", oob_score=True,
-                                n_jobs=16, verbose=1)
+                                n_jobs=-1, verbose=1)
     print("Fitting tree for tIC %d" %(j+1))
     rfr.fit(features, tics[:,j])
     print("Done fitting RF model. Saving now...")
@@ -77,20 +78,21 @@ def get_feature_list(feature_residues_csv, structure_file):
 
   return(feature_list)
 
-def plot_importance_df(df, save_string, j, save_dir):
-  bar_width = 0.4
+def plot_importance_df(df, column_name, ylabel, title, analysis_type, save_string, j, save_dir):
+  bar_width = [0.4 for i in range(0,50)]
   opacity = 0.8
   index = np.arange(50)
-
-  df.sort(columns='importance', inplace=True, ascending=0)
+  
+  df = df.reindex(df.importance.abs().order(ascending=False).index)
   df = df[:50]
-  plt.barh(np.arange(50), pd.np.array(df["importance"]), bar_width, 
-          alpha=opacity, color='b',label='Feature importance')
-  plt.ylabel('Feature')
+  print(df)
+  plt.barh(bottom=np.arange(50), width=df['importance'].values, height=bar_width, 
+           alpha=opacity, color='b',label='Feature importance')
+  plt.ylabel(ylabel)
   plt.xlabel('Overall Importance')
-  plt.title("Random-Forest + GMM Model of tIC %d Feature Importance" %(j+1))
-  plt.yticks(index + bar_width, df["feature_name"].tolist(), fontsize=8)
-  pp = PdfPages("%s/tIC%d_%s.pdf" %(save_dir, (j+1), save_string))
+  plt.title(title)
+  plt.yticks(index + bar_width, df[column_name].tolist(), fontsize=8)
+  pp = PdfPages("%s/%s%d_%s.pdf" %(save_dir, analysis_type, (j+1), save_string))
   pp.savefig()
   pp.close()
   plt.clf()
@@ -114,7 +116,77 @@ def compute_residue_importances(df, percentile=95):
 
   return(residue_importances)
 
+def merge_importances_features(feature_importances_file, feature_residues_map):
+  with open(feature_residues_map) as f:
+    feature_tuples = pickle.load(f)
+  feature_names = ["%s-%s" %(f[0].res_name.title(), f[1].res_name.title()) 
+                                for f in feature_tuples]
 
+  try:
+    with open(feature_importances_file) as f:
+      importances = pickle.load(f)
+  except:
+    with gzip.open(feature_importances_file) as f:
+      importances = pickle.load(f)
+
+  feature_importances = zip(feature_names, importances.tolist())
+  df = pd.DataFrame(columns=('feature_name', 'res_i', 'res_j', 'chain_i', 'chain_j', 'importance'))
+
+  for i, feature_importance in enumerate(feature_importances):
+    row = [feature_importance[0], 
+                 feature_tuples[i][0].resSeq, feature_tuples[i][1].resSeq, 
+                 feature_tuples[i][0].chain_id, feature_tuples[i][1].chain_id, 
+                 feature_importance[1]]
+    df.loc[i] = row
+
+  return df
+
+def compute_per_residue_importance(df, percentile):
+  net_df = pd.DataFrame(columns=['residue', 'importance'])
+  for _, row in df.iterrows():
+    res_i = int(row["res_i"])
+    res_j = int(row["res_j"])
+
+    importance = row["importance"]
+    if res_i not in net_df.index:
+      net_df.loc[res_i] = [res_i, [importance]]
+    else:
+      net_df.loc[res_i]["importance"].append(importance)
+    if res_j not in net_df.index:
+      net_df.loc[res_j] = [res_j, [importance]]
+    else:
+      net_df.loc[res_j]["importance"].append(importance)
+
+  net_df["importance"] = net_df["importance"].apply(np.percentile, q=percentile)
+
+  return net_df  
+
+def interpret_tIC_rf(rf_dir, feature_residues_pkl, n_tica_components=25, percentile=99.9999):
+  for j in range(0, n_tica_components):
+    print("Interpreting tIC %d" %(j+1))
+    importances_file = "%s/tIC.%d_rfr.pkl" %(rf_dir, j)
+    if os.path.exists(importances_file):
+      feature_importances_df = merge_importances_features(importances_file, feature_residues_pkl)
+      residue_importances_df = compute_per_residue_importance(feature_importances_df, percentile)
+
+      plot_importance_df(feature_importances_df, "feature_name", "Contact", 
+                         "tIC %d Contact Importances" % (j+1),
+                         "tIC", 
+                         "per_contact_importances", j, rf_dir)
+
+      plot_importance_df(residue_importances_df, "residue", "Residue", 
+                         "tIC %d Residue Importances" % (j+1), 
+                         "tIC",
+                         "per_residue_importances", j, rf_dir)
+
+      with open("%s/tIC.%d_rfr_feature_importance_df.pkl" %(rf_dir, j), "wb") as f:
+        pickle.dump(feature_importances_df, f)
+
+      with open("%s/tIC.%d_rfr_residue_importance_df.pkl" %(rf_dir, j), "wb") as f:
+        pickle.dump(residue_importances_df, f)
+
+
+'''
 def interpret_tIC_rf(rf_dir, feature_residues_csv, structure_file, n_tica_components=25):
   df = pd.DataFrame(columns=('index', 'res_i', 'res_j', 'feature_name', 'importance'))
   feature_list = get_feature_list(feature_residues_csv, structure_file)
@@ -135,8 +207,6 @@ def interpret_tIC_rf(rf_dir, feature_residues_csv, structure_file, n_tica_compon
       pickle.dump(df_j, f)
     plot_importance_df(df_j, save_string="per_feature_rf_importance", j=j, save_dir=rf_dir)
 
-
-
     residue_df = pd.DataFrame(columns=('feature_name', 'importance'))
     residue_importances = compute_residue_importances(df_j)
     for i, (key, value) in enumerate(residue_importances.iteritems()):
@@ -145,6 +215,7 @@ def interpret_tIC_rf(rf_dir, feature_residues_csv, structure_file, n_tica_compon
 
     with open("%s/tIC.%d_rfr_residue_importance_df.pkl" %(rf_dir, j), "wb") as f:
       pickle.dump(residue_df, f)
+'''
 
 def plot_top_features_per_tIC(projected_tica_coords_file, features_dir, features_ext, 
                               rf_dir, n_tica_components, normalize=False, n_features=5):

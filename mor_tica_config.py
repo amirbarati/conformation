@@ -1,4 +1,3 @@
-from feature_types import *
 import os
 import sys
 import csv
@@ -16,6 +15,8 @@ n_components = 25
 n_samples = 10
 n_macrostates = 25
 n_trees = 100
+
+precision = "SP"
 
 sparse = False
 wolf = True
@@ -44,4 +45,17 @@ else:
   rho = None
   rho_string = ""
 
-if not os.path.exists(analysis_dir): os.makedirs(analysis_dir)
+traj_ext = ".nc"
+base = "/home/enf/MOR/mor_active_apo_crystalwaters"
+traj_dir = "/home/enf/MOR/mor_active_apo_crystalwaters/reimaged"
+structure = "/home/enf/MOR/mor_active_apo_crystalwaters/system.pdb"
+pnas_features_dir = "/home/enf/MOR/mor_active_apo_crystalwaters/pnas_features"
+if not os.path.exists(pnas_features_dir): os.makedirs(pnas_features_dir)
+iterative = False
+featurize_parallel = True
+inactive_dir = "/home/enf/MOR/4dkl_A.pdb"
+active_dir = "/home/enf/MOR/5c1m.pdb"
+mor_active_apo_crystalwaters_protein = "/home/enf/MOR/mor_active_apo_crystalwaters_protein.pdb"
+
+sampling_method = "random"
+precision = "SP"

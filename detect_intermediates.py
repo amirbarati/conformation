@@ -1,7 +1,9 @@
 from sklearn import mixture
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 import numpy as np 
 import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.style.use('ggplot')
 from msmbuilder.dataset import dataset, _keynat, NumpyDirDataset
 from msmbuilder.utils import verbosedump, verboseload
 import time
@@ -10,11 +12,14 @@ import os
 import multiprocessing as mp
 import csv
 from io_functions import *
+from interpret_tICs import plot_importance_df, compute_residue_importances, merge_importances_features, compute_per_residue_importance
 from functools import partial
 import gzip, pickle
 from matplotlib.backends.backend_pdf import PdfPages
 import pandas as pd
 import operator
+from sklearn import preprocessing
+from sklearn.linear_model import LassoCV, LassoLarsCV, LassoLarsIC, lasso_path, LogisticRegressionCV
 
 from pandas import *
 from rpy2.robjects.packages import importr
@@ -219,7 +224,21 @@ def plot_component_importances(df, save_dir, tic_i, component):
   pp.close()
   plt.clf()
 
-
+'''
+def plot_importances_df(df, title, save_file):
+  df = df.sort_values(by="feature_importance")
+  bar_width = 0.2
+  index = np.arange(start=1, stop=len(df.keys())+1, step=1)
+  plt.barh(index, df["feature_importance"].tolist(), bar_width, alpha=opacity, color='b',label='Feature importance')
+  plt.xlabel('tIC')
+  plt.ylabel('Overall Importance')
+  plt.title(title)
+  plt.xticks(index + bar_width, top_df["feature_name"].tolist(), rotation='vertical')
+  pp = PdfPages(save_file)
+  pp.savefig()
+  pp.close()
+  plt.clf()
+'''
 
 def plot_column_pair(i, num_columns, save_dir, titles, data, gmm_means, refcoords):
   for j in range(i+1, num_columns):
@@ -423,7 +442,189 @@ def compute_overall_rf_models(features_dir, projected_tica_coords, gmm_dir, save
     except:
       continue
 
+def rank_tICs_by_docking_rf(docking_csv, tica_coords_csv, model_pkl, importances_pkl, plot_file, n_trees=500):
+  docking = pd.read_csv(docking_csv, header=0, index_col=0)
+  tica_coords = pd.read_csv(tica_coords_csv, header=0, index_col=0)
+  tica_coords = tica_coords.loc[docking.index]
+
+  rfr = RandomForestRegressor(n_estimators=n_trees, max_features='sqrt', oob_score=True, n_jobs=-1)
+  rfr.fit(X=tica_coords, y=docking)
+
+  '''
+  with open(model_pkl, "wb") as f:
+    pickle.dump(rfr, f)
+
+  with open(importances_pkl, "wb") as f:
+    pickle.dump(rfr.feature_importances_, importances_pkl)
+  '''
+
+  df = pd.DataFrame(columns=('feature_name', 'feature_importance'))
+  df['feature_name'] = tica_coords.columns.values.tolist()
+  df['feature_importance'] = rfr.feature_importances_
+  print(df)
+  plot_importances_df(df, "Random Forest Regression of Docking Score on tICs", plot_file)
+  df.sort_values(by='feature_importance')
+
+def plot_coef_path(df, filename):
+  plt.figure()
+  df[df.keys()[range(0,11)]].plot(colormap='gist_rainbow')
+  plt.legend(loc='center left', bbox_to_anchor=(1.0,0.5))  
+  pp = PdfPages(filename)
+  pp.savefig(bbox_inches='tight')
+  pp.close()
+  plt.clf()
+
+def plot_df_rolling(df, filename):
+  plt.figure()
+  pd.rolling_mean(df, 100).plot(colormap='gist_rainbow')
+  plt.legend(loc='center left', bbox_to_anchor=(1.0,0.5))  
+  pp = PdfPages(filename)
+  pp.savefig(bbox_inches='tight')
+  pp.close()
+  plt.clf()
+
+def compute_docking_cutoff(docking_csv, plot_file):
+  docking = pd.read_csv(docking_csv, header=0, index_col=0)
+  plt.figure()
+  docking.plot(kind='hist', bins=50)
+  plt.xlabel("Docking DeltaG")
+  plt.ylabel("Frequency")
+  plt.title("Histogram of Docking Scores")
+  pp = PdfPages(plot_file)
+  pp.savefig()
+  pp.close()
+  plt.clf()
 
 
+'''ref: http://scikit-learn.org/stable/auto_examples/linear_model/plot_lasso_model_selection.html#example-linear-model-plot-lasso-model-selection-py'''
+def rank_tICs_by_logistic_lasso(docking_csv, tica_coords_csv, plot_file, cutoff):
+  docking = pd.read_csv(docking_csv, header=0, index_col=0)
+  tica = pd.read_csv(tica_coords_csv, header=0, index_col=0)
+  tica = tica.loc[docking.index]
+
+  tica_names = list(tica.keys())
+  for i, name in enumerate(tica_names):
+    tica_names[i] = "tIC%d" % (i+1)
+
+  docking_values = docking.values
+  tica_values = tica.values
+  #docking_values[docking_values <= cutoff] = 0.0
+  #docking_values[docking_values > cutoff] = 1.0
+  #print(docking_values)
+  #print(np.max(docking_values))
+  tica_values = preprocessing.normalize(tica.values)
+                       
+
+def compute_one_vs_all_rf_models_MSM(features_dir, projected_tica_coords, clusterer_dir, msm_rf_dir, feature_residues_map, n_trees=10, states_to_analyze=None):
+  feature_names = generate_features(feature_residues_map)
+  feature_names = ["%s_%s" %(f[0].res_name.title(), f[1].res_name.title()) 
+                                for f in feature_names]
+  feature_files = get_trajectory_files(features_dir, ext=".dataset")
+  #features = load_file(feature_files[0])
+  features = np.concatenate(load_file_list(None, directory = features_dir, ext = ".dataset"))
+  clusterer = verboseload(clusterer_dir)
+  Y = np.concatenate(verboseload(clusterer_dir).labels_)
+  #Y = verboseload(clusterer_dir).labels_[0]
+
+  print("Y has shape:")
+  print(np.shape(Y))
+  
+  if states_to_analyze is None:
+    states_to_analyze = range(0, cluster.n_clusters)
+  for state in states_to_analyze:
+    print("Computing random forest model for state %d" %(state))
+    all_indices = range(0,np.shape(Y)[0])
+    state_indices = [k for k in all_indices if int(Y[k]) == state]
+    non_state_indices = list(set(all_indices)-set(state_indices))
+    non_state_indices.sort()
+    Z = copy.deepcopy(Y)
+    Z[state_indices] = 0
+    Z[non_state_indices] = 1
+    rf = RandomForestClassifier(max_features="sqrt",bootstrap=True,n_estimators=n_trees,n_jobs=-1,verbose=1)
+    print("fitting random forest model")
+    r = rf.fit(features, Z)
+    print("fit random forest model, saving now.")
+    with gzip.open("%s/msm_state%d_vs_all_rf.pkl.gz" %(msm_rf_dir, state), "wb") as f:
+      pickle.dump(rf.feature_importances_.astype(float), f)
+    print("Finished saving")
+
+    feature_state_means = np.mean(features[state_indices,:], axis=0)
+    feature_non_state_means = np.mean(features[non_state_indices,:], axis=0)
+
+    feature_importances = zip(feature_names, rf.feature_importances_.astype(float).tolist())
+    pickle.dump(feature_importances, open("%s/msm_state%d_importances_list.pkl" %(msm_rf_dir, state), "wb"))
+    
+    df = pd.DataFrame(columns=('feature_name', 'feature_importance', 'component_mean', 'non_component_mean'))
+
+    for i, feature_importance in enumerate(feature_importances):
+      df.loc[i] = [feature_importance[0], feature_importance[1], feature_state_means[i], feature_non_state_means[i]]
+
+    pickle.dump(df, open("%s/msm_state_%d_vs_all_df.pkl" %(msm_rf_dir, state), "wb"))
+    '''
+    try:
+      plot_component_importances(df, save_dir, i, component)
+    except:
+      continue
+    '''
 
 
+  return
+
+def interpret_msm_rf(msm_dir, feature_residues_pkl, n_msm_states=25, percentile=99.9999):
+  for j in range(0, n_msm_states):
+    print("Interpreting MSM state %d" %(j+1))
+    importances_file = "%s/msm_state%d_vs_all_rf.pkl.gz" %(msm_dir, j)
+    if os.path.exists(importances_file):
+      feature_importances_df = merge_importances_features(importances_file, feature_residues_pkl)
+      residue_importances_df = compute_per_residue_importance(feature_importances_df, percentile)
+
+      plot_importance_df(feature_importances_df, "feature_name", "Contact", 
+                         "MSM %d Contact Importances" % (j+1), 
+                         "msm_state",
+                         "per_contact_importances", j, msm_dir)
+
+      plot_importance_df(residue_importances_df, "residue", "Residue", 
+                         "MSM %d Residue Importances" % (j+1), 
+                         "msm_state",
+                         "per_residue_importances", j, msm_dir)
+
+      feature_means_file = "%s/msm_state_%d_vs_all_df.pkl" %(msm_dir, j)
+      if os.path.exists(feature_means_file):
+        with open(feature_means_file, "rb") as f:
+          feature_means_df = pickle.load(f)
+        feature_importances_new = []
+        for index, row in feature_means_df.iterrows():
+          if row["component_mean"] < row["non_component_mean"]:
+            feature_importances_new.append(-1.0 * row["feature_importance"])
+          else:
+            feature_importances_new.append(row["feature_importance"])
+        feature_means_df["feature_importance"] = feature_importances_new
+        feature_means_df.columns = ["contact", "importance", "state_mean", "non_state_mean"]
+        plot_importance_df(feature_means_df, "contact", "Contact",
+                           "MSM State %d Contact Changes" % (j+1),
+                           "msm_state",
+                           "per_contact_changes", j, msm_dir)
+
+      with open("%s/MSM_state%d_rfr_feature_importance_df.pkl" %(msm_dir, j), "wb") as f:
+        pickle.dump(feature_importances_df, f)
+
+      with open("%s/MSM_state%d_rfr_residue_importance_df.pkl" %(msm_dir, j), "wb") as f:
+        pickle.dump(residue_importances_df, f)
+
+  '''
+def plot_tICs_vs_docking(docking_csv, tica_coords_csv, plot_file):
+  docking = pd.read_csv(docking_csv, header=0, index_col=0)
+  tica = pd.read_csv(tica_coords_csv, header=0, index_col=0)
+  tica = tica.loc[docking.index]
+  tica[tica.keys()] = preprocessing.normalize(tica.values)
+
+  tica_names = list(tica.keys())
+  for i, name in enumerate(tica_names):
+    tica_names[i] = "tIC%d" % (i+1)
+
+  index = pd.Index(docking.values).astype(np.float64)
+  df = pd.DataFrame(np.hstack((tica.values,docking.values)), columns=tica_names+["docking"])
+  df.sort(columns="docking", inplace=True)
+  df = pd.DataFrame(df[tica_names].values[:,range(0,11)], index=df["docking"], columns=range(1,12))
+  plot_df_rolling(df, plot_file)
+  '''

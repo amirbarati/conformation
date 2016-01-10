@@ -1,4 +1,6 @@
 from residue import Residue
+from mor_tica_config import inactive_dir, active_dir, base, mor_active_apo_crystalwaters_protein
+from get_variable_names import get_common_residues_pkl, find_common_residues
 
 def convert_list_to_resobject_list(contact_residues):
   resobject_list = []
@@ -32,7 +34,7 @@ switch_residues = [130, 131, 208, 211, 219, 268, 272, 286, 288, 316, 322, 323, 3
 switch_npxx = [130, 131, 208, 211, 219, 268, 272, 286, 288, 316] + range(322,328)
 switch_pp_npxx = set(switch_npxx + [51, 79, 106, 113, 118, 121, 130, 131, 132, 141, 158, 208, 211, 219, 268, 272, 282, 285, 286, 288, 316, 318, 319, 320, 323, 326, 282])
 tm6_residues = range(270,299)
-bp_residues = [82, 86, 93, 106, 110, 113, 114, 117, 118, 164, 191, 192, 193, 195, 199, 200, 203, 206, 208, 286, 289, 290, 293, 305, 308, 309, 312, 316]
+bp_residues = sorted(list(set([236, 148, 300, 297, 151, 147, 143, 326, 322, 293, 297, 318])))
 dihedral_residues = list(set(switch_npxx + tm6_residues))
 skip_5_residues = range(30,340,5)
 skip_3_residues = range(30,340,3)
@@ -45,9 +47,16 @@ tm_residues = helix_residues["tm1"] + helix_residues["tm2"] + helix_residues["tm
 sampling_method = "random"
 precision = "SP"
 
+bp_residues = convert_list_to_resobject_list([("A", r) for r in bp_residues])
+res293_289 = convert_list_to_resobject_list([("A", 289), ("A", 293)])
 tm6_tm3_residues = convert_list_to_resobject_list([("A",279), ("A",165)])
-npxxy_residues =  convert_list_to_resobject_list([("A", r) for r in range(322,337)])
+print("tm6_tm3_residues")
+print(tm6_tm3_residues)
+npxxy_residues =  convert_list_to_resobject_list([("A", r) for r in range(332,337)])
+npxxy_edf3_residues = range(332,337) + [285,252,158]
+npxxy_edf3 = convert_list_to_resobject_list([("A", r) for r in npxxy_edf3_residues])
 connector_residues = convert_list_to_resobject_list([("A", 165), ("A", 252)])
+triad_residues = convert_list_to_resobject_list([("A", 289), ("A", 244), ("A", 155)])
 
 #feature_types = "_switches_tm6"
 #feature_types = "_switches_npxx_tm6_bp"
@@ -65,9 +74,30 @@ connector_residues = convert_list_to_resobject_list([("A", 165), ("A", 252)])
 #feature_types = "reimaged_notrajfix_tm_residues_2rh1_3sn6_under_cutoff%dnm" %(int(cutoff))
 #feature_types = "reimaged_notrajfix_all_residues_under_cutoff%dnm" %(int(cutoff))
 #feature_types = "all_residues_2rh1_3sn6_under_cutoff%dnm" %(int(cutoff))
-feature_name = "tm_residues_2rh1_3sn6_under_cutoff%dnm" %(int(cutoff))
+#feature_name = "tm_residues_2rh1_3sn6_under_cutoff%dnm" %(int(cutoff))
+feature_name = "all_residues_4dkl_5c1m_under_cutoff%dnm" %(int(cutoff))
+
 #feature_types = "reference_receptors"
-contact_residues = [("A", res) for res in tm_residues]
+#contact_residues = [("A", res) for res in tm_residues]
 #contact_residues = [(0, res) for res in all_residues]
 
-contact_residues = convert_list_to_resobject_list(contact_residues)
+#contact_residues = convert_list_to_resobject_list(contact_residues)
+
+feature_name_residues_dict = {}
+feature_name_residues_dict["tm6_tm3_dist"] = tm6_tm3_residues
+feature_name_residues_dict["rmsd_npxxy_active"] = npxxy_residues
+feature_name_residues_dict["rmsd_npxxy_inactive"] = npxxy_residues
+feature_name_residues_dict["rmsd_connector_active"] = connector_residues
+feature_name_residues_dict["rmsd_connector_inactive"] = connector_residues
+feature_name_residues_dict["rmsd_binding-pocket_inactive"] = bp_residues
+feature_name_residues_dict["rmsd_binding-pocket_active"] = bp_residues
+feature_name_residues_dict["rmsd_293-289_active"] = res293_289
+feature_name_residues_dict["rmsd_293-289_inactive"] = res293_289
+feature_name_residues_dict["rmsd_npxxy-edf3_active"] = npxxy_edf3
+feature_name_residues_dict["rmsd_npxxy-edf3_inactive"] = npxxy_edf3
+feature_name_residues_dict["rmsd_triad_inactive"] = triad_residues
+feature_name_residues_dict["rmsd_triad_active"] = triad_residues
+
+coords_bounds_dict = {'tm6_tm3_dist': [8.0, 10.0, 14.0], 'rmsd_npxxy-edf3_inactive': [1.0, 1.5, 2.5], 'rmsd_npxxy-edf3_active': [0.5,1.2,1.5], 'rmsd_npxxy_inactive': [0.2, 0.4, 1.0]}
+
+contact_residues = find_common_residues([inactive_dir, active_dir, mor_active_apo_crystalwaters_protein], get_common_residues_pkl(base))

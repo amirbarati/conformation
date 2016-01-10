@@ -17,7 +17,7 @@ def plot_timescales(clusterer_dir, n_clusters, tica_dir):
 	sequences = clusterer.labels_
 	#print(sequences)
 	#lag_times = list(np.arange(1,150,5))
-	lag_times = [1, 4, 8, 12, 16]
+	lag_times = range(1,50)
 	n_timescales = 10
 
 	msm_timescales = implied_timescales(sequences, lag_times, n_timescales=n_timescales, msm=MarkovStateModel(verbose=True))
@@ -31,14 +31,14 @@ def plot_timescales(clusterer_dir, n_clusters, tica_dir):
 	pp.savefig()
 	pp.close()
 
-def build_msm(clusterer_dir, lag_time):
+def build_msm(clusterer_dir, lag_time, msm_model_dir):
 	clusterer = verboseload(clusterer_dir)
 	n_clusters = np.shape(clusterer.cluster_centers_)[0]
 	labels = clusterer.labels_
 	msm_modeler = MarkovStateModel(lag_time=lag_time)
 	print("fitting msm to trajectories with %d clusters and lag_time %d" %(n_clusters, lag_time))
 	msm_modeler.fit_transform(labels)
-	verbosedump(msm_modeler, "/scratch/users/enf/b2ar_analysis/msm_model_%d_clusters_t%d" %(n_clusters, lag_time))
+	verbosedump(msm_modeler, msm_model_dir)
 	print("fitted msm to trajectories with %d states" %(msm_modeler.n_states_))
 	'''
 	#np.savetxt("/scratch/users/enf/b2ar_analysis/msm_%d_clusters_t%d_transmat.csv" %(n_clusters, lag_time), msm_modeler.transmat_, delimiter=",")

@@ -45,3 +45,10 @@ else:
   rho_string = ""
 
 if not os.path.exists(analysis_dir): os.makedirs(analysis_dir)
+
+traj_dir = "/home/enf/MOR/mor_active_apo_crystalwaters/reimaged"
+struture = "/home/enf/MOR/mor_active_apo_crystalwaters/system.pdb"
+pnas_features_dir = "/home/enf/MOR/mor_active_apo_crystalwaters/pnas_features"
+if not os.path.exists(pnas_features_dir): os.makedirs(pnas_features_dir)
+inactive_dir = "/home/enf/MOR/4dkl_A.pdb"
+active_dir = "/home/enf/MOR/5c1m.pdb"

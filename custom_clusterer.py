@@ -9,6 +9,8 @@ from msmbuilder.cluster import KCenters
 from msmbuilder.cluster import MiniBatchKMeans
 import random
 import json
+from sklearn import mixture
+from msmbuilder.cluster import GMM
 
 def cluster(data_dir, traj_dir, n_clusters, lag_time):
 	clusterer_dir = "/scratch/users/enf/b2ar_analysis/clusterer_%d_t%d.h5" %(n_clusters, lag_time)
@@ -36,8 +38,10 @@ def cluster_kmeans(tica_dir, data_dir, traj_dir, n_clusters, lag_time):
 		clusterer.fit_transform(reduced_data)
 		verbosedump(clusterer, clusterer_dir)	
 
-def cluster_minikmeans(tica_dir, data_dir, traj_dir, n_clusters, lag_time):
-	clusterer_dir = "%s/clusterer_%dclusters.h5" %(tica_dir, n_clusters)
+def recompute_cluster_means(means, tICs):
+	return
+
+def cluster_minikmeans(tica_dir, data_dir, traj_dir, n_clusters, clusterer_dir=None,tICs=None):
 	if (os.path.exists(clusterer_dir)):
 		print "Already clustered"
 	else:
@@ -46,10 +50,42 @@ def cluster_minikmeans(tica_dir, data_dir, traj_dir, n_clusters, lag_time):
 			reduced_data = verboseload(data_dir)
 		except:
 			reduced_data = load_dataset(data_dir)
-		trajs = np.concatenate(reduced_data)
-		clusterer = MiniBatchKMeans(n_clusters = n_clusters)
-		clusterer.fit_transform(reduced_data)
+		if tICs is not None:
+			X = []
+			for traj in reduced_data:
+				X.append(traj[:,tICs])
+		else:
+			X = reduced_data
+
+		clusterer = MiniBatchKMeans(n_clusters = n_clusters, n_init=10)
+		clusterer.fit_transform(X)
 		verbosedump(clusterer, clusterer_dir)
+
+def cluster_gmm(projected_features_file, model_file, tICs=None, n_components=25):
+	try:
+		projected_features = verboseload(projected_features_file)
+	except:
+		projected_features = load_dataset(projected_features_file)
+	X = np.concatenate(projected_features)
+
+	X = []
+	for traj in projected_features:
+		X.append(traj[:,tICs])
+
+	gmm = GMM(n_components=n_components, covariance_type='diag')
+	print("Now fitting GMM model")
+	gmm.fit(X)
+	labels = gmm.predict(X)
+	print("Completed GMM model. Saving now.")
+
+	msmb_gmm = MSMB_GMM(labels, n_components, gmm.means_)
+	verbosedump(msmb_gmm, model_file)
+
+class MSMB_GMM(object):
+	def __init__(self, labels, n_clusters, centers):
+		self.labels_ = labels 
+		self.n_clusters = n_clusters
+		self.cluster_centers_ = centers
 
 def cluster_kcenters(tica_dir, data_dir, traj_dir, n_clusters, lag_time):
 	clusterer_dir = "%s/kcenters_clusterer_%dclusters.h5" %(tica_dir, n_clusters)
@@ -110,15 +146,17 @@ def cos_to_means(clusterer_dir, features_dir):
 	print sorted_map[0][0:10]
 	return sorted_map
 
-def find_dist(index, k_mean, features):
+def find_dist(index, k_mean, features, tICs=None):
 		traj = index[0]
 		frame = index[1]
 		conformation = features[traj][frame]
 		a = conformation
+		if tICs is not None:
+			a = a[tICs]
 		b = k_mean
 		return (traj, frame, np.linalg.norm(b-a))
 
-def dist_to_means(clusterer_dir, features_dir, n_samples = False, n_components = False, tica_coords_csv = False, kmeans_csv = False):
+def dist_to_means(clusterer_dir, features_dir, n_samples = False, n_components = False, tica_coords_csv = False, kmeans_csv = False, tICs=None):
 	clusterer = verboseload(clusterer_dir)
 	clusters_map = make_clusters_map(clusterer)
 
@@ -132,7 +170,7 @@ def dist_to_means(clusterer_dir, features_dir, n_samples = False, n_components =
 		indices = clusters_map[i]
 		k_mean = clusterer.cluster_centers_[i]
 		print k_mean
-		find_dist_partial = partial(find_dist, k_mean=k_mean, features = features)
+		find_dist_partial = partial(find_dist, k_mean=k_mean, features = features, tICs=tICs)
 		feature_distances_i = map(find_dist_partial, indices)
 		feature_distances[i] = feature_distances_i
 
@@ -218,14 +256,13 @@ def get_samples(cluster, trajectories, clusters_map, clusterer_dir, features_dir
 	return indices
 
 
-def sample_clusters(clusterer_dir, features_dir, traj_dir, traj_ext, save_dir, n_samples, method, clusters_map_file = ""):
+def sample_clusters(clusterer_dir, features_dir, traj_dir, traj_ext, save_dir, n_samples, method, clusters_map_file = "", tICs=None):
 	if method == "cos":	
 		clusters_map = cos_to_means(clusterer_dir, features_dir)
 	elif method == "dist":
 		clusters_map = dist_to_means(clusterer_dir, features_dir)
 	elif method == "random":
-		clusters_map = dist_to_means(clusterer_dir, features_dir)
-
+		clusters_map = dist_to_means(clusterer_dir, features_dir, tICs=tICs)
 	clusters = range(0, len(clusters_map.keys()))
 	if not os.path.exists(save_dir): os.makedirs(save_dir)
 	
