@@ -20,17 +20,20 @@ def color_protein(protein, df):
   max_imp = max(df["importance"].values)
   print(min_imp)
   print(max_imp)
+
   cmd.spectrum("b", "blue red", selection=protein, minimum=min_imp, maximum=max_imp)
   for index in df.index:
-    resid = int(df.loc[index]["residue"])
+    print df.loc[index]
+    resid = int(df.loc[index]["resid"])
     net_importance = df.loc[index]["importance"]
-    cmd.alter("resid %d" % resid, "b=%f" %(net_importance))
-    if net_importance > np.percentile(df["importance"].values,90):
+    cmd.alter("resid %d & %s" % (resid, protein), "b=%f" %(net_importance))
+    cmd.show("ribbon", "resi %d" % resid)
+    if net_importance > np.percentile(df["importance"].values,95):
       cmd.show("sticks", "resi %d" % resid)
-      if "2" in protein:
-        cmd.util.cbac("resi %d & sidechain & %s" % (resid, protein))
-      else:
-        cmd.util.cbag("resi %d & sidechain & %s" % (resid, protein))
+      #if "2" in protein:
+      #  cmd.util.cbac("resi %d & sidechain & %s" % (resid, protein))
+      #else:
+      #  cmd.util.cbag("resi %d & sidechain & %s" % (resid, protein))
     print(resid)
     print(net_importance)
     
@@ -43,5 +46,12 @@ proteins = cmd.get_object_list()
 print(proteins)
 
 for protein in proteins:
-  cmd.align(protein, "2RH1_prepped")
+  cmd.alter(protein, "b=0")
+
+for protein in proteins:
+  #cmd.align(protein, "2RH1_prepped")
+  color_protein(protein, feature_importances_df)
+
+for protein in proteins:
+  #cmd.align(protein, "2RH1_prepped")
   color_protein(protein, feature_importances_df)

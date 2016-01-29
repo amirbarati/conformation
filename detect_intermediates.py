@@ -611,9 +611,10 @@ def interpret_msm_rf(msm_dir, feature_residues_pkl, n_msm_states=25, percentile=
       with open("%s/MSM_state%d_rfr_residue_importance_df.pkl" %(msm_dir, j), "wb") as f:
         pickle.dump(residue_importances_df, f)
 
-  '''
-def plot_tICs_vs_docking(docking_csv, tica_coords_csv, plot_file):
+
+def plot_tICs_vs_docking(docking_csv, tica_coords_csv, plot_file, chosen_ligand="docking"):
   docking = pd.read_csv(docking_csv, header=0, index_col=0)
+  docking.columns = [c.rstrip().lstrip() for c in docking.columns]
   tica = pd.read_csv(tica_coords_csv, header=0, index_col=0)
   tica = tica.loc[docking.index]
   tica[tica.keys()] = preprocessing.normalize(tica.values)
@@ -622,9 +623,13 @@ def plot_tICs_vs_docking(docking_csv, tica_coords_csv, plot_file):
   for i, name in enumerate(tica_names):
     tica_names[i] = "tIC%d" % (i+1)
 
+  print(docking)
+  print(docking.keys())
+  if chosen_ligand is not "docking":
+    print(docking[chosen_ligand])
+    docking = pd.DataFrame(docking[chosen_ligand].values, columns=[chosen_ligand])
   index = pd.Index(docking.values).astype(np.float64)
-  df = pd.DataFrame(np.hstack((tica.values,docking.values)), columns=tica_names+["docking"])
-  df.sort(columns="docking", inplace=True)
-  df = pd.DataFrame(df[tica_names].values[:,range(0,11)], index=df["docking"], columns=range(1,12))
+  df = pd.DataFrame(np.hstack((tica.values,docking.values)), columns=tica_names+[chosen_ligand])
+  df.sort(columns=chosen_ligand, inplace=True)
+  df = pd.DataFrame(df[tica_names].values[:,range(0,11)], index=df[chosen_ligand], columns=range(1,12))
   plot_df_rolling(df, plot_file)
-  '''

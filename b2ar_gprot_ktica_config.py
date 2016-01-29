@@ -11,12 +11,12 @@ if exacycle:
   lag_time *= 2
 
 msm_lag_time = 5
-n_components = 5
+n_components = 25
 n_samples = 10
 n_macrostates = 25
 n_trees = 100
 
-landmark_subsample=1
+precision = "SP"
 
 sparse = False
 wolf = True
@@ -36,8 +36,8 @@ elif wolf and sparse:
   wolf_string = "_wolf_"
   shrinkage = None
   shrinkage_string = "autoShrinkage"
-  rho = 0.1
-  rho_string = "_rho0pt1"
+  rho = 0.05
+  rho_string = "_rho0pt05"
 else:
   wolf_string = ""
   shrinkage = 0.001

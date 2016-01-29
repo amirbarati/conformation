@@ -46,16 +46,16 @@ def load_npz(filename):
 def load_file(filename):
 	print("loading %s" %filename)
 	if filename.split(".")[1] == "h5":
-		return np.transpose(verboseload(filename))
+		return np.nan_to_num(np.transpose(verboseload(filename)))
 	elif filename.split(".")[1] == "dataset":
-		return np.array(load_dataset(filename))
+		return np.nan_to_num(np.array(load_dataset(filename)))
 	elif filename.split(".")[1] == "csv":
-		csv = np.genfromtxt(filename, delimiter=",")
-		return(csv)
+		csv = np.nan_to_num(np.genfromtxt(filename, delimiter=","))
+		return(np.nan_to_num(csv))
 	elif filename.split(".")[1] == "npy":
-		return(np.load(filename))
+		return(np.nan_to_num(np.load(filename)))
 	elif filename.split(".")[1] == "npz":
-		return(np.array(load_dataset(filename)))
+		return(np.nan_to_num(np.array(load_dataset(filename))))
 
 def load_file_list(files, directory = None, ext = None):
 	print(directory)
@@ -72,9 +72,9 @@ def load_file_list(files, directory = None, ext = None):
 def load_features(filename):
 	print("loading %s" %filename)
 	if filename.split(".")[1] == ".h5":
-		return np.transpose(verboseload(filename))
+		return np.nan_to_num(np.transpose(verboseload(filename)))
 	else:
-		return np.transpose(np.array(load_dataset(filename)))
+		return np.nan_to_num(np.transpose(np.array(load_dataset(filename))))
 
 def get_trajectory_files(traj_dir, ext = ".pdb"):
 	traj_files = []

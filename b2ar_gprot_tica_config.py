@@ -11,7 +11,7 @@ if exacycle:
   lag_time *= 2
 
 msm_lag_time = 5
-n_components = 10
+n_components = 25
 n_samples = 10
 n_macrostates = 25
 n_trees = 100
@@ -36,8 +36,8 @@ elif wolf and sparse:
   wolf_string = "_wolf_"
   shrinkage = None
   shrinkage_string = "autoShrinkage"
-  rho = 0.005
-  rho_string = "_rho0pt005"
+  rho = 0.05
+  rho_string = "_rho0pt05"
 else:
   wolf_string = ""
   shrinkage = 0.001
@@ -45,17 +45,15 @@ else:
   rho = None
   rho_string = ""
 
-traj_ext = ".nc"
-base = "/home/enf/MOR/mor_active_apo_crystalwaters"
-traj_dir = "/home/enf/MOR/mor_active_apo_crystalwaters/reimaged"
-structure = "/home/enf/MOR/mor_active_apo_crystalwaters/system.pdb"
-pnas_features_dir = "/home/enf/MOR/mor_active_apo_crystalwaters/pnas_features"
+traj_ext = ".h5"
+base = "/home/enf/md_simulations/b2ar/2RH1-1azs"
+traj_dir = "/home/enf/md_simulations/b2ar/2RH1-1azs/all_reimaged"
+inactive_dir = "/home/enf/md_simulations/b2ar/2RH1-1azs/2RH1_prepped.pdb"
+active_dir = "/home/enf/md_simulations/b2ar/2RH1-1azs/3P0G_pymol_prepped.pdb"
+pnas_features_dir = "/home/enf/md_simulations/b2ar/2RH1-1azs/pnas_features"
 if not os.path.exists(pnas_features_dir): os.makedirs(pnas_features_dir)
 iterative = False
 featurize_parallel = True
-inactive_dir = "/home/enf/MOR/4dkl_A.pdb"
-active_dir = "/home/enf/MOR/5c1m.pdb"
-mor_active_apo_crystalwaters_protein = "/home/enf/MOR/mor_active_apo_crystalwaters_protein.pdb"
 
 sampling_method = "random"
 precision = "SP"

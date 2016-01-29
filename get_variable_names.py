@@ -35,6 +35,12 @@ def get_tica_dir(base, is_sparse, lag_time, n_components, feature_types,
   make_directory_if_not_exist(tica_dir)
   return tica_dir
 
+def get_corner_plot_file(tica_dir):
+  return("%s/tICA_corner_plot.pdf" % tica_dir)
+
+def get_timescales_plot_file(tica_dir):
+  return("%s/tICA_timescales_plot.pdf" % tica_dir)
+
 def get_ktica_dir(tica_dir, n_components, feature_types, 
                   wolf_string, shrinkage_string):
   ktica_dir = "%s/ktICA_n_components%d_random_specified_regularization%s%s" % (tica_dir, 
@@ -200,11 +206,12 @@ def get_base_files(base):
   ligand_dir = "%s/ligprep_2/ligprep_2-out.maegz" %base
   agonist_dir = "%s/b2ar_full_agonists" %base
   inverse_agonist_dir = "%s/b2ar_inverse_agonists" %base
+  biased_agonist_dir = "%s/b2ar_biased_agonists" % base
   ref_receptors_dir = "%s/reference_receptors" %base
   whole_trajectory_pnas = "%s/all_pnas_features" %(base)
   sasa_file = "%s/sasa_bp.csv" %base
   return (active_ref_dir, inactive_ref_dir, simulation_ref_dir, scripts_dir,
-          ligand_dir, agonist_dir, inverse_agonist_dir, ref_receptors_dir, whole_trajectory_pnas,
+          ligand_dir, agonist_dir, inverse_agonist_dir, biased_agonist_dir, ref_receptors_dir, whole_trajectory_pnas,
           sasa_file)
 
 def get_graph_file(tica_dir, msm_lag_time, n_clusters):
@@ -230,6 +237,14 @@ def get_ref_tica_dirs(tica_dir):
   make_directory_if_not_exist(ref_tica_dir)
   ref_tica_coords = "%s/refcoords.csv" %ref_tica_dir
   return ref_tica_dir, ref_tica_coords
+
+def get_ref_ktica_dirs(tica_dir):
+  ref_tica_dir = "%s/reference_receptors" % tica_dir
+  make_directory_if_not_exist(ref_tica_dir)
+  ref_tica_coords = "%s/refcoords.csv" % ref_tica_dir
+  ref_nystroem = "%s/nystroem.npz" % ref_tica_dir
+  ref_ktica_projected_data_filename = "%s/ktica_random_specified_projected_coords.npz" % ref_tica_dir
+  return ref_tica_dir, ref_tica_coords, ref_nystroem, ref_ktica_projected_data_filename
 
 def get_common_residues(residues_map_csv, contact_residues):
   residues_map = generate_residues_map(residues_map_csv)

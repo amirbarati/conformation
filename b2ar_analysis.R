@@ -54,8 +54,8 @@ do.docking.analysis <- function(docking, reference.docking, tica.coords.averages
   #tica.unclustered.transformed <- logistic.transform(tica.coords,intercept,coefficients)
   #plot(hexbin(tica.transformed,tica.coords.averages[,1]))
   #plot(hexbin(tica.coords[,6], tica.unclustered.transformed))
-  plot.colmap(pnas.coords.averages[,3,drop=F],as.data.frame(cbind(tica.coords.averages[,1], tica.transformed)), refcoords[,coords], "tIC1_vs_transformed_tIC_w_NPxxY_color", analysis.dir)
-  plot.colmap(as.data.frame(tica.transformed),pnas.coords.averages[,c(1,3)], refcoords[,coords], "A priori Reaction Coordinates vs. transformed tIC 1", analysis.dir)
+  #plot.colmap(pnas.coords.averages[,3,drop=F],as.data.frame(cbind(tica.coords.averages[,1], tica.transformed)), refcoords[,coords], "tIC1_vs_transformed_tIC_w_NPxxY_color", analysis.dir)
+  #plot.colmap(as.data.frame(tica.transformed),pnas.coords.averages[,c(1,3)], refcoords[,coords], "A priori Reaction Coordinates vs. transformed tIC 1", analysis.dir)
   plot(tica.transformed,pnas.coords.averages[,3])
   plot(tica.coords.averages[,"tIC.9"],pnas.coords.averages[,3])
   
@@ -71,7 +71,7 @@ do.docking.analysis <- function(docking, reference.docking, tica.coords.averages
   
 
   coords <- c("tm6_tm3_dist", "npxxy_rmsd_active")
-  plot.colmap(docking.averages, pnas.coords.averages[,coords, drop=F], refcoords[,coords], "Docking Score All Clusters vs TM6_TM3 dist and NPxxY RMSD to Inactive", analysis.dir, top=100)
+  #plot.colmap(docking.averages, pnas.coords.averages[,coords, drop=F], refcoords[,coords], "Docking Score All Clusters vs TM6_TM3 dist and NPxxY RMSD to Inactive", analysis.dir, top=100)
   active.docking <- combine.dfs(docking.averages, as.data.frame(active.rows))
   active.docking.sorted <- active.docking[order(-1.0*active.docking[,1]),]
   

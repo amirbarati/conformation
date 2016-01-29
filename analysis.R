@@ -354,7 +354,7 @@ test_method <- function(docking, pnas.rows, title, save.dir) {
   pos.scores <- clusters.active.docking.ordered[clusters.active.docking.ordered[,2] == T, 1]
   neg.scores <- clusters.active.docking.ordered[clusters.active.docking.ordered[,2] == F, 1]
   auc <- mean(sample(pos.scores,1000,replace=T) > sample(neg.scores,1000,replace=T))
- #print(auc)
+  write(auc, file = paste(save.dir, "/", "auc.txt", sep=""))
 }
 
 plot.docking.vs.reference <- function(docking, reference.docking, save.dir) {

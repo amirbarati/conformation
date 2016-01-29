@@ -18,7 +18,7 @@ class Nystroem(MultiSequenceDecompositionMixin, LandmarkNystroem):
 	pass
 
 def ktica(features, landmarks, projected_data_filename, nystroem_data_filename, fit_model_filename, sparse = False, shrinkage = 0.05, wolf = True, rho = 0.01,
-					n_components=25, lag_time=5):
+					n_components=25, lag_time=5, refcoords_csv=None):
 	if not sparse:
 		if shrinkage is None:
 			tica_model = tICA(n_components = n_components, lag_time = lag_time)
@@ -51,7 +51,8 @@ def ktica(features, landmarks, projected_data_filename, nystroem_data_filename, 
 		nyx = load_dataset(nystroem_data_filename)
 		print("Loaded Nystroem")
 
-	if not os.path.exists(projected_data_filename):
+	if not os.path.exists(fit_model_filename):
+		print("Fitting Kernel tICA model")
 		fit_model = tica_model.fit(nyx)
 		verbosedump(fit_model, fit_model_filename)
 		transformed_data = fit_model.transform(nyx)
@@ -62,12 +63,18 @@ def ktica(features, landmarks, projected_data_filename, nystroem_data_filename, 
 			os.system("rm -rf %s" %projected_data_filename)
 			save_dataset(transformed_data, projected_data_filename)
 	else:
-		print("Already performed landmark kernel tICA.")
+		fit_model = verboseload(fit_model_filename)
+		transformed_data = fit_model.transform(nyx)
+		os.system("rm -rf %s" %projected_data_filename)
+		save_dataset(transformed_data, projected_data_filename)
+		if refcoords_csv is not None:
+			np.savetxt(refcoords_csv, transformed_data, delimiter=",")
+	return
 
 def landmark_ktica(features_dir, combined_features_file=None, ktica_dir="", feature_ext="dataset", use_clusters_as_landmarks=True, clusters_map_file = "", 
 	landmarks_dir = "", nystroem_components=1000, n_components=10, lag_time=5, nystroem_data_filename = "", 
 	fit_model_filename = "", projected_data_filename = "", landmark_subsample=10, 
-	sparse = False, shrinkage = 0.05, wolf = False, rho = 0.01):
+	sparse = False, shrinkage = 0.05, wolf = False, rho = 0.01, refcoords_csv=None):
 	'''
 	features_dir: string, directory where your featurized trajectories are kept. 
 	combined_features_dir: if you have a file containing all featurized trajectories in one file, i.e. as a list of np arrays, this is it.
@@ -130,7 +137,7 @@ def landmark_ktica(features_dir, combined_features_file=None, ktica_dir="", feat
 				verbosedump(landmarks, landmarks_dir)
 
 		ktica(features, landmarks, projected_data_filename, nystroem_data_filename, fit_model_filename, sparse, shrinkage, wolf, rho,
-					n_components=n_components, lag_time=lag_time)
+					n_components=n_components, lag_time=lag_time, refcoords_csv=refcoords_csv)
 
 
 def landmark_ktica_ticaTraj(tica_dir, clusterer_dir, ktica_dir, clusters_map_file = "", landmarks_dir = "", nystroem_components=1000, n_components=10, lag_time=5, nystroem_data_filename = "", fit_model_filename = "", projected_data_filename = "", landmark_subsample=1, sparse = False, wolf = True, rho = 0.01, shrinkage = None):

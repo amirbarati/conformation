@@ -314,7 +314,7 @@ def unzip_file(filename_grid_dir):
 
 def unzip_receptors(grid_dir, receptors):
 	print "Unzipping selected grid files"
-	grids = ["%s/%s.zip" %(grid_dir,receptor) for receptor in receptors if not os.path.exists("%s/%s.grd")]
+	grids = ["%s/%s.zip" %(grid_dir,receptor) for receptor in receptors if not os.path.exists("%s/%s.grd" %(grid_dir, receptor))]
 	pool = mp.Pool(mp.cpu_count())
 	pool.map(unzip, grids)
 	pool.terminate()
@@ -508,6 +508,8 @@ parallel --> if you set it to "both" it will run in parallel over both ligands a
 
 def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "SP", ext = "-out.maegz", chosen_ligands = False, chosen_receptors = False, parallel = False, grid_ext = ".zip"):
 	ligands = get_trajectory_files(ligands_dir, ext = ext)
+	print("ligands")
+	print(ligands)
 
 	if parallel == "both":
 		lig_dirs = []

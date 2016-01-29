@@ -459,7 +459,7 @@ def featurize_contacts_custom(traj_dir, features_dir, traj_ext, structures,
 		is not a consensus residue numbering for the same protein.
 	'''
 	trajs = which_trajs_to_featurize(traj_dir, traj_ext, features_dir)
-	if 1==2:
+	if os.path.exists(contact_residue_pairs_file):
 		contact_residue_pairs = generate_features(contact_residue_pairs_file)
 		print("Which contacts to measure already chosen.")
 		if exacycle: contact_residue_pairs = [residues_map[key] for key in contact_residue_pairs]
@@ -615,7 +615,7 @@ def compute_user_defined_features_wrapper(traj_dir, traj_ext, inactive_file, act
 	trajs = get_trajectory_files(traj_dir, traj_ext)
 	#features = []
 	#for traj in trajs:
-#		features.append(compute_user_defined_features_partial(traj))
+	#	features.append(compute_user_defined_features_partial(traj))
 	pool = mp.Pool(mp.cpu_count())
 	features = pool.map(compute_user_defined_features_partial, trajs)
 	pool.terminate()

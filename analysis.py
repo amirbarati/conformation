@@ -74,7 +74,7 @@ def rmsd_npxxy(traj, inactive, residues=[], residues_map = None):
 
 	npxxy_atoms = []
 	for residue in residues:
-		npxxy_atoms += [(a.index,str(a)) for a in traj.topology.atoms if residue.is_mdtraj_res_equivalent(a.residue) and a.is_backbone]
+		npxxy_atoms += [(a.index,str(a)) for a in traj.topology.atoms if residue.is_mdtraj_res_equivalent(a.residue) and a.is_backbone and a.residue.is_protein]
 	npxxy_atoms = sorted(npxxy_atoms, key=operator.itemgetter(1), reverse = True)
 	npxxy_atoms = [a[0] for a in npxxy_atoms]
 
@@ -83,7 +83,7 @@ def rmsd_npxxy(traj, inactive, residues=[], residues_map = None):
 
 	npxxy_atoms_target = []
 	for residue in residues: 
-		npxxy_atoms_target += [(a.index,str(a)) for a in inactive.topology.atoms if residue.is_mdtraj_res_equivalent(a.residue) and a.is_backbone]
+		npxxy_atoms_target += [(a.index,str(a)) for a in inactive.topology.atoms if residue.is_mdtraj_res_equivalent(a.residue) and a.is_backbone and a.residue.is_protein]
 
 	npxxy_atoms_target = sorted(npxxy_atoms_target, key=operator.itemgetter(1), reverse = True)
 	npxxy_atoms_target = [a[0] for a in npxxy_atoms_target]
@@ -228,7 +228,7 @@ def plot_pnas_vs_tics(pnas_dir, tic_dir, pnas_names, directory, scale = 7.14, re
 		for j in range(0,np.shape(tics)[1]):
 			tic = tics[:,j]
 			pnas_coord = pnas[:,i]
-			plt.hexbin(tic, pnas_coord, bins = 'log', mincnt=1)
+			plt.hexbin(tic, pnas_coord, bins = 'log', mincnt=1, cmap=plt.cm.RdYlBu_r)
 			coord_name = pnas_names[i]
 			tic_name = "tIC.%d" %(j+1)
 			plt.xlabel(tic_name)
@@ -245,7 +245,7 @@ def plot_hex(transformed_data_file, figure_directory, colors = None, scale = 1.0
 	transformed_data = verboseload(transformed_data_file)
 	trajs = np.concatenate(transformed_data)
 	print trajs
-	plt.hexbin(trajs[:,0] * scale, trajs[:,1], bins='log', mincnt=1)
+	plt.hexbin(trajs[:,0] * scale, trajs[:,1], bins='log', mincnt=1, cmap=plt.cm.RdYlBu_r)
 	pp = PdfPages(figure_directory)
 	pp.savefig()
 	pp.close()
@@ -286,7 +286,7 @@ def get_cluster_centers(clusterer_dir, traj_dir):
 def plot_tica(transformed_data_dir, lag_time):
 	transformed_data = verboseload(transformed_data_dir)
 	trajs = np.concatenate(transformed_data)
-	plt.hexbin(trajs[:,0], trajs[:,1], bins='log', mincnt=1)
+	plt.hexbin(trajs[:,0], trajs[:,1], bins='log', mincnt=1, cmap=plt.cm.RdYlBu_r)
 	pp = PdfPages("/scratch/users/enf/b2ar_analysis/tica_phi_psi_chi2_t%d.pdf" %lag_time)
 	pp.savefig()
 	pp.close()
@@ -297,7 +297,7 @@ def plot_tica(transformed_data_dir, lag_time):
 def plot_tica_and_clusters(component_j, transformed_data, clusterer, lag_time, component_i, label = "dot", active_cluster_ids = [], intermediate_cluster_ids = [], inactive_cluster_ids = [], inactive_subsample=5, intermediate_subsample=5, tica_dir = "", center_i=None, center_j=None):
 
 	trajs = np.concatenate(transformed_data)
-	plt.hexbin(trajs[:,component_i], trajs[:,component_j], bins='log', mincnt=1)
+	plt.hexbin(trajs[:,component_i], trajs[:,component_j], bins='log', mincnt=1, cmap=plt.cm.RdYlBu_r)
 	plt.xlabel("tIC %d" %(component_i + 1))
 	plt.ylabel('tIC %d' %(component_j+1))
 	centers = clusterer.cluster_centers_
@@ -364,8 +364,9 @@ def plot_tica_component_i_j(tica_dir, transformed_data_dir, lag_time, component_
 	plt.clf()
 
 def plot_column_pair(i, num_columns, save_dir, titles, data, refcoords):
+	print(titles[i])
 	for j in range(i+1, num_columns):
-		plt.hexbin(data[:,i],  data[:,j], bins = 'log', mincnt=1)
+		plt.hexbin(data[:,i],  data[:,j], bins = 'log', mincnt=1,cmap=plt.cm.RdYlBu_r)
 		if refcoords is not None:
 			print([refcoords[0,i], refcoords[0,j]])
 			plt.scatter([refcoords[0,i]], [refcoords[0,j]], marker = 's', c='w',s=15)
@@ -399,9 +400,11 @@ def plot_columns(save_dir, data_file, titles = None, tICA = False, scale = 1.0, 
 
 	num_columns = np.shape(data)[1]
 	plot_column_pair_partial = partial(plot_column_pair, num_columns = num_columns, save_dir = save_dir, titles = titles, data = data, refcoords = refcoords)
-	pool = mp.Pool(mp.cpu_count())
-	pool.map(plot_column_pair_partial, range(0,num_columns))
-	pool.terminate()
+	#pool = mp.Pool(mp.cpu_count())
+	#pool.map(plot_column_pair_partial, range(0,num_columns))
+	#pool.terminate()
+	for i in range(0,num_columns):
+		plot_column_pair_partial(i)
 
 	print("Done plotting columns")
 	return
