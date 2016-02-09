@@ -18,7 +18,7 @@ import glob
 
 def generateData(files):
 	for data in files:
-		print data
+		print(data)
 		yield verboseload(data)
 
 def generateTraj(files, top=None):
@@ -36,7 +36,7 @@ def get_trajectory_files(traj_dir):
 	return sorted(traj_files)
 
 def read_trajectory(directory, filename, stride=10):
-	print("reading %s" %(filename))
+	print(("reading %s" %(filename)))
 	traj = md.load(filename, stride=stride, top="/home/harrigan/compute/wetmsm/gpcr/des/system_mae_to_pdb/des_trajs/DESRES-Trajectory_pnas2011b-H-05-all/system.pdb")
 	return traj
 
@@ -44,7 +44,7 @@ def read_and_save_traj(traj, stride=10):
 	directory = traj.split("/")
 	simulation = directory[len(directory)-2]
 	dcd_file = directory[len(directory)-1]
-	print("analyzing simulation %s file %s" %(simulation, dcd_file))
+	print(("analyzing simulation %s file %s" %(simulation, dcd_file)))
 	top_file = directory[0:len(directory)-2]
 	#print(top_file)
 	top_file.append("system.pdb")
@@ -65,12 +65,12 @@ def read_and_save_traj(traj, stride=10):
 		os.makedirs(new_condition_dir)
 
 	new_file_full = "%s/%s/%s" %(new_root_dir, condition, new_file)
-	print("saving trajectory as %s" %new_file_full)
+	print(("saving trajectory as %s" %new_file_full))
 	traj.save(new_file_full)
 
 
 def read_and_featurize(filename, dihedrals=['phi','psi','chi2'], stride=10):
-	print("reading and featurizing %s" %(filename))
+	print(("reading and featurizing %s" %(filename)))
 	traj = md.load(filename).select('chain A and protein')
 	featurizer = DihedralFeaturizer(types = dihedrals)
 	features = featurizer.transform(traj_list = traj)
@@ -87,7 +87,7 @@ def read_and_featurize(filename, dihedrals=['phi','psi','chi2'], stride=10):
 		os.makedirs(new_condition_dir)
 
 	new_file_full = "%s/%s/%s" %(new_root_dir, condition, new_file)
-	print("saving features as %s" %new_file_full)
+	print(("saving features as %s" %new_file_full))
 
 	verbosedump(features, new_file_full)
 	return features
@@ -102,18 +102,18 @@ def featurize(directory):
 			print("we have already featurized this simulation")
 			continue
 
-		print("currently analyzing %s " %sim_dir)
+		print(("currently analyzing %s " %sim_dir))
 		trajs = get_trajectory_files(sim_dir)
 		
 
-		print("there are %d cpus" %(mp.cpu_count()))
+		print(("there are %d cpus" %(mp.cpu_count())))
 		pool = mp.Pool(mp.cpu_count())
 		features_i = pool.map(read_and_featurize, trajs)
 		features = [np.concatenate(np.concatenate(features_i))]
 		combined_dir = "/home/enf/b2ar_analysis/combined_features"
 		new_file_name = "%s_combined.h5" %(simulation)
 		new_file = "%s/%s" %(combined_dir, new_file_name)
-		print("saving concatenated features for %s as %s" %(simulation, new_file))
+		print(("saving concatenated features for %s as %s" %(simulation, new_file)))
 		verbosedump(features, new_file)
 
 def fit_and_transform(directory):
@@ -123,7 +123,7 @@ def fit_and_transform(directory):
 
 	features = generateData(get_trajectory_files(directory))
 	for data in features:
-		print(np.shape(data[0]))
+		print((np.shape(data[0])))
 		tica_model.partial_fit(data[0])
 		print("Fitting: ")
 		print(data)

@@ -9,12 +9,12 @@ def fix_topology(topology):
 		#print chain
 		for residue in chain.residues:
 			resname = str(residue)
-			if resname in residues.keys():
+			if resname in list(residues.keys()):
 				residues[resname].append(residue)
 			else:
 				residues[resname] = [residue]
 
-	for resname in residues.keys():
+	for resname in list(residues.keys()):
 		fragments = residues[resname]
 		if len(fragments) > 1:
 			main_fragment = fragments[0]
@@ -50,5 +50,5 @@ def fix_traj(traj):
 		new_atom_sequence[i].index = i
 
 	time1 = time.time()
-	print time1 - time0
+	print(time1 - time0)
 	return new_traj

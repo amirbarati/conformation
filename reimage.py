@@ -23,7 +23,7 @@ def reimage_traj(traj_file, save_dir):
 	filename = filename.split(".")[0]
 	h5_filename = "%s.h5" %filename
 	new_h5_file = "%s/%s" %(save_dir, h5_filename)
-	print new_h5_file
+	print(new_h5_file)
 	traj.save(new_h5_file)
 	return
 

@@ -27,12 +27,12 @@ def calc_rmsds(pdb_dir, ref_dir, rmsd_file):
 	new_file = open(rmsd_file, "wb")
 
 	for i in range(0,len(pdbs)):
-		print i 
+		print(i) 
 		pdb_file = pdbs[i]
 		pdb_name = pdb_file.split("/")[len(pdb_file.split("/"))-1]
 		cmd.load(pdb_file, str(i))
 		rmsd = cmd.align(str(i), "ref")
-		print rmsd[0]
+		print(rmsd[0])
 		new_file.write("%s;%f\n" %(pdb_name, rmsd[0]))
 		cmd.delete(str(i))
 	new_file.close()

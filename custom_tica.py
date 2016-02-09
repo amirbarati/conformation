@@ -34,7 +34,7 @@ def fit_and_transform(features_directory, model_dir, stride=5, lag_time=10, n_co
 			for feature_file in feature_files:
 				#if "A-00" not in feature_file and "A-01" not in feature_file: continue
 				#print("Loading feature files one at a time")
-				print "loading %s" %feature_file
+				print("loading %s" %feature_file)
 				#if sparse: 
 				#	features.append(load_features(feature_file)[0:1000,0:10])
 				#else:
@@ -52,15 +52,15 @@ def fit_and_transform(features_directory, model_dir, stride=5, lag_time=10, n_co
 		if transpose: 
 			for i in range(0, len(features)):
 				features[i] = np.transpose(features[i])
-		print np.shape(features[0])
+		print(np.shape(features[0]))
 		#print np.shape(features[1])
-		print(features[0][0][0:10])
+		print((features[0][0][0:10]))
 		#print(features[1][0][0:10])
-		print(np.shape(features))
+		print((np.shape(features)))
 
 		print("fitting data to tICA model")
 		fit_model = tica_model.fit(features)
-		print(fit_model.summarize())
+		print((fit_model.summarize()))
 		#print(dir(fit_model))
 		#save_dataset(fit_model, fit_model_filename)
 		transformed_data = fit_model.transform(features)
@@ -105,7 +105,7 @@ def transform(existing_model, features_directory, tica_dir):
 def check_tica_vs_features(tica_coords_dir, feature_dir):
 	tica_coords = verboseload(tica_coords_dir)
 	tica_coords = np.concatenate(tica_coords)
-	print(np.shape(tica_coords))
+	print((np.shape(tica_coords)))
 	feature_files = get_trajectory_files(feature_dir, ext = ".h5")
 	if len(feature_files) == 0: feature_files = get_trajectory_files(feature_dir, ext = ".dataset")
 	pool = mp.Pool(mp.cpu_count())
@@ -115,7 +115,7 @@ def check_tica_vs_features(tica_coords_dir, feature_dir):
 		for i in range(0, len(features)):
 			features[i] = np.transpose(features[i])
 	features = np.concatenate(features)
-	print(np.shape(features))
-	print(np.shape(tica_coords))
+	print((np.shape(features)))
+	print((np.shape(tica_coords)))
 
 #print out all random forest GINI decreases:

@@ -46,7 +46,7 @@ def compute_random_forests(features_dir, projected_tica_coords, rf_dir, R=True, 
     #os.system("rm %s/tIC.%d_rfr.pkl" %(rf_dir, j))
     rfr = RandomForestRegressor(n_estimators=n_trees, max_features="sqrt",
                                 n_jobs=8, verbose=1)
-    print("Fitting tree for tIC %d" %(j+1))
+    print(("Fitting tree for tIC %d" %(j+1)))
     rfr.fit(features, tics[:,j])
     print("Done fitting RF model. Saving now...")
 
@@ -105,22 +105,22 @@ def compute_residue_importances(df, percentile=95):
   for row in df.iterrows():
     row = row[1]
     res_i = row['res_i']
-    if res_i not in residue_importances.keys():
+    if res_i not in list(residue_importances.keys()):
       residue_importances[res_i] = []
-    residue_importances[res_i].append(row['importance'])
+    residue_importances[res_i].append(np.abs(row['importance']))
 
     res_j = row['res_j']
-    if res_j not in residue_importances.keys():
+    if res_j not in list(residue_importances.keys()):
       residue_importances[res_j] = []
-    residue_importances[res_j].append(row['importance'])
+    residue_importances[res_j].append(np.abs(row['importance']))
 
-  for residue in residue_importances.iterkeys():
+  for residue in residue_importances.keys():
     residue_importances[residue] = np.percentile(residue_importances[residue], percentile)
 
   return(residue_importances)
 
 def merge_importances_features(feature_importances_file, feature_residues_map, importances=None):
-  with open(feature_residues_map) as f:
+  with open(feature_residues_map, "rb") as f:
     feature_tuples = pickle.load(f)
   feature_names = ["%s-%s" %(f[0].res_name.title(), f[1].res_name.title()) 
                                 for f in feature_tuples]
@@ -133,7 +133,7 @@ def merge_importances_features(feature_importances_file, feature_residues_map, i
       with gzip.open(feature_importances_file) as f:
         importances = pickle.load(f)
 
-  feature_importances = zip(feature_names, importances.tolist())
+  feature_importances = list(zip(feature_names, importances.tolist()))
   rows = []
   for i, feature_importance in enumerate(feature_importances):
     row = [feature_importance[0], 
@@ -174,9 +174,14 @@ def interpret_tIC_components(tica_filename, save_dir, feature_residues_pkl, n_ti
 
   for j in range(0, np.shape(tica_components)[0]):
     components = tica_components[j,:]
-    print("Interpreting tIC %d" %(j+1))
+    print(("Interpreting tIC %d" %(j+1)))
     feature_importances_df = merge_importances_features(None, feature_residues_pkl, components)
     residue_importances_df = compute_per_residue_importance(feature_importances_df, percentile)
+
+    print("feature_importances_df.shape")
+    print(feature_importances_df.shape)
+    print("residue_importances_df.shape")
+    print(residue_importances_df.shape)
 
     plot_importance_df(feature_importances_df, "feature_name", "Contact", 
                        "tIC %d Contact Component" % (j+1),
@@ -196,7 +201,7 @@ def interpret_tIC_components(tica_filename, save_dir, feature_residues_pkl, n_ti
 
 def interpret_tIC_rf(rf_dir, feature_residues_pkl, n_tica_components=25, percentile=95):
   for j in range(0, n_tica_components):
-    print("Interpreting tIC %d" %(j+1))
+    print(("Interpreting tIC %d" %(j+1)))
     importances_file = "%s/tIC.%d_rfr.pkl" %(rf_dir, j)
     if os.path.exists(importances_file):
       feature_importances_df = merge_importances_features(importances_file, feature_residues_pkl)
@@ -256,7 +261,7 @@ def plot_top_features_per_tIC(projected_tica_coords_file, features_dir, features
   projected_tica_coords = np.concatenate(load_file(projected_tica_coords_file))
 
   for j in range(0, n_tica_components):
-    print("Examining tIC %d" %(j+1))
+    print(("Examining tIC %d" %(j+1)))
     with open("%s/tIC.%d_rfr_feature_importance_df.pkl" %(rf_dir, j), "rb") as f:
       df = pickle.load(f)
     df.sort(columns='importance', inplace=True, ascending=0)

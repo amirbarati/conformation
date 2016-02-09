@@ -19,6 +19,7 @@ from .utils import check_array, check_random_state, as_float_array
 from .utils.extmath import safe_sparse_dot
 from .utils.validation import check_is_fitted
 from .metrics.pairwise import pairwise_kernels
+import collections
 
 
 class RBFSampler(BaseEstimator, TransformerMixin):
@@ -513,7 +514,7 @@ class Nystroem(BaseEstimator, TransformerMixin):
         params = self.kernel_params
         if params is None:
             params = {}
-        if not callable(self.kernel):
+        if not isinstance(self.kernel, collections.Callable):
             params['gamma'] = self.gamma
             params['degree'] = self.degree
             params['coef0'] = self.coef0

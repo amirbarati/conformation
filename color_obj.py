@@ -36,7 +36,7 @@ SEE ALSO
  
         if rainbow:
  
-           print "\nColouring objects as rainbow\n"
+           print("\nColouring objects as rainbow\n")
  
            nobj = len(obj_list)
  
@@ -48,13 +48,13 @@ SEE ALSO
               rgb = hsv_to_rgb(hsv)
               # Define the new colour
               cmd.set_color("col" + str(j), rgb)
-              print obj_list[j], rgb
+              print(obj_list[j], rgb)
               # Colour the object
               cmd.color("col" + str(j), obj_list[j])
  
         else:
  
-           print "\nColouring objects using PyMOL defined colours\n"
+           print("\nColouring objects using PyMOL defined colours\n")
  
            # List of available colours
            colours = ['red', 'green', 'blue', 'yellow', 'violet', 'cyan',    \
@@ -66,7 +66,7 @@ SEE ALSO
            # Loop over objects
            i = 0
            for obj in obj_list:
-              print "  ", obj, colours[i]
+              print("  ", obj, colours[i])
               cmd.color(colours[i], obj)
               i = i+1
               if(i == ncolours):
@@ -110,7 +110,7 @@ def hsv_to_rgb(hsv):
                         (r,g,b) = (v,p,q)
                 else:
                         (r,g,b) = (v,v,v)
-                        print "error, i not equal 1-5"
+                        print("error, i not equal 1-5")
  
         return [r,g,b]
  

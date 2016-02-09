@@ -10,22 +10,25 @@ from io_functions import *
 from analysis import *
 from msmbuilder import lumping
 import re
+from msmbuilder.utils import KDTree
+import multiprocessing as mp
+from functools import partial
 
-def plot_timescales(clusterer_dir, n_clusters, tica_dir):
+def plot_timescales(clusterer_dir, n_clusters, tica_dir, lag_times=list(range(1,50))):
 	clusterer = verboseload(clusterer_dir)
-	print clusterer
+	print(clusterer)
 	sequences = clusterer.labels_
 	#print(sequences)
 	#lag_times = list(np.arange(1,150,5))
-	lag_times = range(1,50)
 	n_timescales = 10
 
 	msm_timescales = implied_timescales(sequences, lag_times, n_timescales=n_timescales, msm=MarkovStateModel(verbose=True))
-	print msm_timescales
-	implied_timescales(sequences, lag_times, n_timescales=n_timescales, msm=MarkovStateModel(verbose=False))
+	print(msm_timescales)
 
 	for i in range(n_timescales):
 		plt.plot(lag_times, msm_timescales[:,i])
+	plt.xlabel("Lag time (ns)")
+	plt.ylabel("Implied Timescales (ns)")
 	plt.semilogy()
 	pp = PdfPages("%s/n_clusters%d_implied_timescales.pdf" %(tica_dir, n_clusters))
 	pp.savefig()
@@ -36,10 +39,10 @@ def build_msm(clusterer_dir, lag_time, msm_model_dir):
 	n_clusters = np.shape(clusterer.cluster_centers_)[0]
 	labels = clusterer.labels_
 	msm_modeler = MarkovStateModel(lag_time=lag_time)
-	print("fitting msm to trajectories with %d clusters and lag_time %d" %(n_clusters, lag_time))
+	print(("fitting msm to trajectories with %d clusters and lag_time %d" %(n_clusters, lag_time)))
 	msm_modeler.fit_transform(labels)
 	verbosedump(msm_modeler, msm_model_dir)
-	print("fitted msm to trajectories with %d states" %(msm_modeler.n_states_))
+	print(("fitted msm to trajectories with %d states" %(msm_modeler.n_states_)))
 	'''
 	#np.savetxt("/scratch/users/enf/b2ar_analysis/msm_%d_clusters_t%d_transmat.csv" %(n_clusters, lag_time), msm_modeler.transmat_, delimiter=",")
 	#G = nx.from_numpy_matrix(msm_modeler.transmat_)
@@ -75,14 +78,14 @@ def construct_graph(msm_modeler_dir, clusterer_dir, n_clusters, tica_lag_time, m
 	labels = clusterer.labels_
 	if not os.path.exists(msm_modeler_dir):
 		msm_modeler = MarkovStateModel(lag_time=msm_lag_time, n_timescales = 5, sliding_window = True, verbose = True)
-		print("fitting msm to trajectories with %d clusters and lag_time %d" %(n_clusters, msm_lag_time))
+		print(("fitting msm to trajectories with %d clusters and lag_time %d" %(n_clusters, msm_lag_time)))
 		msm_modeler.fit_transform(labels)
 		verbosedump(msm_modeler, msm_modeler_dir)
 	else:
 		msm_modeler = verboseload(msm_modeler_dir)
 	graph = nx.DiGraph()
 	mapping = msm_modeler.mapping_
-	inv_mapping = {v: k for k, v in mapping.items()}
+	inv_mapping = {v: k for k, v in list(mapping.items())}
 	transmat = msm_modeler.transmat_
 
 	for i in range(0, msm_modeler.n_states_):
@@ -94,11 +97,11 @@ def construct_graph(msm_modeler_dir, clusterer_dir, n_clusters, tica_lag_time, m
 				original_j = inv_mapping[j]
 				graph.add_edge(original_i, original_j, prob = float(prob), inverse_prob = 1.0 / float(prob), weight = float(prob))
 
-	print(graph.number_of_nodes())
+	print((graph.number_of_nodes()))
 
 	if inactive is not None:
 		scores = convert_csv_to_map_nocombine(inactive)
-		for cluster in scores.keys():
+		for cluster in list(scores.keys()):
 			cluster_id = int(cluster[7:len(cluster)])
 			if cluster_id in graph.nodes():
 				score = scores[cluster][0]
@@ -106,7 +109,7 @@ def construct_graph(msm_modeler_dir, clusterer_dir, n_clusters, tica_lag_time, m
 
 	if active is not None:
 		scores = convert_csv_to_map_nocombine(active)
-		for cluster in scores.keys():
+		for cluster in list(scores.keys()):
 			cluster_id = int(re.search(r'\d+',cluster).group()) 
 			if cluster_id in graph.nodes():
 				score = scores[cluster][0]
@@ -114,7 +117,7 @@ def construct_graph(msm_modeler_dir, clusterer_dir, n_clusters, tica_lag_time, m
 
 	if pnas_clusters_averages is not None:
 		scores = convert_csv_to_map_nocombine(pnas_clusters_averages)
-		for cluster in scores.keys():
+		for cluster in list(scores.keys()):
 			cluster_id = int(re.search(r'\d+',cluster).group()) 
 			if cluster_id in graph.nodes():
 				graph.node[cluster_id]["tm6_tm3_dist"] = scores[cluster][0]
@@ -123,7 +126,7 @@ def construct_graph(msm_modeler_dir, clusterer_dir, n_clusters, tica_lag_time, m
 
 	if tica_clusters_averages is not None:
 		scores = convert_csv_to_map_nocombine(tica_clusters_averages)
-		for cluster in scores.keys():
+		for cluster in list(scores.keys()):
 			cluster_id = int(re.search(r'\d+',cluster).group()) 
 			if cluster_id in graph.nodes():
 				for i in range(0,len(scores[cluster])):
@@ -131,7 +134,7 @@ def construct_graph(msm_modeler_dir, clusterer_dir, n_clusters, tica_lag_time, m
 
 	if docking is not None:
 		scores = convert_csv_to_map_nocombine(docking)
-		for cluster in scores.keys():
+		for cluster in list(scores.keys()):
 			cluster_id = int(cluster[7:len(cluster)])
 			if cluster_id in graph.nodes():
 				score = scores[cluster][0]
@@ -208,17 +211,17 @@ def compute_z_core_degrees_group(G = None, graph_file = None, cluster_ids = None
 	degree_map = {}
 	degree_z_map = {}
 
-	print(subgraphs[0].nodes())
+	print((subgraphs[0].nodes()))
 	if 'cluster' in cluster_ids[0]:
 		cluster_ids = [s[7:len(s)] for s in cluster_ids]
 
 	for i in range(0,len(subgraphs)):
 		subgraph = subgraphs[i]
-		print(subgraph_degrees[i][1:10])
+		print((subgraph_degrees[i][1:10]))
 		mean = np.mean(subgraph_degrees[i], axis = 0)
-		print mean
+		print(mean)
 		std = np.std(subgraph_degrees[i], axis = 0)
-		print std
+		print(std)
 		for cluster_id in cluster_ids:
 			if cluster_id in subgraph.nodes():
 				degree = G.in_degree(nbunch = cluster_id, weight = "prob") - G.out_degree(nbunch = cluster_id, weight = "prob")
@@ -244,13 +247,86 @@ def macrostate_pcca(msm_file, clusterer_file, n_macrostates, macrostate_dir):
 	#pcca_object.transform(sequences = clusterer.labels_)
 	#macrostate_model = pcca_object.from_msm(msm = msm, n_macrostates = n_macrostates)
 	print(pcca_object)
-	print(pcca_object.microstate_mapping_)
+	print((pcca_object.microstate_mapping_))
 	verbosedump(pcca_object, macrostate_dir)
 
 
 
-def macrostate_bace(msm_file, n_macrosates):
+def macrostate_bace(msm_file, n_macrosates, clusters_map_file, start_state=None):
 	return
 
-def make_trajectory(msm_file, tica_dir):
+def find_closest_indices_to_cluster_center(tica_coords, clusterer_file):
+	tica = verboseload(tica_coords)
+	clusterer = verboseload(clusterer_file)
+	kd = KDTree(tica)
+	dist, inds = kd.query(clusterer.cluster_centers_)
+	return inds
+
+def get_frame(traj_index_frame, traj_files):
+	traj_index, frame = traj_index_frame
+	print(traj_index)
+	top = md.load_frame(traj_files[traj_index], index=0).topology
+	atom_indices = [a.index for a in top.atoms if a.residue.chain.id == "R" or "LIG" in str(a.residue)]
+	frame = md.load_frame(traj_files[traj_index], index=frame, atom_indices=atom_indices)
+	return frame
+
+def make_msm_trajectory(msm_file, tica_coords, traj_dir, sampled_frames_file, clusterer_dir, msm_trajectory_filename, 
+						n_clusters, start_cluster=0, n_steps=1000):
+	indices = find_closest_indices_to_cluster_center(tica_coords, clusterer_dir)
+	traj_files = get_trajectory_files(traj_dir)
+
+	if not os.path.exists(sampled_frames_file):
+		pool = mp.Pool(mp.cpu_count())
+		get_frame_partial = partial(get_frame, traj_files=traj_files)
+		frames = pool.map(get_frame_partial, list(indices))
+		pool.terminate()
+		verbosedump(frames, sampled_frames_file)
+	else:
+		frames = verboseload(sampled_frames_file)
+
+	msm = verboseload(msm_file)
+	msm_trajectory = msm.sample_discrete(state=start_cluster, n_steps=n_steps)
+	msm_trajectory_frames = []
+	top = frames[0].topology
+	for state in msm_trajectory:
+		frame = frames[state]
+		frame.topology = top
+		msm_trajectory_frames.append(frame)
+
+	msm_trajectory = msm_trajectory_frames[0].join(msm_trajectory_frames[1:len(msm_trajectory_frames)])
+
+	'''
+	top = msm_trajectory_frames[0].topology
+	for i, frame in enumerate(msm_trajectory_frames):
+		frame.topology = top 
+		msm_trajectory_frames[i] = frame
+
+	
+	print("Joining frames into MSM trajectory")
+	msm_coords = []
+	cell_lengths = []
+	for frame in msm_trajectory_frames:
+		#rint(np.shape(frame.xyz))
+		msm_coords.append(frame.xyz)
+		cell_lengths.append(frame._unitcell_lengths)
+	msm_coords = np.concatenate(msm_coords)
+	cell_lengths = np.concatenate(cell_lengths)
+	print(np.shape(msm_coords))
+	frame.xyz = msm_coords
+	frame._unitcell_lengths = cell_lengths
+	msm_trajectory = frame
+	msm_trajectory.time = np.arange(n_steps)
+	#msm_trajectory = msm_trajectory_frames[0]
+	#for i, frame in enumerate(msm_trajectory_frames):
+	#	if i > 0:
+	#		msm_trajectory = msm_trajectory.stack(msm_trajectory_frames[i])
+	'''
+	print("Complete. Saving to disk.")
+	h5_filename = "%s.h5" % msm_trajectory_filename
+	dcd_filename = "%s.dcd" % msm_trajectory_filename
+	pdb_filename = "%s.pdb" % msm_trajectory_filename
+	msm_trajectory.save(h5_filename)
+	msm_trajectory.save_dcd(dcd_filename)
+	msm_trajectory[0].save_pdb(pdb_filename)
+
 	return

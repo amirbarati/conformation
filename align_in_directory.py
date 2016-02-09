@@ -1,7 +1,7 @@
 import os 
 from pymol import cmd
 
-print(os.getcwd())
+print((os.getcwd()))
 for pdb in os.listdir(os.getcwd()):
   #print(os.path.splitext(pdb))
   if os.path.splitext(pdb)[1] == ".pdb":

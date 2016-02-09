@@ -33,11 +33,11 @@ def read_and_featurize_iter(traj_file, features_dir = None, condition=None, dihe
 			#chunk = md.load(traj_file,stride=1000)
 			#print(resIndex_pairs[0:10])
 				chunk_features = md.compute_contacts(chunk, contacts = resIndex_pairs, scheme = 'closest-heavy', ignore_nonprotein=False)[0]
-				print(np.shape(chunk_features))
+				print((np.shape(chunk_features)))
 				contact_features.append(chunk_features)
 			contact_features = np.concatenate(contact_features)
-		except Exception,e:
-			print str(e)
+		except Exception as e:
+			print(str(e))
 			print("Failed")
 			return
 			#traj = md.load(traj_file)
@@ -51,8 +51,8 @@ def read_and_featurize_iter(traj_file, features_dir = None, condition=None, dihe
 
 	b = time.time()
 
-	print("new features %s has shape: " %traj_file)
-	print(np.shape(manual_features))
+	print(("new features %s has shape: " %traj_file))
+	print((np.shape(manual_features)))
 
 	if condition is None:
 		condition = traj_file.split("/")[len(traj_file.split("/"))-1]
@@ -74,7 +74,7 @@ def compute_contacts_below_cutoff(traj_file_frame, cutoff = 100000.0, contact_re
 		residue = contact_residues[i]
 		indices = [r.index for r in top.residues if r.resSeq == residue and not r.is_water]
 		if len(indices) == 0:
-			print("No residues in trajectory for residue %d" %residue)
+			print(("No residues in trajectory for residue %d" %residue))
 			continue
 		else:
 			ind = indices[0]
@@ -103,7 +103,7 @@ def compute_contacts_below_cutoff(traj_file_frame, cutoff = 100000.0, contact_re
 
 	distances = md.compute_contacts(frame, contacts = res_index_combinations, scheme = 'closest-heavy', ignore_nonprotein=False)[0]
 	#print(distances)
-	print(np.shape(distances))
+	print((np.shape(distances)))
 	for i in range(0, len(distances[0])):
 		distance = distances[0][i]
 		#print(distance)
@@ -111,8 +111,8 @@ def compute_contacts_below_cutoff(traj_file_frame, cutoff = 100000.0, contact_re
 			final_resIndex_pairs.append(res_index_combinations[i])
 			final_resSeq_pairs.append(resSeq_pairs[i])
 
-	print(len(final_resSeq_pairs))
-	print(len(final_resIndex_pairs))
+	print((len(final_resSeq_pairs)))
+	print((len(final_resIndex_pairs)))
 	return(final_resSeq_pairs)
 
 
@@ -136,8 +136,8 @@ def featurize_custom_anton(traj_dir, features_dir, traj_ext, featurized_traj_and
 	pool = mp.Pool(mp.cpu_count()/4)
 
 	if residues_map is not None:
-		contact_residues = [r for r in contact_residues if r in residues_map.keys()]
-		dihedral_residues = [d for d in dihedral_residues if d in residues_map.keys()]		
+		contact_residues = [r for r in contact_residues if r in list(residues_map.keys())]
+		dihedral_residues = [d for d in dihedral_residues if d in list(residues_map.keys())]		
 
 	#print contact_residues	
 	
@@ -148,14 +148,14 @@ def featurize_custom_anton(traj_dir, features_dir, traj_ext, featurized_traj_and
 		contact_residue_pairs = compute_contacts_below_cutoff(featurized_traj_and_frame, cutoff = contact_cutoff, contact_residues = contact_residues, anton = False)
 	else:
 		contact_residue_pairs = generate_features(contact_residue_pairs_csv)
-	print("Number of contact pairs = %d" %len(contact_residue_pairs))
+	print(("Number of contact pairs = %d" %len(contact_residue_pairs)))
 
 
 	featurize_partial = partial(read_and_featurize_iter, features_dir = features_dir, dihedral_residues = dihedral_residues, dihedral_types = dihedral_types, resSeq_pairs = contact_residue_pairs)
 	#pool.map(featurize_partial, trajs)
 	#pool.terminate()
 	for traj in trajs:
-		print traj
+		print(traj)
 		featurize_partial(traj)
 
 

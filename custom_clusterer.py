@@ -4,8 +4,8 @@ from functools import partial
 from analysis import *
 import multiprocessing as mp
 import mdtraj as md
-from msmbuilder.cluster import KMeans
-from msmbuilder.cluster import KCenters
+#from msmbuilder.cluster import KMeans
+#from msmbuilder.cluster import KCenters
 from msmbuilder.cluster import MiniBatchKMeans
 import random
 import json
@@ -15,7 +15,7 @@ from msmbuilder.cluster import GMM
 def cluster(data_dir, traj_dir, n_clusters, lag_time):
 	clusterer_dir = "/scratch/users/enf/b2ar_analysis/clusterer_%d_t%d.h5" %(n_clusters, lag_time)
 	if (os.path.exists(clusterer_dir)):
-		print "Already clustered"
+		print("Already clustered")
 	else:
 		try:
 			reduced_data = verboseload(data_dir)
@@ -26,26 +26,14 @@ def cluster(data_dir, traj_dir, n_clusters, lag_time):
 		clusterer.fit_transform(reduced_data)
 		verbosedump(clusterer, "/scratch/users/enf/b2ar_analysis/clusterer_%d_t%d.h5" %(n_clusters, lag_time))	
 
-def cluster_kmeans(tica_dir, data_dir, traj_dir, n_clusters, lag_time):
-	clusterer_dir = "%s/clusterer_%dclusters.h5" %(tica_dir, n_clusters)
-	if (os.path.exists(clusterer_dir)):
-		print "Already clustered"
-	else:
-		print "Clustering by KMeans"
-		reduced_data = verboseload(data_dir)
-		trajs = np.concatenate(reduced_data)
-		clusterer = KMeans(n_clusters = n_clusters, n_jobs = -1)
-		clusterer.fit_transform(reduced_data)
-		verbosedump(clusterer, clusterer_dir)	
-
 def recompute_cluster_means(means, tICs):
 	return
 
 def cluster_minikmeans(tica_dir, data_dir, traj_dir, n_clusters, clusterer_dir=None,tICs=None):
 	if (os.path.exists(clusterer_dir)):
-		print "Already clustered"
+		print("Already clustered")
 	else:
-		print "Clustering by KMeans"
+		print("Clustering by KMeans")
 		try:
 			reduced_data = verboseload(data_dir)
 		except:
@@ -90,9 +78,9 @@ class MSMB_GMM(object):
 def cluster_kcenters(tica_dir, data_dir, traj_dir, n_clusters, lag_time):
 	clusterer_dir = "%s/kcenters_clusterer_%dclusters.h5" %(tica_dir, n_clusters)
 	if (os.path.exists(clusterer_dir)):
-		print "Already clustered"
+		print("Already clustered")
 	else:
-		print "Clustering by KMeans"
+		print("Clustering by KMeans")
 		reduced_data = verboseload(data_dir)
 		trajs = np.concatenate(reduced_data)
 		clusterer = KClusters(n_clusters = n_clusters)
@@ -113,8 +101,8 @@ def make_clusters_map(clusterer):
 			cluster = trajectory[j]
 			clusters_map[cluster].add((i,j))
 
-	for cluster in clusters_map.keys():
-		print len(clusters_map[cluster])
+	for cluster in list(clusters_map.keys()):
+		print(len(clusters_map[cluster]))
 
 	return clusters_map
 
@@ -125,25 +113,25 @@ def cos_to_means(clusterer_dir, features_dir):
 	features = verboseload(features_dir)
 	feature_distances = {}
 
-	for i in range(0, len(clusters_map.keys())):
+	for i in range(0, len(list(clusters_map.keys()))):
 		indices = clusters_map[i]
 		k_mean = clusterer.cluster_centers_[i]
-		print k_mean
+		print(k_mean)
 		find_cos_partial = partial(find_cos, k_mean=k_mean, features = features)
-		feature_distances_i = map(find_cos_partial, indices)
+		feature_distances_i = list(map(find_cos_partial, indices))
 		feature_distances[i] = feature_distances_i
 
-	print(feature_distances[0][0:10])
+	print((feature_distances[0][0:10]))
 	sorted_map = {}
 
-	print(feature_distances.keys())
-	print(len(feature_distances.keys()))
+	print((list(feature_distances.keys())))
+	print((len(list(feature_distances.keys()))))
 
-	for i in range(0, len(feature_distances.keys())):
+	for i in range(0, len(list(feature_distances.keys()))):
 		sorted_features = sorted(feature_distances[i], key = lambda x: x[2], reverse = True)
 		sorted_map[i] = sorted_features
 
-	print sorted_map[0][0:10]
+	print(sorted_map[0][0:10])
 	return sorted_map
 
 def find_dist(index, k_mean, features, tICs=None):
@@ -166,27 +154,27 @@ def dist_to_means(clusterer_dir, features_dir, n_samples = False, n_components =
 		features = load_dataset(features_dir)
 	feature_distances = {}
 
-	for i in range(0, len(clusters_map.keys())):
+	for i in range(0, len(list(clusters_map.keys()))):
 		indices = clusters_map[i]
 		k_mean = clusterer.cluster_centers_[i]
-		print k_mean
+		print(k_mean)
 		find_dist_partial = partial(find_dist, k_mean=k_mean, features = features, tICs=tICs)
-		feature_distances_i = map(find_dist_partial, indices)
+		feature_distances_i = list(map(find_dist_partial, indices))
 		feature_distances[i] = feature_distances_i
 
-	print(feature_distances[0][0:10])
+	print((feature_distances[0][0:10]))
 	sorted_map = {}
 
-	print(feature_distances.keys())
-	print(len(feature_distances.keys()))
+	print((list(feature_distances.keys())))
+	print((len(list(feature_distances.keys()))))
 
-	for i in range(0, len(feature_distances.keys())):
+	for i in range(0, len(list(feature_distances.keys()))):
 		sorted_features = sorted(feature_distances[i], key = lambda x: x[2], reverse = False)
 		sorted_map[i] = sorted_features
 
 	if n_samples is not False and n_components is not False and tica_coords_csv is not False:
 		tica_coords_map = {}
-		for cluster_id in sorted_map.keys():
+		for cluster_id in list(sorted_map.keys()):
 			for j in range(0, n_samples):
 				sample = "cluster%d_sample%d" %(cluster_id, j)
 				sample_tuple = sorted_map[cluster_id][j][0:2]
@@ -195,8 +183,8 @@ def dist_to_means(clusterer_dir, features_dir, n_samples = False, n_components =
 		titles = ["sample"]
 		for k in range(0, n_components):
 			titles.append("component_%d" %k)
-		print(tica_coords_map.keys()[0])
-		print(tica_coords_map[tica_coords_map.keys()[0]])
+		print((list(tica_coords_map.keys())[0]))
+		print((tica_coords_map[list(tica_coords_map.keys())[0]]))
 		write_map_to_csv(tica_coords_csv, tica_coords_map, titles)
 
 	if kmeans_csv is not False:
@@ -211,20 +199,20 @@ def dist_to_means(clusterer_dir, features_dir, n_samples = False, n_components =
 		write_map_to_csv(kmeans_csv, kmeans_map, titles)			
 
 
-	print sorted_map[0][0:10] 
+	print(sorted_map[0][0:10]) 
 	return sorted_map
 
 
-def get_samples(cluster, trajectories, clusters_map, clusterer_dir, features_dir, traj_dir, save_dir, n_samples, method, structure=None):
+def get_samples(cluster, trajectories, clusters_map, clusterer_dir, features_dir, traj_dir, save_dir, n_samples, method, structure=None, residue_cutoff=10000):
 	num_configurations = len(clusters_map[cluster])
 	if method == "random":
 		try:
-			indices = random.sample(range(num_configurations), n_samples)
+			indices = random.sample(list(range(num_configurations)), n_samples)
 		except:
-			return(range(0, min(n_samples, num_configurations)))
+			return(list(range(0, min(n_samples, num_configurations))))
 		#print indices
 	else:
-		indices = range(0, min(n_samples, num_configurations))
+		indices = list(range(0, min(n_samples, num_configurations)))
 	
 	for s in range(0, n_samples):
 		if s == len(clusters_map[cluster]): return(indices[0:s])
@@ -236,7 +224,7 @@ def get_samples(cluster, trajectories, clusters_map, clusterer_dir, features_dir
 		traj_id = sample[0]
 		frame = sample[1]
 		traj = trajectories[traj_id]
-		print("cluster %d sample %d" %(cluster, k))
+		print(("cluster %d sample %d" %(cluster, k)))
 		#print traj
 
 		#traj_obj = md.load(traj)
@@ -248,7 +236,7 @@ def get_samples(cluster, trajectories, clusters_map, clusterer_dir, features_dir
 		else:
 			top = md.load_frame(traj, index=frame, top=structure).topology
 
-		atom_indices = [a.index for a in top.atoms if str(a.residue)[0:3] != "SOD" and str(a.residue)[0:3] != "CLA" and a.residue.resSeq < 341]
+		atom_indices = [a.index for a in top.atoms if str(a.residue)[0:3] != "SOD" and str(a.residue)[0:3] != "CLA" and a.residue.resSeq < residue_cutoff and str(a.residue)[0:3] != "POP" and not a.residue.is_water]
 		#print indices
 		if structure is None:
 			conformation = md.load_frame(traj, index=frame, atom_indices=sorted(atom_indices))
@@ -270,7 +258,7 @@ def sample_clusters(clusterer_dir, features_dir, traj_dir, traj_ext, save_dir, n
 		clusters_map = dist_to_means(clusterer_dir, features_dir)
 	elif method == "random":
 		clusters_map = dist_to_means(clusterer_dir, features_dir, tICs=tICs)
-	clusters = range(0, len(clusters_map.keys()))
+	clusters = list(range(0, len(list(clusters_map.keys()))))
 	if not os.path.exists(save_dir): os.makedirs(save_dir)
 	
 	trajectories = get_trajectory_files(traj_dir, traj_ext)
@@ -307,16 +295,16 @@ def get_pnas(cluster, clusters_map, pnas_active_distances, pnas_coords, tica_coo
 		coords = []
 		tica_coords_list = []
 		feature_coords_list = []
-		print "cluster = %d" %cluster
+		print("cluster = %d" %cluster)
 		for s in range(0, n_samples):
-			print "sample  = %d" %s
+			print("sample  = %d" %s)
 			if s == len(clusters_map[cluster]): return
 			sample = clusters_map[cluster][s]
-			print sample
+			print(sample)
 			traj_id = sample[0]
 			frame = sample[1]
-			print(pnas_active_distances[traj_id])
-			print(np.shape(pnas_active_distances[traj_id]))
+			print((pnas_active_distances[traj_id]))
+			print((np.shape(pnas_active_distances[traj_id])))
 			pnas_coord = pnas_coords[traj_id][frame]
 			tica_coord = tica_coords[traj_id][frame]
 			if feature_coords is not None: 
@@ -334,14 +322,14 @@ def cluster_pnas_distances(clusterer_dir, features_dir, pnas_coords_dir, project
 	elif method == "random":
 		with open(clusters_map_file) as f:
 			clusters_map = json.load(f)
-			clusters_map = {int(k):v for k,v in clusters_map.items()}
-			print(clusters_map.keys())
+			clusters_map = {int(k):v for k,v in list(clusters_map.items())}
+			print((list(clusters_map.keys())))
 	elif method == "dist":
 		clusters_map = dist_to_means(clusterer_dir, features_dir)
 	else: 
 		print("method not recognized")
 		return
-	clusters = range(0, len(clusters_map.keys()))
+	clusters = list(range(0, len(list(clusters_map.keys()))))
 
 	trajectories = get_trajectory_files(traj_dir, traj_ext)
 
@@ -367,10 +355,10 @@ def cluster_pnas_distances(clusterer_dir, features_dir, pnas_coords_dir, project
 	tica_coords_map = {}
 	feature_coords_map = {}
 
-	for i in range(0, len(clusters_map.keys())):
+	for i in range(0, len(list(clusters_map.keys()))):
 		try:
 			pnas_coord = pnas_feature[i][0]
-			print pnas_coord
+			print(pnas_coord)
 			tica_coord = pnas_feature[i][1]
 			if features_dir is not None: feature_coord = pnas_feature[i][2]
 		except:
@@ -380,7 +368,7 @@ def cluster_pnas_distances(clusterer_dir, features_dir, pnas_coords_dir, project
 			tica_coords_map["cluster%d_sample%d" %(i,j)] = tica_coord[j]
 			if features_dir is not None: feature_coords_map["cluster%d_sample%d" %(i,j)] = feature_coord[j]
 
-	n_components = len(tica_coords_map[tica_coords_map.keys()[0]])
+	n_components = len(tica_coords_map[list(tica_coords_map.keys())[0]])
 
 	write_map_to_csv(pnas_coords_csv, pnas_coords_map, ["sample"] + coord_names)
 	tic_names = []
@@ -395,14 +383,14 @@ def sample_features(clusterer_dir, features_dir, features_ext, n_samples, method
 	elif method == "random":
 		with open(clusters_map_file) as f:
 			clusters_map = json.load(f)
-			clusters_map = {int(k):v for k,v in clusters_map.items()}
-			print(clusters_map.keys())
+			clusters_map = {int(k):v for k,v in list(clusters_map.items())}
+			print((list(clusters_map.keys())))
 	elif method == "dist":
 		clusters_map = dist_to_means(clusterer_dir, features_dir)
 	else: 
 		print("method not recognized")
 		return
-	clusters = range(0, len(clusters_map.keys()))
+	clusters = list(range(0, len(list(clusters_map.keys()))))
 
 	features = load_file_list(None, features_dir, features_ext)
 
@@ -419,12 +407,12 @@ def sample_features(clusterer_dir, features_dir, features_ext, n_samples, method
 	pnas_coords_map = {}
 	tica_coords_map = {}
 
-	for i in range(0, len(clusters_map.keys())):
+	for i in range(0, len(list(clusters_map.keys()))):
 		try:
 			pnas_distance = pnas_feature[i][0]
-			print pnas_distance
+			print(pnas_distance)
 			pnas_coord = pnas_feature[i][1]
-			print pnas_coord
+			print(pnas_coord)
 			tica_coord = pnas_feature[i][2]
 		except:
 			continue
@@ -433,7 +421,7 @@ def sample_features(clusterer_dir, features_dir, features_ext, n_samples, method
 			pnas_coords_map["cluster%d_sample%d" %(i,j)] = pnas_coord[j]
 			tica_coords_map["cluster%d_sample%d" %(i,j)] = tica_coord[j]
 
-	n_components = len(tica_coords_map[tica_coords_map.keys()[0]])
+	n_components = len(tica_coords_map[list(tica_coords_map.keys())[0]])
 
 	write_map_to_csv(active_pnas_csv, pnas_distance_map, ["sample", "active_pnas_distance"])
 	write_map_to_csv(pnas_coords_csv, pnas_coords_map, ["sample", "tm6_tm3_dist", "npxxy_rmsd_inactive", "npxxy_rmsd_active", "connector_rmsd_inactive", "connector_rmsd_active"])

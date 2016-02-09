@@ -14,10 +14,9 @@ import subprocess
 from subprocess import Popen
 import sys
 from io_functions import *
-import pytraj.io as mdio
-#from pytraj import adict
+
 import signal
-import czipfile
+import zipfile
 
 class TimeoutException(Exception):   # Custom exception class
     pass
@@ -43,92 +42,6 @@ Sherlock but not on Biox3.
 
 
 
-
-def reimage_traj(traj_file, traj_dir, save_dir, ext):
-	if ext == ".pdb":
-		file_lastname = traj_file.split("/")[len(traj_file.split("/"))-1]
-		filename = file_lastname.split(".")[0]
-		h5_filename = file_lastname
-		new_h5_file = "%s/%s" %(save_dir, h5_filename)
-		if os.path.exists(new_h5_file):
-			print "already reimaged"
-			return 
-
-		traj_pytraj = mdio.load(traj_file, top = traj_file)[:]
-		#traj_pytraj.fixatomorder()
-		traj_pytraj.autoimage()
-
-		
-		traj_pytraj.save(new_h5_file)
-		print "saving %s" %h5_filename
-
-	else:
-		traj_file_lastname = traj_file.split("/")[len(traj_file.split("/"))-1]
-		traj_filename = traj_file_lastname.split(".")[0]
-		traj_dcd = "%s/%s.dcd" %(traj_dir, traj_filename)
-		traj_pdb = "%s/%s.pdb" %(traj_dir, traj_filename)
-		traj = md.load(traj_file)
-		traj_frame = md.load_frame(traj_file, index=0)
-		traj.save_dcd(traj_dcd)
-		traj_frame.save_pdb(traj_pdb)
-
-		traj_pytraj = mdio.load(traj_dcd, top = traj_pdb)[:]
-		traj_pytraj.autoimage()
-
-		file_lastname = traj_file.split("/")[len(traj_file.split("/"))-1]
-		filename = file_lastname.split(".")[0]
-		dcd_filename = "%s_temp.dcd" %filename
-		top_filename = "%s_temp.pdb" %filename
-		h5_filename = file_lastname
-		new_dcd_file = "%s/%s" %(save_dir, dcd_filename)
-		new_top_file = "%s/%s" %(save_dir, top_filename)
-		new_h5_file = "%s/%s" %(save_dir, h5_filename)
-		print new_dcd_file
-		print new_top_file
-		traj_pytraj.save(new_dcd_file)
-		traj_pytraj.save(new_top_file)
-
-		new_traj = md.load(new_dcd_file, top = traj_pdb)
-		new_traj.save(new_h5_file)
-		os.remove(traj_dcd)
-		os.remove(traj_pdb)
-		os.remove(new_dcd_file)
-		os.remove(new_top_file)
-	return
-
-def reimage_traj_new(traj_file, traj_dir, save_dir, ext):
-	traj = md.load(traj_file)
-	traj_pytraj = mdio.load_mdtraj(traj)
-	traj_pytraj.autoimage()
-	traj.xyz[:] = traj_pytraj.xyz/10.0
-	traj.save("%s/%s" %(traj_dir, traj_file.split("/")[len(traj_file.split("/"))-1]))
-	return 
-
-
-'''
-If sim was run under periodic boundary conditions, this will reimage all trajectories in directory traj_dir
-'''
-
-def reimage_trajs(traj_dir, ext = ".pdb"):
-	print "traj dir = %s" %traj_dir
-	new_dir = "%s_reimaged" %traj_dir
-	print "new dir = %s" %new_dir
-
-	if not os.path.exists(new_dir): os.makedirs(new_dir)
-
-	trajs = get_trajectory_files(traj_dir, ext = ext)
-
-	reimage = partial(reimage_traj, save_dir = new_dir, traj_dir = traj_dir, ext = ext)
-
-	num_workers = mp.cpu_count()
-	pool = mp.Pool(num_workers)
-	pool.map(reimage, trajs)
-	pool.terminate()
-	#reimage(trajs[0])
-	#for traj in trajs:
-	#	reimage(traj)
-	return
-
 '''
 The following two functions take as input a directory containing PDB files containing structures to which you would like to dock.
 It will prepare the protein with Schrodinger's tools (add hydrogens, SS bonds (no, not that SS!), bond orders, etc.) and then save
@@ -140,10 +53,10 @@ def pprep_prot(pdb, ref, extension = ".mae"):
 	new_pdb = pdb_name.rsplit( ".", 1 )[ 0 ]
 	new_pdb = "%s%s" %(new_pdb, extension)
 	if os.path.exists(new_pdb): 
-		print "already prepped and mae'd protein"
+		print("already prepped and mae'd protein")
 		return
 	command = "$SCHRODINGER/utilities/prepwizard -WAIT -disulfides -fix -noepik -noimpref -noprotassign -reference_st_file %s -NOLOCAL %s %s" %(ref, pdb_name, new_pdb)
-	print command
+	print(command)
 	os.system(command)
 	return
 
@@ -155,14 +68,14 @@ def remove_path_and_extension(directory):
 
 def pprep(pdb_dir, ref, indices = None, chosen_receptors = None, extension = ".mae"):
 	pdbs = get_trajectory_files(pdb_dir, ext = ".pdb")
-	print(len(chosen_receptors))
-	print(len(pdbs))
+	print((len(chosen_receptors)))
+	print((len(pdbs)))
 	if indices is not None:
 		pdbs = pdbs[indices[0] : indices[1]]
 	elif chosen_receptors is not None:
-		print(remove_path_and_extension(pdbs[0]))
+		print((remove_path_and_extension(pdbs[0])))
 		pdbs = [pdb for pdb in pdbs if remove_path_and_extension(pdb) in chosen_receptors]
-	print(len(pdbs))
+	print((len(pdbs)))
 	os.chdir(pdb_dir)
 	
 	pprep_partial = partial(pprep_prot, ref = ref, extension = extension)
@@ -190,7 +103,7 @@ def prepare_ligand(lig, lig_dir):
 	lig_output = "%s-out.maegz" %lig_no_ext
 
 	if os.path.exists("%s/%s" %(lig_dir,lig_output)):
-		print "already prepared ligand"
+		print("already prepared ligand")
 		return
 
 	ligfile = open(lig_input, "wb")
@@ -205,20 +118,20 @@ def prepare_ligand(lig, lig_dir):
 	ligfile.close()
 
 	cmd = "$SCHRODINGER/ligprep -WAIT -inp %s" %lig_input
-	print cmd
+	print(cmd)
 	subprocess.call(cmd, shell=True)
 
 
 def prepare_ligands(lig_dir, ext = ".mae"):
 	ligs = get_trajectory_files(lig_dir, ext)
-	print ligs
+	print(ligs)
 	lig_partial = partial(prepare_ligand, lig_dir = lig_dir)
 
 	num_workers = mp.cpu_count()
 	pool = mp.Pool(num_workers)
 	pool.map(lig_partial, ligs)
 	pool.terminate()
-	print "finished preparing ligands"
+	print("finished preparing ligands")
 
 '''
 To dock, Schrodinger has to generate grid files (in .zip format) for each receptor. This needs as input the (x,y,z) coordinates 
@@ -245,17 +158,17 @@ def generate_grid_input(mae, grid_center, grid_dir, remove_lig = None):
 	grid_file = "%s/%s.zip" %(output_dir, mae_last_name)
 
 	if (os.path.exists(grid_job) and os.path.exists(new_mae)) or (os.path.exists(grid_file)):
-		print "Already created that grid job, skipping"
+		print("Already created that grid job, skipping")
 		return
 
 	if remove_lig == None:
 		if not os.path.exists(new_mae):
 			cmd = "cp %s %s" %(mae, new_mae)
-			print cmd
+			print(cmd)
 			subprocess.call(cmd, shell=True)
 	else:
 		cmd = "$SCHRODINGER/run $SCHRODINGER/mmshare-v29013/python/common/delete_atoms.py -asl \"res.pt %s \" %s %s" %(remove_lig, mae, new_mae)
-		print cmd
+		print(cmd)
 		subprocess.call(cmd, shell=True)
 
 	gridfile = open(grid_job, "wb")
@@ -274,14 +187,14 @@ def generate_grid(grid_file, grid_dir):
 	grid_zip = grid_file.rsplit( ".", 1)[0]
 	grid_zip = "%s.zip" %grid_zip
 	if os.path.exists(grid_zip):
-		print "already generated grid; skipping"
+		print("already generated grid; skipping")
 		return
 
 	os.chdir(grid_dir)
 	grid_command = "$SCHRODINGER/glide %s -OVERWRITE -WAIT" %grid_file
 
 	subprocess.call(grid_command, shell = True)
-	print "completed grid generation job"
+	print("completed grid generation job")
 	return 
 
 def unzip(zip_file):
@@ -300,10 +213,10 @@ def unzip_file(filename_grid_dir):
 	filename = filename_grid_dir[0]
 	grid_dir = filename_grid_dir[1]
 	gridname = filename.split("/")[len(filename.split("/"))-1]
-	print "unzipping %s" %gridname
+	print("unzipping %s" %gridname)
 	try:
 		fh = open(filename, 'rb')
-		z = czipfile.ZipFile(fh)
+		z = zipfile.ZipFile(fh)
 		for name in z.namelist():
 		    outpath = grid_dir
 		    z.extract(name, outpath)
@@ -313,7 +226,7 @@ def unzip_file(filename_grid_dir):
 	return
 
 def unzip_receptors(grid_dir, receptors):
-	print "Unzipping selected grid files"
+	print("Unzipping selected grid files")
 	grids = ["%s/%s.zip" %(grid_dir,receptor) for receptor in receptors if not os.path.exists("%s/%s.grd" %(grid_dir, receptor))]
 	pool = mp.Pool(mp.cpu_count())
 	pool.map(unzip, grids)
@@ -324,12 +237,12 @@ def unzip_receptors(grid_dir, receptors):
 	#pool = mp.Pool(num_workers)
 	#pool.map(unzip_file, filename_grid_dirs)
 	#pool.terminate()
-	print "Finishing unzipping grid files"
+	print("Finishing unzipping grid files")
 	return
 
 
 def generate_grids(mae_dir, grid_center, grid_dir, remove_lig = None, indices = None, chosen_receptors = None):
-	print grid_dir
+	print(grid_dir)
 	if not os.path.exists(grid_dir): os.makedirs(grid_dir)
 
 	maes = get_trajectory_files(mae_dir, ".mae")
@@ -377,7 +290,7 @@ def dock(dock_job):
 	try:
 		run_command(cmd)
 	except TimeoutException:
-		print "Docking job timed out"
+		print("Docking job timed out")
 		return
 	else:
 		signal.alarm(0)
@@ -407,7 +320,7 @@ def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP", chos
 		log_size = 0
 		if os.path.exists(log_name): log_size = os.stat(log_name).st_size
 		if os.path.exists(maegz_name):# and log_size > 3000:
-			print "already docked %s" %grid_file_no_ext
+			print("already docked %s" %grid_file_no_ext)
 			continue
 		dock_job_name = "%s/%s.in" %(docking_dir, grid_file_no_ext)
 		dock_jobs.append(dock_job_name)
@@ -587,7 +500,7 @@ Identical as above functions for docking, but for MM-GBSA calculations
 def mmgbsa_individual(job):
 	cmd = "$SCHRODINGER/prime_mmgbsa -WAIT %s" %job
 	subprocess.call(cmd, shell = True)
-	print "Completed mmgbsa job %s" %job
+	print("Completed mmgbsa job %s" %job)
 	return
 
 def mmgbsa(docking_dir, mmgbsa_dir, chosen_jobs = False):
@@ -609,7 +522,7 @@ def mmgbsa(docking_dir, mmgbsa_dir, chosen_jobs = False):
 		if os.path.exists(log_name): log_size = os.stat(log_name).st_size
 
 		if os.path.exists(mmgbsa_out_name) and log_size > 2599:
-			print "Already ran mmgbsa with %s" %dock_file_no_pv
+			print("Already ran mmgbsa with %s" %dock_file_no_pv)
 			continue
 		cmd = "cp %s %s" %(dock_file, mmgbsa_dir)
 		os.system(cmd)
@@ -628,7 +541,7 @@ def mmgbsa(docking_dir, mmgbsa_dir, chosen_jobs = False):
 	pool = mp.Pool(num_workers)
 	pool.map(mmgbsa_individual, mmgbsa_jobs)
 	pool.terminate()
-	print "Done with MM GBSA calculations"
+	print("Done with MM GBSA calculations")
 
 def mmgbsa_ligands_and_receptors(docking_dir, mmgbsa_dir, ligands, chosen_receptors = False):
 	for ligand in ligands:

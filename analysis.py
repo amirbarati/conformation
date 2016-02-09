@@ -15,11 +15,10 @@ from msmbuilder.utils import verbosedump, verboseload
 from sklearn.metrics import mutual_info_score
 from scipy.stats import pearsonr
 from scipy import stats
-from mayavi import mlab
 
 def calc_mean_and_stdev(rmsd_map):
 	stats_map = {}
-	for key in rmsd_map.keys():
+	for key in list(rmsd_map.keys()):
 		rmsds = np.array(rmsd_map[key])
 		mean = np.mean(rmsds, axis = 0)
 		stdev = np.std(rmsds, axis = 0)
@@ -28,7 +27,7 @@ def calc_mean_and_stdev(rmsd_map):
 
 def calc_mean(rmsd_map):
 	stats_map = {}
-	for key in rmsd_map.keys():
+	for key in list(rmsd_map.keys()):
 		rmsds = np.array(rmsd_map[key])
 		mean = np.mean(rmsds, axis = 0)
 		stats_map[key] = [mean]
@@ -139,13 +138,13 @@ def plot_pnas_vs_docking(docking_dir, pnas_dir, save_dir, selected = False):
 	x = []
 	y = []
 	c = []
-	for key in dock_scores.keys():
+	for key in list(dock_scores.keys()):
 		if selected is not False:
 			if key not in selected: continue
 		#print "PNAS"
 		#print key
 		#print pnas_vectors[key]
-		if key in pnas_vectors.keys():
+		if key in list(pnas_vectors.keys()):
 			#print pnas_vectors[key]
 			x.append(pnas_vectors[key][0])
 			y.append(pnas_vectors[key][1])
@@ -171,7 +170,7 @@ def pnas_distance(traj_file, inactive_file, active_file):
 	active_dist = np.linalg.norm(traj_tuple - active_tuple)
 	inactive_dist = np.linalg.norm(traj_tuple - inactive_tuple)
 	distances = [inactive_dist, active_dist]
-	print distances[1]
+	print(distances[1])
 	return [traj_coords, distances]
 	
 
@@ -211,15 +210,15 @@ def pnas_distances(traj_dir, inactive_file, active_file):
 def plot_pnas_vs_tics(pnas_dir, tic_dir, pnas_names, directory, scale = 7.14, refcoords_file = None):
 	pnas = np.concatenate(load_file(pnas_dir))
 	pnas[:,0] *= scale
-	print(np.shape(pnas))
-	print(len(pnas_names))
+	print((np.shape(pnas)))
+	print((len(pnas_names)))
 	if("ktICA" in tic_dir):
 		tics = load_dataset(tic_dir)
 	else:
 		tics = verboseload(tic_dir)
-	print(np.shape(tics))
+	print((np.shape(tics)))
 	tics = np.concatenate(tics)
-	print(np.shape(tics))
+	print((np.shape(tics)))
 	if len(pnas_names) != np.shape(pnas)[1]:
 		print("Invalid pnas names")
 		return
@@ -244,7 +243,7 @@ def plot_pnas_vs_tics(pnas_dir, tic_dir, pnas_names, directory, scale = 7.14, re
 def plot_hex(transformed_data_file, figure_directory, colors = None, scale = 1.0):
 	transformed_data = verboseload(transformed_data_file)
 	trajs = np.concatenate(transformed_data)
-	print trajs
+	print(trajs)
 	plt.hexbin(trajs[:,0] * scale, trajs[:,1], bins='log', mincnt=1, cmap=plt.cm.RdYlBu_r)
 	pp = PdfPages(figure_directory)
 	pp.savefig()
@@ -266,7 +265,7 @@ def plot_col(transformed_data_file, figure_directory, colors_file):
 def save_pdb(traj_dir, clusterer, i):
 	location = clusterer.cluster_ids_[i,:]
 	traj = get_trajectory_files(traj_dir)[location[0]]
-	print("traj = %s, frame = %d" %(traj, location[1]))
+	print(("traj = %s, frame = %d" %(traj, location[1])))
 	conformation = md.load_frame(traj, location[1])
 	conformation.save_pdb("/scratch/users/enf/b2ar_analysis/clusters_1000_allprot/%d.pdb" %i)
 	return None
@@ -277,7 +276,7 @@ def get_cluster_centers(clusterer_dir, traj_dir):
 	centers = clusterer.cluster_centers_
 
 	save_pdb_partial = partial(save_pdb, traj_dir = traj_dir, clusterer = clusterer)
-	indices = range(0, np.shape(centers)[0])
+	indices = list(range(0, np.shape(centers)[0]))
 	pool = mp.Pool(mp.cpu_count())
 	pool.map(save_pdb_partial, indices)
 	pool.terminate()
@@ -342,15 +341,17 @@ def plot_all_tics_and_clusters(tica_dir, transformed_data_dir, clusterer_dir, la
 		transformed_data = load_dataset(transformed_data_dir)
 	clusterer = verboseload(clusterer_dir)
 	num_tics = np.shape(transformed_data[0])[1]
-	print "Looking at %d tICS" %num_tics
+	print("Looking at %d tICS" %num_tics)
 	for i in range(0,num_tics):
-		js = range(i+1, num_tics)
-		plot_partial = partial(plot_tica_and_clusters, tica_dir = tica_dir, transformed_data = transformed_data, clusterer = clusterer, lag_time = lag_time, label = "dot", active_cluster_ids = active_cluster_ids, intermediate_cluster_ids = intermediate_cluster_ids, inactive_cluster_ids = inactive_cluster_ids, inactive_subsample=inactive_subsample, intermediate_subsample=intermediate_subsample, component_i = i)
-		pool = mp.Pool(mp.cpu_count())
-		pool.map(plot_partial, js)
-		pool.terminate()
+		js = list(range(i+1, num_tics))
+		plot_partial = partial(plot_tica_and_clusters, tica_dir = tica_dir, transformed_data = transformed_data, clusterer = clusterer, lag_time = lag_time, label = label, active_cluster_ids = active_cluster_ids, intermediate_cluster_ids = intermediate_cluster_ids, inactive_cluster_ids = inactive_cluster_ids, inactive_subsample=inactive_subsample, intermediate_subsample=intermediate_subsample, component_i = i)
+		for j in js:
+			plot_partial(j)
+		#pool = mp.Pool(mp.cpu_count())
+		#pool.map(plot_partial, js)
+		#pool.terminate()
 		#plot_tica_and_clusters(tica_dir = tica_dir, transformed_data = transformed_data, clusterer = clusterer, lag_time = lag_time, label = "dot", active_cluster_ids = active_cluster_ids, intermediate_cluster_ids = intermediate_cluster_ids, inactive_cluster_ids = inactive_cluster_ids, component_i = i, component_j = j)
-	print "Printed all tICA coords and all requested clusters"
+	print("Printed all tICA coords and all requested clusters")
 
 def plot_tica_component_i_j(tica_dir, transformed_data_dir, lag_time, component_i = 0, component_j = 1):
 	transformed_data = verboseload(transformed_data_dir)
@@ -364,7 +365,7 @@ def plot_tica_component_i_j(tica_dir, transformed_data_dir, lag_time, component_
 	plt.clf()
 
 def plot_column_pair(i, num_columns, save_dir, titles, data, refcoords):
-	print(titles[i])
+	print((titles[i]))
 	for j in range(i+1, num_columns):
 		plt.hexbin(data[:,i],  data[:,j], bins = 'log', mincnt=1,cmap=plt.cm.RdYlBu_r)
 		if refcoords is not None:
@@ -395,7 +396,7 @@ def plot_columns(save_dir, data_file, titles = None, tICA = False, scale = 1.0, 
 		refcoords = load_file(refcoords_file)
 	else:
 		refcoords = None
-	print(np.shape(refcoords))
+	print((np.shape(refcoords)))
 	print(refcoords)
 
 	num_columns = np.shape(data)[1]
@@ -408,106 +409,38 @@ def plot_columns(save_dir, data_file, titles = None, tICA = False, scale = 1.0, 
 
 	print("Done plotting columns")
 	return
-
-def plot_columns_3d(save_dir, data_file, titles = None, tICA = True, scale = 1.0, refcoords_file = None, columns = []):
-	data = verboseload(data_file)[0:10]
-	data = np.concatenate(data)
-	data[:,0] *= scale
-
-	if(refcoords_file is not None):
-		refcoords = load_file(refcoords_file)
-	else:
-		refcoords = None
-	print(np.shape(refcoords))
-	print(refcoords)
-
-	x = data[:,columns[0]]
-	y = data[:,columns[1]]
-	z = data[:,columns[2]]
-	xyz = np.vstack([x,y,z])
-	kde = stats.gaussian_kde(xyz)
-	density = np.log(kde(xyz))
-
-	figure = mlab.figure('DensityPlot')
-	pts = mlab.points3d(x,y,z, density,scale_mode='none',scale_factor=0.07)
-	mlab.axes()
-	mlab.show()
-	mlab.savefig("%s/tICs_%d_%d_%d.pdf" %(save_dir, columns[0], columns[1], columns[2]), figure=figure)
-			
+	
 def calc_kde(data, kde):
-    return kde(data.T)
-
-def plot_columns_3d_contour(save_dir, data_file, titles = None, tICA = True, scale = 1.0, refcoords_file = None, columns = []):
-	data = verboseload(data_file)[0:2]
-	data = np.concatenate(data)
-	data[:,0] *= scale
-
-	if(refcoords_file is not None):
-		refcoords = load_file(refcoords_file)
-	else:
-		refcoords = None
-	print(np.shape(refcoords))
-	print(refcoords)
-
-	x = data[:,columns[0]]
-	y = data[:,columns[1]]
-	z = data[:,columns[2]]
-	xyz = np.vstack([x,y,z])
-	kde = stats.gaussian_kde(xyz)
-	density = kde(xyz)
-
-	xmin, ymin, zmin = x.min(), y.min(), z.min()
-	xmax, ymax, zmax = x.max(), y.max(), z.max()
-
-	xi, yi, zi = np.mgrid[xmin:xmax:30j, ymin:ymax:30j, zmin:zmax:30j]
-	coords = np.vstack([item.ravel() for item in [xi, yi, zi]]) 
-
-	cores = mp.cpu_count()
-	pool = mp.Pool(processes=cores)
-	calc_kde_partial = partial(calc_kde, kde=kde)
-	results = pool.map(calc_kde_partial, np.array_split(coords.T, 2))
-	density = np.concatenate(results).reshape(xi.shape)
-
-	figure = mlab.figure('DensityPlot')
-
-	grid = mlab.pipeline.scalar_field(xi, yi, zi, density)
-	min = density.min()
-	max=density.max()
-	mlab.pipeline.volume(grid, vmin=min, vmax=min + .5*(max-min))
-
-	mlab.axes()
-	mlab.show()
-
-				
+    return kde(data.T)	
 
 def plot_all_tics(tica_dir, transformed_data_dir, lag_time):
 	transformed_data = verboseload(transformed_data_dir)
 	num_tics = np.shape(transformed_data[0])[1]
-	print "Looking at %d tICS" %num_tics
+	print("Looking at %d tICS" %num_tics)
 	for i in range(0,num_tics):
 		for j in range(i+1,num_tics):
 			plot_tica_component_i_j(tica_dir, transformed_data_dir, lag_time, component_i = i, component_j = j)
-	print "Printed all tICA coords"
+	print("Printed all tICA coords")
 
 #Add way to plot location of specific clusters as well
 def plot_all_tics_samples(tica_coords_csv, save_dir, docking_csv = False, specific_clusters = False):
 	tica_coords_map = convert_csv_to_map_nocombine(tica_coords_csv)
-	n_samples = len(tica_coords_map.keys())
+	n_samples = len(list(tica_coords_map.keys()))
 	if docking_csv is not False: docking_map = convert_csv_to_map_nocombine(docking_csv)
 
-	num_tics = len(tica_coords_map[tica_coords_map.keys()[0]])
+	num_tics = len(tica_coords_map[list(tica_coords_map.keys())[0]])
 	for i in range(0, 1):
 		for j in range(i + 1, num_tics):
-			print("plotting tICS %d %d" %(i, j))
+			print(("plotting tICS %d %d" %(i, j)))
 			x = []
 			y = []
 			if docking_csv is not False: c = []
-			for sample in tica_coords_map.keys():
+			for sample in list(tica_coords_map.keys()):
 				x.append(tica_coords_map[sample][i])
 				y.append(tica_coords_map[sample][j])
 				if docking_csv is not False: 
 					sample_id = "cluster%s" %sample
-					print docking_map[sample_id]
+					print(docking_map[sample_id])
 					c.append(abs(docking_map[sample_id][0]))
 			if docking_csv is not False:
 				plt.scatter(x, y, c=c, s=50, cmap = mpl.cm.RdYlBu_r)
@@ -536,7 +469,7 @@ def plot_timescales(clusterer_dir, n_clusters, lag_time):
 	n_timescales = 5
 
 	msm_timescales = implied_timescales(sequences, lag_times, n_timescales=n_timescales, msm=MarkovStateModel(verbose=False))
-	print msm_timescales
+	print(msm_timescales)
 
 	for i in range(n_timescales):
 		plt.plot(lag_times, msm_timescales[:,i])
@@ -552,7 +485,7 @@ def rmsd_to_structure(clusters_dir, ref_dir, text):
 	rmsds = np.zeros(shape=(len(pdbs),2))
 
 	for i in range(0,len(pdbs)):
-		print i 
+		print(i) 
 		pdb_file = pdbs[i]
 		pdb = md.load_frame(pdb_file, index=0)
 		rmsd = md.rmsd(pdb, ref, 0)
@@ -578,7 +511,7 @@ def rmsd_pymol(pdb_dir, ref_dir, script_dir, rmsd_dir):
 
 	new_script.close()
 	command = "/scratch/users/enf/pymol/pymol %s" %script_dir
-	print command
+	print(command)
 	os.system(command)
 
 def analyze_rmsds(inactive_rmsd_file, active_rmsd_file, pnas_i, pnas_a, combined_file, analysis_file):
@@ -616,9 +549,9 @@ def analyze_rmsds(inactive_rmsd_file, active_rmsd_file, pnas_i, pnas_a, combined
 
 def merge_samples(results_map):
 	merged_results = {}
-	for key in results_map.keys():
+	for key in list(results_map.keys()):
 		cluster = key.split("_")[0]
-		if cluster not in merged_results.keys():
+		if cluster not in list(merged_results.keys()):
 			merged_results[cluster] = [results_map[key]]
 		else:
 			merged_results[cluster].append(results_map[key])
@@ -656,7 +589,7 @@ def analyze_log_file(log_file):
 	return (conformation, score)
 
 def analyze_docking_results(docking_dir, ligand, precision, docking_summary, redo = False):
-	print("currently analyzing %s" %ligand)
+	print(("currently analyzing %s" %ligand))
 	if redo is False and os.path.exists(docking_summary):
 		print("Already collected dockking scores for this ligand.")
 		scores_map = convert_csv_to_map_nocombine(docking_summary)
@@ -718,7 +651,7 @@ def analyze_docking_results_multiple(docking_dir, precision, ligands, summary, r
 		docking_summary = "%s/docking_summary.csv" %subdir
 		arg_tuples.append([subdir, lig_name, precision, docking_summary, redo])
 
-	print lig_names
+	print(lig_names)
 	results_list = []
 	for arg_tuple in arg_tuples:
 		results_list.append(analyze_docking_results_wrapper(arg_tuple))
@@ -728,7 +661,7 @@ def analyze_docking_results_multiple(docking_dir, precision, ligands, summary, r
 	write_map_to_csv(combined_filename, combined_map, ["sample"] + lig_names)
 
 def compute_means(docking_csv, joined_csv, means_csv):
-	print "analyzing %s" %docking_csv
+	print("analyzing %s" %docking_csv)
 	titles = get_titles(docking_csv)
 	docking_scores = convert_csv_to_joined_map(docking_csv, joined_csv)[0]
 	docking_averages = calc_mean(docking_scores)
@@ -762,11 +695,11 @@ def compute_aggregate_scores(docking_csv, inverse_agonists = [], summary = "", z
 	scores_map = convert_csv_to_map_nocombine(docking_csv)
 	docking_titles = get_titles(docking_csv)
 	lig_names = docking_titles[1:len(docking_titles)]
-	print lig_names
+	print(lig_names)
 	scores_per_ligand = {}
 	for lig_name in lig_names:
 		scores_per_ligand[lig_name] = []
-	for receptor in scores_map.keys():
+	for receptor in list(scores_map.keys()):
 		receptor_scores = scores_map[receptor]
 		for i in range(0, len(receptor_scores)):
 			lig_name = lig_names[i]
@@ -776,7 +709,7 @@ def compute_aggregate_scores(docking_csv, inverse_agonists = [], summary = "", z
 
 	z_scores_per_receptor = {}
 
-	for receptor in scores_map.keys():
+	for receptor in list(scores_map.keys()):
 		receptor_scores = scores_map[receptor]
 		z_scores_per_receptor[receptor] = []
 		for i in range(0, len(receptor_scores)):
@@ -804,8 +737,8 @@ def combine_docking_distances(docking_csv, distances_csv, docking_dir):
 	distances_map = convert_csv_to_map_nocombine(distances_csv)
 	combined_map = copy.deepcopy(distances_map)
 
-	for key in distances_map.keys():
-		if key in docking_map.keys():
+	for key in list(distances_map.keys()):
+		if key in list(docking_map.keys()):
 			combined_map[key].append(-1.0 * docking_map[key][0])
 		else:
 			combined_map.pop(key, None)
@@ -852,8 +785,8 @@ def combine_docking_mmgbsa(combined_csv, mmgbsa_csv, mmgbsa_dir, filename):
 	mmgbsa_map = convert_csv_to_map_nocombine(mmgbsa_csv)
 	new_map = copy.deepcopy(combined_map)
 
-	for key in mmgbsa_map.keys():
-		if key in combined_map.keys():
+	for key in list(mmgbsa_map.keys()):
+		if key in list(combined_map.keys()):
 			new_map[key].append(-1.0 * mmgbsa_map[key][0])
 		else:
 			new_map.pop(key, None)
@@ -882,7 +815,7 @@ def analyze_mmgbsa_results(mmgbsa_dir, ligand, chosen_receptors):
 			if i == 0:
 				i += 1
 				continue
-			print row[0]
+			print(row[0])
 			temp = float(row[1])
 			if temp < score:
 				score = temp
@@ -969,7 +902,7 @@ def combine_rmsd_docking_maps(rmsd_csv, docking_csv):
 			if j == 0: continue
 			docking_map.append(line[j])
 
-	print docking_map[docking_map.keys()[0]]
+	print(docking_map[list(docking_map.keys())[0]])
 
 
 
@@ -1029,7 +962,7 @@ def find_correlation(features_dir, tica_projected_coords_dir, mutual_information
 	if pearson_csv != "":
 		coefs = np.zeros((np.shape(features[0])[1], np.shape(tica_coords)[1]))
 		for i in range(0, np.shape(features[0])[1]):
-			print("Calculating Pearson Coefficients for all tICs for feature %d" %i)
+			print(("Calculating Pearson Coefficients for all tICs for feature %d" %i))
 		#for j in range(0, np.shape(tica_coords)[1]):
 			#print("Calculating Pearson Coefficients for all features in tIC %d" %j)
 			feature_column = np.concatenate([f[:,i] for f in features])
@@ -1039,8 +972,8 @@ def find_correlation(features_dir, tica_projected_coords_dir, mutual_information
 			pearsons = pool.map(pearson_partial, tica_coords.transpose())
 			pool.terminate()
 			print(pearsons)
-			print(np.shape(pearsons))
-			print(np.shape(coefs))
+			print((np.shape(pearsons)))
+			print((np.shape(coefs)))
 			coefs[i,:] = np.array([p[0] for p in pearsons])
 			#for i in range(0, np.shape(features)[1]):
 			#	pearson = pearsonr(features[:,i], tica_coords[:,j])[0]
@@ -1054,7 +987,7 @@ def make_extreme_tIC_barplots(tica_extremes_dir, feature_residues_pkl, n_compone
 	feature_files = [f for f in feature_files if "standardized" in f]
 	for i in range(1, n_components+1):
 		low_file = [f for f in feature_files if "tIC.%d_" %i in f and "low" in f][0]
-		print low_file
+		print(low_file)
 		high_file = [f for f in feature_files if "tIC.%d_" %i in f and "high" in f][0]
 		r['analyze.extreme.tic.values'](low_file, high_file, feature_residues_pkl, i, tica_extremes_dir)
 	return

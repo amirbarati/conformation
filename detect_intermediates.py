@@ -22,24 +22,24 @@ from sklearn import preprocessing
 from sklearn.linear_model import LassoCV, LassoLarsCV, LassoLarsIC, lasso_path, LogisticRegressionCV
 
 from pandas import *
-from rpy2.robjects.packages import importr
-import rpy2.robjects as ro
-import pandas.rpy.common as com
-from rpy2.robjects import r
-import rpy2.robjects.numpy2ri as numpy2ri
-numpy2ri.activate()
+#from rpy2.robjects.packages import importr
+#import rpy2.robjects as ro
+#import pandas.rpy.common as com
+#from rpy2.robjects import r
+#import rpy2.robjects.numpy2ri as numpy2ri
+#numpy2ri.activate()
 base = get_base()
-R_functions = "%s/conformation/analysis.R" %base
-R_analysis = "%s/conformation/b2ar_analysis.R" %base
-ro.r.source(R_functions)
-ro.r.source(R_analysis)
+#R_functions = "%s/conformation/analysis.R" %base
+#R_analysis = "%s/conformation/b2ar_analysis.R" %base
+#ro.r.source(R_functions)
+#ro.r.source(R_analysis)
 
 
 def select_model(X, tic_j, max_components, save_dir):
   num_trials = 0
   possible_components = []
   for trial in range(0,num_trials):
-    train_indices = random.sample(range(0,len(X)), len(X)/2)
+    train_indices = random.sample(list(range(0,len(X))), len(X)/2)
     test_indices = list(set(range(0,len(X))) - set(train_indices))
     X_train = X[train_indices,:]
     X_test = X[test_indices,:]
@@ -49,7 +49,7 @@ def select_model(X, tic_j, max_components, save_dir):
     test_likelihoods = []
     models = []
     for n_components in range(max_components, max_components):
-        print("For tIC %d looking at GMM model with %d components" %(tic_j, n_components))
+        print(("For tIC %d looking at GMM model with %d components" %(tic_j, n_components)))
         g = mixture.DPGMM(n_components=10)
         #g = mixture.GMM(n_components = n_components, n_init = 3, min_covar = 1e-1, params='mc')
         g.fit(X_train)
@@ -98,7 +98,7 @@ def select_model(X, tic_j, max_components, save_dir):
   return(g)
 
 def compute_gmm(tic_j_x_tuple, max_components, save_dir):
-  print("Analyzing tIC %d" %(tic_j_x_tuple[0]))
+  print(("Analyzing tIC %d" %(tic_j_x_tuple[0])))
   model = select_model(tic_j_x_tuple[1].reshape(-1,1), tic_j_x_tuple[0], max_components, save_dir)
   with gzip.open("%s/tIC%d_gmm.pkl.gz" %(save_dir, tic_j_x_tuple[0]), "wb") as f:
     pickle.dump(model, f)
@@ -117,9 +117,9 @@ def compute_gmms(projected_tica_coords, save_dir, max_components):
 def compute_gmm_R(tIC_j_x_tuple, max_components, save_dir):
   j = tIC_j_x_tuple[0]
   tIC = tIC_j_x_tuple[1]
-  gmm = r['compute.tIC.mixture.model'](tIC, j, save_dir, max_components=max_components, num_repeats=5)
-  gmm_dict = { key : np.array(gmm.rx2(key)) for key in gmm.names}
-  return(gmm_dict)
+  #gmm = r['compute.tIC.mixture.model'](tIC, j, save_dir, max_components=max_components, num_repeats=5)
+  #gmm_dict = { key : np.array(gmm.rx2(key)) for key in gmm.names}
+  #return(gmm_dict)
 
 def compute_gmms_R(projected_tica_coords, max_components, save_dir, max_j=10):
   tics = np.concatenate(load_file(projected_tica_coords))
@@ -160,17 +160,17 @@ def plot_importances(feature_importances, save_dir, i, percentile=True):
       residue_i = feature_importance[0].split("_")[0]
       residue_j = feature_importance[0].split("_")[1]
       importance = feature_importance[1]
-      if residue_i not in feature_importance_dict.keys():
+      if residue_i not in list(feature_importance_dict.keys()):
         feature_importance_dict[residue_i] = []
-      if residue_j not in feature_importance_dict.keys():
+      if residue_j not in list(feature_importance_dict.keys()):
         feature_importance_dict[residue_j] = []
 
       feature_importance_dict[residue_i].append(importance)
       feature_importance_dict[residue_j].append(importance)
-    for residue in feature_importance_dict.keys():
+    for residue in list(feature_importance_dict.keys()):
       feature_importance_dict[residue] = np.percentile(feature_importance_dict[residue], 95.0)
 
-    feature_importances = [(key, value) for key, value in feature_importance_dict.iteritems()]
+    feature_importances = [(key, value) for key, value in feature_importance_dict.items()]
     feature_importances.sort(key=operator.itemgetter(1),reverse=True)
 
   
@@ -191,13 +191,13 @@ def plot_overall_rf_importances(rf_dir, feature_residues_map):
   feature_names = ["%d_%d" %(f[0], f[1]) for f in feature_names]
   
   while(os.path.exists(filename)):
-    print("Examining tIC %d" %(j+1))
+    print(("Examining tIC %d" %(j+1)))
     with gzip.open(filename, "rb") as f:
       rf = pickle.load(f)
 
-    feature_importances = zip(feature_names, rf.feature_importances_.astype(float).tolist())
+    feature_importances = list(zip(feature_names, rf.feature_importances_.astype(float).tolist()))
     feature_importances.sort(key=operator.itemgetter(1),reverse=True)
-    print(feature_importances[0:10])
+    print((feature_importances[0:10]))
     plot_importances(feature_importances, rf_dir, j)
     j += 1
     filename = "%s/tIC%d_overall_rf.pkl" %(rf_dir, j)
@@ -244,8 +244,8 @@ def plot_column_pair(i, num_columns, save_dir, titles, data, gmm_means, refcoord
   for j in range(i+1, num_columns):
     plt.hexbin(data[:,i],  data[:,j], bins = 'log', mincnt=1)
     print(gmm_means)
-    print(gmm_means[i])
-    print(gmm_means[j])
+    print((gmm_means[i]))
+    print((gmm_means[j]))
     for mean in gmm_means[i]:
       plt.axvline(x=mean,color='k',ls='dashed')
     for mean in gmm_means[j]:
@@ -275,7 +275,7 @@ def plot_tics_gmm(save_dir, data_file, gmm_dir, R=True, titles = None, tICA = Fa
     refcoords = load_file(refcoords_file)
   else:
     refcoords = None
-  print(np.shape(refcoords))
+  print((np.shape(refcoords)))
   print(refcoords)
 
   gmm_means = []
@@ -296,7 +296,7 @@ def plot_tics_gmm(save_dir, data_file, gmm_dir, R=True, titles = None, tICA = Fa
   #for i in range(0,num_columns):
   #  plot_column_pair_partial(i)
   pool = mp.Pool(mp.cpu_count())
-  pool.map(plot_column_pair_partial, range(0,num_columns))
+  pool.map(plot_column_pair_partial, list(range(0,num_columns)))
   pool.terminate()
 
   print("Done plotting columns")
@@ -311,7 +311,7 @@ def plot_tics_gmm_R(save_dir, data_file, gmm_dir, titles = None, tICA = False, s
     refcoords = load_file(refcoords_file)
   else:
     refcoords = None
-  print(np.shape(refcoords))
+  print((np.shape(refcoords)))
   print(refcoords)
 
   gmm_means = []
@@ -326,7 +326,7 @@ def plot_tics_gmm_R(save_dir, data_file, gmm_dir, titles = None, tICA = False, s
   #for i in range(0,num_columns):
   #  plot_column_pair_partial(i)
   pool = mp.Pool(mp.cpu_count())
-  pool.map(plot_column_pair_partial, range(0,num_columns))
+  pool.map(plot_column_pair_partial, list(range(0,num_columns)))
   pool.terminate()
 
   print("Done plotting columns")
@@ -340,7 +340,7 @@ def compute_one_vs_all_rf_models(features_dir, projected_tica_coords, gmm_dir, s
   feature_names = ["%d_%d" %(f[0], f[1]) for f in feature_names]
 
   for i in range(0, n_tica_components):
-    print("Computing random forest model for tIC.%d" %(i+1))
+    print(("Computing random forest model for tIC.%d" %(i+1)))
     
     if R:
       with gzip.open("%s/tIC.%d_classes.pkl.gz" %(gmm_dir, i), "rb") as f:
@@ -351,18 +351,18 @@ def compute_one_vs_all_rf_models(features_dir, projected_tica_coords, gmm_dir, s
       Y = gmm.predict(tics[:,i].reshape(-1,1))
 
     n_components = len(np.unique(Y).tolist())
-    print(np.unique(Y).tolist())
-    print("n_components %d" %n_components)
+    print((np.unique(Y).tolist()))
+    print(("n_components %d" %n_components))
 
     for component in np.unique(Y).tolist():
-      print("Analyzing component %d" %component)
-      all_indices = range(0,np.shape(tics)[0])
+      print(("Analyzing component %d" %component))
+      all_indices = list(range(0,np.shape(tics)[0]))
       component_indices = [k for k in all_indices if int(Y[k]) == component]
       non_component_indices = list(set(all_indices)-set(component_indices))
       non_component_indices.sort()
-      print(len(component_indices))
-      print(len(non_component_indices))
-      print(len(component_indices)+len(non_component_indices))
+      print((len(component_indices)))
+      print((len(non_component_indices)))
+      print((len(component_indices)+len(non_component_indices)))
       print("Found indices")
       Z = copy.deepcopy(Y)
       Z[component_indices] = 0
@@ -376,11 +376,11 @@ def compute_one_vs_all_rf_models(features_dir, projected_tica_coords, gmm_dir, s
       print("Finished saving")
 
       feature_component_means = np.mean(features[component_indices,:], axis=0)
-      print(np.shape(feature_component_means))
-      print(feature_component_means[0:100])
+      print((np.shape(feature_component_means)))
+      print((feature_component_means[0:100]))
       feature_non_component_means = np.mean(features[non_component_indices,:], axis=0)
 
-      feature_importances = zip(feature_names, rf.feature_importances_.astype(float).tolist())
+      feature_importances = list(zip(feature_names, rf.feature_importances_.astype(float).tolist()))
       pickle.dump(feature_importances, open("%s/tIC%d_c%d_importances_list.pkl" %(save_dir, i, component), "wb"))
       '''
       df = pd.DataFrame(columns=('feature_name', 'feature_importance', 'component_mean', 'non_component_mean'))
@@ -415,7 +415,7 @@ def compute_overall_rf_models(features_dir, projected_tica_coords, gmm_dir, save
   feature_names = ["%d_%d" %(f[0], f[1]) for f in feature_names]
 
   for i in range(0, n_tica_components):
-    print("Computing random forest model for tIC.%d" %(i+1))
+    print(("Computing random forest model for tIC.%d" %(i+1)))
 
     if R:
       with gzip.open("%s/tIC.%d_classes.pkl.gz" %(gmm_dir, i), "rb") as f:
@@ -433,10 +433,10 @@ def compute_overall_rf_models(features_dir, projected_tica_coords, gmm_dir, save
       pickle.dump(rf, f)
     print("Saved RF model")
 
-    feature_importances = zip(feature_names, rf.feature_importances_.astype(float).tolist())
+    feature_importances = list(zip(feature_names, rf.feature_importances_.astype(float).tolist()))
     feature_importances.sort(key=operator.itemgetter(1),reverse=True)
 
-    print(feature_importances[0:20])
+    print((feature_importances[0:20]))
     try:
       plot_importances(feature_importances, save_dir, i)
     except:
@@ -467,7 +467,7 @@ def rank_tICs_by_docking_rf(docking_csv, tica_coords_csv, model_pkl, importances
 
 def plot_coef_path(df, filename):
   plt.figure()
-  df[df.keys()[range(0,11)]].plot(colormap='gist_rainbow')
+  df[list(df.keys())[list(range(0,11))]].plot(colormap='gist_rainbow')
   plt.legend(loc='center left', bbox_to_anchor=(1.0,0.5))  
   pp = PdfPages(filename)
   pp.savefig(bbox_inches='tight')
@@ -527,13 +527,13 @@ def compute_one_vs_all_rf_models_MSM(features_dir, projected_tica_coords, cluste
   #Y = verboseload(clusterer_dir).labels_[0]
 
   print("Y has shape:")
-  print(np.shape(Y))
+  print((np.shape(Y)))
   
   if states_to_analyze is None:
-    states_to_analyze = range(0, cluster.n_clusters)
+    states_to_analyze = list(range(0, cluster.n_clusters))
   for state in states_to_analyze:
-    print("Computing random forest model for state %d" %(state))
-    all_indices = range(0,np.shape(Y)[0])
+    print(("Computing random forest model for state %d" %(state)))
+    all_indices = list(range(0,np.shape(Y)[0]))
     state_indices = [k for k in all_indices if int(Y[k]) == state]
     non_state_indices = list(set(all_indices)-set(state_indices))
     non_state_indices.sort()
@@ -551,7 +551,7 @@ def compute_one_vs_all_rf_models_MSM(features_dir, projected_tica_coords, cluste
     feature_state_means = np.mean(features[state_indices,:], axis=0)
     feature_non_state_means = np.mean(features[non_state_indices,:], axis=0)
 
-    feature_importances = zip(feature_names, rf.feature_importances_.astype(float).tolist())
+    feature_importances = list(zip(feature_names, rf.feature_importances_.astype(float).tolist()))
     pickle.dump(feature_importances, open("%s/msm_state%d_importances_list.pkl" %(msm_rf_dir, state), "wb"))
     
     df = pd.DataFrame(columns=('feature_name', 'feature_importance', 'component_mean', 'non_component_mean'))
@@ -572,7 +572,7 @@ def compute_one_vs_all_rf_models_MSM(features_dir, projected_tica_coords, cluste
 
 def interpret_msm_rf(msm_dir, feature_residues_pkl, n_msm_states=25, percentile=99.9999):
   for j in range(0, n_msm_states):
-    print("Interpreting MSM state %d" %(j+1))
+    print(("Interpreting MSM state %d" %(j+1)))
     importances_file = "%s/msm_state%d_vs_all_rf.pkl.gz" %(msm_dir, j)
     if os.path.exists(importances_file):
       feature_importances_df = merge_importances_features(importances_file, feature_residues_pkl)
@@ -617,19 +617,19 @@ def plot_tICs_vs_docking(docking_csv, tica_coords_csv, plot_file, chosen_ligand=
   docking.columns = [c.rstrip().lstrip() for c in docking.columns]
   tica = pd.read_csv(tica_coords_csv, header=0, index_col=0)
   tica = tica.loc[docking.index]
-  tica[tica.keys()] = preprocessing.normalize(tica.values)
+  tica[list(tica.keys())] = preprocessing.normalize(tica.values)
 
   tica_names = list(tica.keys())
   for i, name in enumerate(tica_names):
     tica_names[i] = "tIC%d" % (i+1)
 
   print(docking)
-  print(docking.keys())
+  print((list(docking.keys())))
   if chosen_ligand is not "docking":
-    print(docking[chosen_ligand])
+    print((docking[chosen_ligand]))
     docking = pd.DataFrame(docking[chosen_ligand].values, columns=[chosen_ligand])
   index = pd.Index(docking.values).astype(np.float64)
   df = pd.DataFrame(np.hstack((tica.values,docking.values)), columns=tica_names+[chosen_ligand])
   df.sort(columns=chosen_ligand, inplace=True)
-  df = pd.DataFrame(df[tica_names].values[:,range(0,11)], index=df[chosen_ligand], columns=range(1,12))
+  df = pd.DataFrame(df[tica_names].values[:,list(range(0,11))], index=df[chosen_ligand], columns=list(range(1,12)))
   plot_df_rolling(df, plot_file)

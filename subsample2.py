@@ -23,7 +23,7 @@ import itertools
 
 def generateData(files):
 	for data in files:
-		print data
+		print(data)
 		yield verboseload(data)
 
 def generateTraj(files, top=None):
@@ -41,7 +41,7 @@ def get_trajectory_files(traj_dir):
 	return sorted(traj_files)
 
 def read_trajectory(directory, filename, stride=10):
-	print("reading %s" %(filename))
+	print(("reading %s" %(filename)))
 	traj = md.load(filename, stride=stride, top="/home/harrigan/compute/wetmsm/gpcr/des/system_mae_to_pdb/des_trajs/DESRES-Trajectory_pnas2011b-H-05-all/system.pdb")
 	return traj
 
@@ -50,7 +50,7 @@ def subsample_traj(traj, stride=5, top=None):
 	simulation = directory[len(directory)-2]
 	dcd_file = directory[len(directory)-1]
 	condition = "%s-%s" %(simulation.split('-')[1], simulation.split('-')[2])
-	print("analyzing simulation %s file %s" %(simulation, dcd_file))
+	print(("analyzing simulation %s file %s" %(simulation, dcd_file)))
 	top_file = top
 
 	top = md.load_frame(traj, 0, top=top_file).topology
@@ -66,7 +66,7 @@ def subsample_traj(traj, stride=5, top=None):
 	new_condition_dir = "%s/%s" %(new_root_dir, condition)
 
 	new_file_full = "%s/%s/%s" %(new_root_dir, condition, new_file)
-	print("saving trajectory as %s" %new_file_full)
+	print(("saving trajectory as %s" %new_file_full))
 	traj.save(new_file_full)
 
 
@@ -169,7 +169,7 @@ def featurize_divided(directory):
 		else:
 			os.makedirs(new_dir)
 
-		print("currently analyzing %s " %sim_dir)
+		print(("currently analyzing %s " %sim_dir))
 		trajs = get_trajectory_files(sim_dir)[0:3]
 		print(trajs)
 
@@ -178,7 +178,7 @@ def featurize_divided(directory):
 		features_i = pool.map(read_and_featurize, trajs)
 		#print(features_i)
 		features = [np.concatenate(np.concatenate(features_i))]
-		print(np.shape(features[0]))
+		print((np.shape(features[0])))
 		combined_dir = "/scratch/users/enf/b2ar_analysis/combined_features"
 		new_file_name = "%s_combined.h5" %(simulation)
 		new_file = "%s/%s" %(combined_dir, new_file_name)
@@ -223,15 +223,15 @@ def fix_topology(topology):
 
 	residues = {}
 	for chain in new_top.chains:
-		print chain
+		print(chain)
 		for residue in chain.residues:
 			resname = str(residue)
-			if resname in residues.keys():
+			if resname in list(residues.keys()):
 				residues[resname].append(residue)
 			else:
 				residues[resname] = [residue]
 
-	for resname in residues.keys():
+	for resname in list(residues.keys()):
 		fragments = residues[resname]
 		if len(fragments) > 1:
 			main_fragment = fragments[0]
@@ -246,17 +246,17 @@ def fix_topology(topology):
 				fragment.chain = main_fragment.chain
 			main_fragment._atoms = new_atom_list
 
-	print topology
-	print [(a.index, a.name, a.residue.chain.index) for a in new_top.atoms if a.residue.index == 71]
+	print(topology)
+	print([(a.index, a.name, a.residue.chain.index) for a in new_top.atoms if a.residue.index == 71])
 
 	
-	print new_top
-	print [(a.index, a.name, a.residue.chain.index) for a in topology.atoms if a.residue.index == 71]
+	print(new_top)
+	print([(a.index, a.name, a.residue.chain.index) for a in topology.atoms if a.residue.index == 71])
 	return new_top
 
 
 def read_and_featurize(filename, dihedrals=['phi', 'psi', 'chi2'], stride=10):
-	print("reading and featurizing %s" %(filename))
+	print(("reading and featurizing %s" %(filename)))
 
 	traj = md.load(filename)
 	#test_traj_init = md.load_frame(filename,5)
@@ -276,7 +276,7 @@ def read_and_featurize(filename, dihedrals=['phi', 'psi', 'chi2'], stride=10):
 	traj_file = directory[len(directory)-1]
 	condition = traj_file.split("_")[0].split(".")[0]
 
-	print("Condition %s has features of shape %s" %(condition, np.shape(features)))
+	print(("Condition %s has features of shape %s" %(condition, np.shape(features))))
 
 	new_file = "/scratch/users/enf/b2ar_analysis/combined_features/%s_features.h5" %condition
 	verbosedump(features, new_file)
@@ -337,7 +337,7 @@ def fit_and_transform(directory, stride=5):
 	featurizer = DihedralFeaturizer(types=['phi', 'psi', 'chi2'])
 	active_pdb_features = featurizer.transform(active_pdb)
 	active_pdb_projected = fit_model.transform(active_pdb_features)
-	print(active_pdb_projected[0:4])
+	print((active_pdb_projected[0:4]))
 	
 def cluster(data_dir, traj_dir, n_clusters):
 	reduced_data = verboseload(data_dir)
@@ -354,10 +354,10 @@ def cluster(data_dir, traj_dir, n_clusters):
 		plt.annotate('C%d' %i, xy=(center[0],center[1]),xytext=(center[0]+0.1,center[1]+0.1), arrowprops=dict(facecolor='black',shrink=0.05))
 
 		location = clusterer.cluster_ids_[i,:]
-		print location
+		print(location)
 		traj = get_trajectory_files(traj_dir)[location[0]]
-		print("traj = %s" %traj)
-		print("frame = %d" %location[1])
+		print(("traj = %s" %traj))
+		print(("frame = %d" %location[1]))
 		conformation = md.load_frame(traj, location[1])
 		conformation.save_pdb("/scratch/users/enf/b2ar_analysis/cluster_%d.pdb" %i)
 

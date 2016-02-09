@@ -109,15 +109,15 @@ def landmark_ktica(features_dir, combined_features_file=None, ktica_dir="", feat
 
 		if os.path.exists(landmarks_dir):
 			landmarks = verboseload(landmarks_dir)
-			print(np.shape(landmarks))
+			print((np.shape(landmarks)))
 		else:
 			if use_clusters_as_landmarks:
 				print("Using cluster centers as landmarks")
 				with open(clusters_map_file) as f:
 					clusters_map = json.load(f)
-					clusters_map = {int(k):v for k,v in clusters_map.items()}
+					clusters_map = {int(k):v for k,v in list(clusters_map.items())}
 					landmarks = []
-					for cluster_id,sample_list in clusters_map.items():
+					for cluster_id,sample_list in list(clusters_map.items()):
 						for sample in sample_list:
 							traj = sample[0]
 							frame = sample[1]
@@ -126,8 +126,8 @@ def landmark_ktica(features_dir, combined_features_file=None, ktica_dir="", feat
 					landmarks = [landmarks[i] for i in range(0,np.shape(landmarks)[0]) if i%landmark_subsample==0] #%landmark_subsample == 0]
 
 					print("Landmarks have shape: ")
-					print(len(landmarks))
-					print(np.shape(landmarks))
+					print((len(landmarks)))
+					print((np.shape(landmarks)))
 					verbosedump(landmarks, landmarks_dir)
 			else: 
 				n = np.shape(features)[0]
@@ -164,8 +164,8 @@ def landmark_ktica_ticaTraj(tica_dir, clusterer_dir, ktica_dir, clusters_map_fil
 
 		print("here's what goes into the combined class:")
 		#print(np.shape(features))
-		print(np.shape(landmarks))
-		print(type(landmarks))
+		print((np.shape(landmarks)))
+		print((type(landmarks)))
 		nys = Nystroem(n_components = np.shape(landmarks)[0], basis = landmarks)#np.shape(landmarks)[0])# basis=landmarks)
 		nyx = nys.fit_transform(features)
 		del features
@@ -178,8 +178,8 @@ def landmark_ktica_ticaTraj(tica_dir, clusterer_dir, ktica_dir, clusters_map_fil
 	else:
 		nyx = load_dataset(nystroem_data_filename)
 
-	print(np.shape(nyx))
-	print(dir(nyx))
+	print((np.shape(nyx)))
+	print((dir(nyx)))
 
 	if not os.path.exists(projected_data_filename):
 		fit_model = tica_model.fit(nyx)
@@ -207,8 +207,8 @@ def ktica_test(features_dir, tica_dir, landmark_indices = None, nystroem_compone
 	nyx = nys.fit_transform(features)
 	verbosedump(nyx, nystroem_data_filename)
 
-	print(np.shape(nyx))
-	print(dir(nyx))
+	print((np.shape(nyx)))
+	print((dir(nyx)))
 
 	fit_model = tica_model.fit(nyx)
 	verbosedump(fit_model, fit_model_filename)

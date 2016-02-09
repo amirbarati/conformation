@@ -32,12 +32,12 @@ def calc_rmsds(pdb_dir, ref_dir, rmsd_file):
 	new_file = open(rmsd_file, "wb")
 	rmsds = []
 	for i in range(0,len(pdbs)):
-		print i 
+		print(i) 
 		pdb_file = pdbs[i]
 		pdb_name = pdb_file.split("/")[len(pdb_file.split("/"))-1]
 		cmd.load(pdb_file, str(i))
 		rmsd = cmd.align(str(i), "ref")
-		print rmsd[0]
+		print(rmsd[0])
 		new_file.write("%s;%f\n" %(pdb_name, rmsd[0]))
 		rmsds.append(rmsd[0])
 		cmd.delete(str(i))
@@ -50,7 +50,7 @@ def calc_rmsds_parallel(pdb_dir, ref_dir, rmsd_file):
 		pdb_name = pdb_file.split("/")[len(pdb_file.split("/"))-1]
 		cmd.load(pdb_file, pdb_name)
 		rmsd = cmd.align(pdb_name, "ref")
-		print rmsd[0]
+		print(rmsd[0])
 		cmd.delete(pdb_name)
 		return rmsd[0]
 
@@ -60,19 +60,19 @@ def calc_rmsds_parallel(pdb_dir, ref_dir, rmsd_file):
 	num_workers = mp.cpu_count()
 	pool = mp.Pool(num_workers)
 	rmsds = pool.map(calc_rmsd_partial, pdbs)
-	print "HELLO!"
+	print("HELLO!")
 	pool.terminate()
 
 	new_file = open(rmsd_file, "wb")
 
 	for i in range(0, len(pdbs)):
-		print i
+		print(i)
 		rmsd = rmsds[i]
 		pdb_file = pdbs[i]
 		pdb_name = pdb_file.split("/")[len(pdb_file.split("/"))-1]
 		new_file.write("%s, %f \n" %(pdb_name, rmsd))
 
-	print "HELLO?"
+	print("HELLO?")
 	new_file.close()
 	return
 

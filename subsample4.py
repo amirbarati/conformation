@@ -55,8 +55,8 @@ n_mmgbsa = 50
 #feature_types = ""
 
 switch_residues = [130, 131, 208, 211, 219, 268, 272, 286, 288, 316, 322, 323, 326]
-switch_npxx = [130, 131, 208, 211, 219, 268, 272, 286, 288, 316] + range(322,328)
-tm6_residues = range(269, 299)
+switch_npxx = [130, 131, 208, 211, 219, 268, 272, 286, 288, 316] + list(range(322,328))
+tm6_residues = list(range(269, 299))
 bp_residues = [82, 86, 93, 106, 110, 113, 114, 117, 118, 164, 191, 192, 193, 195, 199, 200, 203, 206, 208, 286, 289, 290, 293, 305, 308, 309, 312, 316]
 dihedral_residues = list(set(switch_npxx + tm6_residues))
 sampling_method = "dist"

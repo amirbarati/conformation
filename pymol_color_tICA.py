@@ -26,7 +26,7 @@ def get_trajectory_files(traj_dir, ext = ".pdb"):
 
 def change_color(object_name, residue_importances, ginis):
 	cmd.alter("%s" %(object_name), "b=0.0")
-	for resid in residue_importances.iterkeys():
+	for resid in residue_importances.keys():
 		print(resid)
 		cmd.alter("resid %d" %resid, "b=%f" %(residue_importances[resid]))
 	cmd.spectrum("b", "blue green red", object_name,min(ginis), max(ginis))
@@ -66,16 +66,16 @@ def interpret_tIC(pdb_dir, pdb_list_file, ref_dir, importance_file, save_dir, ti
 				imp0 = float(line[1])
 				resid1 = int(line[0].split('_')[2])
 				imp1 = float(line[1])
-				if resid0 in residue_importances.iterkeys():
+				if resid0 in iter(residue_importances.keys()):
 					residue_importances[resid0].append(imp0)
 				else:
 					residue_importances[resid0] = [imp0]
 
-				if resid1 in residue_importances.iterkeys():
+				if resid1 in iter(residue_importances.keys()):
 					residue_importances[resid1].append(imp1)
 				else:
 					residue_importances[resid1] = [imp1]
-		for key in residue_importances.iterkeys():
+		for key in residue_importances.keys():
 			residue_importances[key] = np.percentile(np.array(residue_importances[key]),99.99)
 			ginis.append(residue_importances[key])
 
@@ -86,12 +86,12 @@ def interpret_tIC(pdb_dir, pdb_list_file, ref_dir, importance_file, save_dir, ti
 				imp0 = float(line[1])
 				resid1 = int(line[0].split('_')[2])
 				imp1 = float(line[1])
-				if resid0 in residue_importances.iterkeys():
+				if resid0 in iter(residue_importances.keys()):
 					if imp0 > residue_importances[resid0]: residue_importances[resid0] = imp0
 				else:
 					residue_importances[resid0] = imp0
 
-				if resid1 in residue_importances.iterkeys():
+				if resid1 in iter(residue_importances.keys()):
 					if imp1 > residue_importances[resid1]: residue_importances[resid1] = imp1
 				else:
 					residue_importances[resid1] = imp1
@@ -99,7 +99,7 @@ def interpret_tIC(pdb_dir, pdb_list_file, ref_dir, importance_file, save_dir, ti
 
 
 	for i in range(0,len(pdbs)):
-		print i 
+		print(i) 
 		if(pdb_list_file is not None):
 			if i == 0: continue
 			pdb_file = "%s/%s.pdb" %(pdb_dir,pdbs[i][2])
@@ -122,8 +122,8 @@ def interpret_tIC(pdb_dir, pdb_list_file, ref_dir, importance_file, save_dir, ti
 	change_color("active_ref", residue_importances, ginis)
 
 
-	print save_dir
-	print tic_j
+	print(save_dir)
+	print(tic_j)
 	#cmd.deselect()
 	#cmd.hide("all")
 	#cmd.cartoon("loop")

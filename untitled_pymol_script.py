@@ -20,7 +20,7 @@ trajs = get_trajectory_files(traj_dir)
 cmd.load("/Users/evan/scratch_enf/b2ar_analysis/3P0G_pymol_prepped.pdb", "3P0G")
 
 for i in range(0,len(trajs)):
-	print i
+	print(i)
 	filename = trajs[i]
 	print(filename)
 	cmd.load(filename, str(i))

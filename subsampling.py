@@ -7,7 +7,7 @@ from glob import glob
 from functools import partial 
 
 def reimage(traj_file):
-	print("Examining %s" %traj_file)
+	print(("Examining %s" %traj_file))
 	traj = md.load(traj_file)
 	#traj = fix_traj(traj)
 	top = traj.topology
@@ -55,7 +55,7 @@ def subsample_traj(traj, stride=5, top=None):
 	simulation = directory[len(directory)-2]
 	dcd_file = directory[len(directory)-1]
 	condition = "%s-%s" %(simulation.split('-')[1], simulation.split('-')[2])
-	print("analyzing simulation %s file %s" %(simulation, dcd_file))
+	print(("analyzing simulation %s file %s" %(simulation, dcd_file)))
 	top_file = top
 
 	top = md.load_frame(traj, 0, top=top_file).topology
@@ -72,7 +72,7 @@ def subsample_traj(traj, stride=5, top=None):
 	new_condition_dir = "%s/%s" %(new_root_dir, condition)
 
 	new_file_full = "%s/%s/%s" %(new_root_dir, condition, new_file)
-	print("saving trajectory as %s" %new_file_full)
+	print(("saving trajectory as %s" %new_file_full))
 	traj.save(new_file_full)
 
 

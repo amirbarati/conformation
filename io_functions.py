@@ -10,6 +10,7 @@ from msmbuilder.dataset import dataset, _keynat, NumpyDirDataset
 from functools import partial
 import scipy.io as sio
 import pickle
+import sys
 
 
 def get_base():
@@ -24,7 +25,7 @@ def get_base():
 		base = biox3_base
 	else:
 		print("WHERE ARE WE?")
-		sys.exit()
+		base = ""
 	return(base)
 
 def save_dataset(data, path): 
@@ -40,11 +41,11 @@ def load_dataset(path):
 
 def load_npz(filename):
 	nyx = np.load(filename)
-	nyx = [nyx[key] for key in nyx.keys()][0]
+	nyx = [nyx[key] for key in list(nyx.keys())][0]
 	return(nyx)
 
 def load_file(filename):
-	print("loading %s" %filename)
+	print(("loading %s" %filename))
 	if filename.split(".")[1] == "h5":
 		return np.nan_to_num(np.transpose(verboseload(filename)))
 	elif filename.split(".")[1] == "dataset":
@@ -70,7 +71,7 @@ def load_file_list(files, directory = None, ext = None):
 	return(features)
 
 def load_features(filename):
-	print("loading %s" %filename)
+	print(("loading %s" %filename))
 	if filename.split(".")[1] == ".h5":
 		return np.nan_to_num(np.transpose(verboseload(filename)))
 	else:
@@ -84,7 +85,7 @@ def get_trajectory_files(traj_dir, ext = ".pdb"):
 	return sorted(traj_files)
 
 def convert_feature_to_ext(feature_file, save_ext):
-	print("Converting %s" %feature_file)
+	print(("Converting %s" %feature_file))
 	feature = load_file(feature_file)
 	name = feature_file.split(".")[0]
 	if save_ext == ".csv":
@@ -115,9 +116,9 @@ def get_trajectory_files_conditions(traj_dir, ext, condition_1, condition_2):
 	traj_2 = [t for t in trajs if condition_2 in t]
 	traj_1 = sorted(traj_1)
 	traj_2 = sorted(traj_2)
-	print len(traj_1)
-	print(len(traj_2))
-	print(len(traj_1+traj_2))
+	print((len(traj_1)))
+	print((len(traj_2)))
+	print((len(traj_1+traj_2)))
 	return(traj_1 + traj_2)
 
 def get_ligands(lig_dir, ext= ".sdf"):
@@ -153,7 +154,7 @@ def write_map_to_csv(filename, data_map, titles):
 
 def generateData(files):
 	for data in files:
-		print data
+		print(data)
 		yield verboseload(data)
 
 def generateTraj(files, top=None):
@@ -194,7 +195,7 @@ def convert_csv_to_list(filename):
 		return lines
 
 def convert_csv_to_map_nocombine(filename):
-	print filename
+	print(filename)
 	rmsds = open(filename, "rb")
 	lines = [line.strip() for line in rmsds.readlines()]
 	#if "docking" in filename:
@@ -224,7 +225,7 @@ def convert_csv_to_map_nocombine(filename):
 			#print rmsd
 			#if rmsd > 3.0: print "%s %f" %(cluster, rmsd)
 
-			if cluster in rmsd_map.keys():
+			if cluster in list(rmsd_map.keys()):
 				rmsd_map[cluster].append(rmsd)
 			else:
 				rmsd_map[cluster] = [rmsd]
@@ -258,13 +259,13 @@ def convert_csv_to_joined_map(filename, new_filename = False):
 		cluster = line[0].split('_')[0]
 		rmsd = float(line[1].split('\\')[0])
 
-		if cluster in rmsd_map.keys():
+		if cluster in list(rmsd_map.keys()):
 			rmsd_map[cluster].append(rmsd)
 		else:
 			rmsd_map[cluster] = [rmsd]
 
 	titles = []
-	num_entries = len(rmsd_map[rmsd_map.keys()[0]])
+	num_entries = len(rmsd_map[list(rmsd_map.keys())[0]])
 	titles.append("cluster")
 	for i in range(0, num_entries):
 		titles.append("sample%d" %i)
@@ -275,13 +276,13 @@ def convert_csv_to_joined_map(filename, new_filename = False):
 	return [rmsd_map, titles]
 
 def combine_map(map_i, map_j):
-	map_j_val_length = len(map_j[map_j.keys()[0]])
+	map_j_val_length = len(map_j[list(map_j.keys())[0]])
 	placeholder = []
 	for i in range(0, map_j_val_length):
 		placeholder.append(0.0)
 
-	for key in map_i.keys():
-		if key in map_j.keys():
+	for key in list(map_i.keys()):
+		if key in list(map_j.keys()):
 			map_i[key] += map_j[key]
 		else:
 			#map_i[key] += placeholder
@@ -304,11 +305,11 @@ def combine_csv_list(csv_list, new_csv_filename):
 		csv_file = open(csv, "rb")
 		csv_titles = csv_file.readlines()[0].split("\n")[0].split(",")
 		csv_titles = csv_titles[1:len(csv_titles)]
-		print csv_titles
+		print(csv_titles)
 		combined_map_titles += csv_titles
 
 	combined_map = combine_maps(map_list)
-	print combined_map_titles
+	print(combined_map_titles)
 	write_map_to_csv(new_csv_filename, combined_map, combined_map_titles)
 	return combined_map
 
@@ -319,7 +320,7 @@ def get_condition(filename):
 	return condition 
 
 def read_trajectory(directory, filename, stride=10):
-	print("reading %s" %(filename))
+	print(("reading %s" %(filename)))
 	traj = md.load(filename, stride=stride, top="/home/harrigan/compute/wetmsm/gpcr/des/system_mae_to_pdb/des_trajs/DESRES-Trajectory_pnas2011b-H-05-all/system.pdb")
 	return traj
 
@@ -334,7 +335,7 @@ def reverse_sign_csv(csv_file):
 		if line_num > 0:
 			for i in range(1, len(line)):
 				line[i] = str(-1.0 * (float(line[i])))
-			print line
+			print(line)
 			new_csv.write(",".join(line))
 			new_csv.write(" \n")
 		else:
@@ -370,7 +371,7 @@ def find_missing_features(traj_dir, features_dir):
 	features = get_trajectory_files(features_dir, ".h5")
 	features = [f.split("/")[len(f.split("/"))-1].split(".")[0] for f in features]
 	features = set(features)
-	print(trajs - features)
+	print((trajs - features))
 
 def generate_features(features_file):
 	if features_file.split(".")[1] == "csv":
@@ -406,7 +407,7 @@ def map_residues(residues_map, residues):
 		try:
 			new_residues.append(residues_map[residue])
 		except:
-			print("residue %d not in receptor" %residue)
+			print(("residue %d not in receptor" %residue))
 	return new_residues 
 
 def test_residues_map(traj_file_1, traj_file_2, residues, residues_map):
@@ -418,10 +419,10 @@ def test_residues_map(traj_file_1, traj_file_2, residues, residues_map):
 		new_residue = residues_map[residue]
 		print("Original residues:")
 		residues = [r for r in top1.residues if r.resSeq == residue and r.is_protein]
-		print(residues[0])
+		print((residues[0]))
 		print("New residues:")
 		residues = [r for r in top2.residues if r.resSeq == new_residue and r.is_protein]
-		print(residues[0])
+		print((residues[0]))
 	return
 
 def test_residues_map_num_atoms(traj_file_1, traj_file_2, residues, residues_map):
@@ -436,7 +437,7 @@ def test_residues_map_num_atoms(traj_file_1, traj_file_2, residues, residues_map
 		atoms = [a.index for a in top2.atoms if a.residue.resSeq == new_residue and a.residue.is_protein]
 		len2 = len(atoms)
 		if (len1 != len2) or (len1 == len2):
-			print("Atom number %d %d doesn't match for residue %d" %(len1, len2, residue))
+			print(("Atom number %d %d doesn't match for residue %d" %(len1, len2, residue)))
 	return
 
 
@@ -471,17 +472,17 @@ def map_residues_universal(residues, save):
 	for residue in residues:
 		new_residues.append(residues_map[residue])
 
-	if 281 in residues_map.keys():
-		print("Residue 281 is now Residue %d" %residues_map[281])
+	if 281 in list(residues_map.keys()):
+		print(("Residue 281 is now Residue %d" %residues_map[281]))
 
-	print("residue 272 is now residue %d" %residues_map[272])
+	print(("residue 272 is now residue %d" %residues_map[272]))
 
 	pdb.close()
 	lh5.close()
 
 	if save != False:
 		writer = csv.writer(open(save, "wb"))
-		for key, value in residues_map.items():
+		for key, value in list(residues_map.items()):
 			writer.writerow([key,value])
 
 	return new_residues
@@ -521,21 +522,21 @@ def map_residues_condition(residues, condition):
 	for residue in residues:
 		new_residues.append(residues_map[residue])
 
-	if 281 in residues_map.keys():
-		print("Residue 281 is now Residue %d" %residues_map[281])
+	if 281 in list(residues_map.keys()):
+		print(("Residue 281 is now Residue %d" %residues_map[281]))
 
-	print("residue 272 is now residue %d" %residues_map[272])
+	print(("residue 272 is now residue %d" %residues_map[272]))
 
 	pdb.close()
 	lh5.close()
 
 	if condition == "2rh1":
 		writer = csv.writer(open("/home/enf/b2ar_analysis_sherlock_all/exacycle_data/residues_map_2rh1.csv", "wb"))
-		for key, value in residues_map.items():
+		for key, value in list(residues_map.items()):
 			writer.writerow([key,value])
 	if condition == "3p0g":
 		writer = csv.writer(open("/home/enf/b2ar_analysis_sherlock_all/exacycle_data/residues_map_3p0g.csv", "wb"))
-		for key, value in residues_map.items():
+		for key, value in list(residues_map.items()):
 			writer.writerow([key,value])
 
 	return new_residues
@@ -551,7 +552,7 @@ def get_cluster_ids(active_clusters_csv, intermediate_clusters_csv, inactive_clu
 	    intermediate_clusters = list(reader)[0]
 	intermediate_clusters = [int(c[7:]) for c in intermediate_clusters]
 	print(intermediate_clusters)
-	print(intermediate_clusters[0:10])
+	print((intermediate_clusters[0:10]))
 	with open(inactive_clusters_csv, 'rb') as f:
 	    reader = csv.reader(f)
 	    inactive_clusters = list(reader)[0]

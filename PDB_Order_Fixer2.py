@@ -30,13 +30,13 @@ class PDB_Order_Fixer:
 		i = 0
 
 		while lines[i][0:4] != "ATOM" and lines[i][0:6] != "HETATM":
-			print i
+			print(i)
 			residue_key = (i, 0, 0)
 			residue_order.append(residue_key)
 			residue_lines[residue_key] = [i]
 			i += 1
 
-		print("Found first atom line, line %d" %i)
+		print(("Found first atom line, line %d" %i))
 
 		while i < (len(lines) - 1):
 			line = lines[i].split()
@@ -71,7 +71,7 @@ class PDB_Order_Fixer:
 			residue_key = (res_name, chain, res_number)
 
 
-			if residue_key in residue_lines.keys():
+			if residue_key in list(residue_lines.keys()):
 				residue_lines[residue_key].append(i)
 			else:
 				residue_lines[residue_key] = [i]
@@ -79,7 +79,7 @@ class PDB_Order_Fixer:
 
 			i += 1
 
-		print("read a total of %d lines" %i)
+		print(("read a total of %d lines" %i))
 		print("finished reading file")
 
 		new_file = open(new_filename, "wb")

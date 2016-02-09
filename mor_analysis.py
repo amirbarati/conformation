@@ -151,7 +151,7 @@ tic_components_dir = "%s/tic_components" % tica_dir
 if not os.path.exists(tic_components_dir): os.makedirs(tic_components_dir)
 interpret_tIC_components(projection_operator_dir, tic_components_dir, feature_residues_pkl, n_tica_components=25, percentile=95)
 
-plot_pnas_vs_tics(user_defined_features_file, projected_features_dir, feature_name_residues_dict.keys(), tica_dir)
+plot_pnas_vs_tics(user_defined_features_file, projected_features_dir, list(feature_name_residues_dict.keys()), tica_dir)
 
 transform(existing_model = projection_operator_dir, features_directory = ref_features_dir, tica_dir = ref_tica_dir)
 plot_columns(tica_dir, projected_features_dir, titles = None, tICA = True, scale = 1.0, refcoords_file = ref_tica_coords)
@@ -161,11 +161,11 @@ plot_columns(tica_dir, projected_features_dir, titles = None, tICA = True, scale
 
 interpret_tIC_rf(rf_dir, feature_residues_pkl, n_tica_components=5, percentile=95)
 
-cluster_minikmeans(tica_dir, projected_features_dir, traj_dir, n_clusters, clusterer_dir, tICs=range(0,5))
+cluster_minikmeans(tica_dir, projected_features_dir, traj_dir, n_clusters, clusterer_dir, tICs=list(range(0,5)))
 
-sample_clusters(clusterer_dir, projected_features_dir, traj_dir, traj_ext, save_dir, n_samples, method = sampling_method, clusters_map_file = clusters_map_file, structure=structure, tICs=range(0,5))
+sample_clusters(clusterer_dir, projected_features_dir, traj_dir, traj_ext, save_dir, n_samples, method = sampling_method, clusters_map_file = clusters_map_file, structure=structure, tICs=list(range(0,5)))
 
-cluster_pnas_distances(clusterer_dir, features_dir, pnas_coords_dir, projected_features_dir, traj_dir, traj_ext, pnas_coords_csv, tica_coords_csv, features_csv, n_samples, sampling_method, feature_name_residues_dict.keys(), clusters_map_file = clusters_map_file)
+cluster_pnas_distances(clusterer_dir, features_dir, pnas_coords_dir, projected_features_dir, traj_dir, traj_ext, pnas_coords_csv, tica_coords_csv, features_csv, n_samples, sampling_method, list(feature_name_residues_dict.keys()), clusters_map_file = clusters_map_file)
 
 r['do.analysis'](tica_dir, analysis_dir, pnas_coords_csv, tica_coords_csv, features_dir, docking_multiple_ligands)
 
@@ -199,7 +199,7 @@ interpret_tIC_rf(rf_dir, feature_residues_pkl, n_tica_components=5, percentile=9
 from mor_ktica_config import *
 print("BEGINNING kernel tICA ANALYSIS")
 
-print feature_name
+print(feature_name)
 
 tica_dir = get_ktica_dir(tica_dir, n_components, feature_name, 
                          wolf_string, shrinkage_string)

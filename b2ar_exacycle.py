@@ -61,16 +61,16 @@ n_mmgbsa = 50
 #feature_types = ""
 
 switch_residues = [130, 131, 208, 211, 219, 268, 272, 286, 288, 316, 322, 323, 326]
-switch_npxx = [130, 131, 208, 211, 219, 268, 272, 286, 288, 316] + range(322,328)
+switch_npxx = [130, 131, 208, 211, 219, 268, 272, 286, 288, 316] + list(range(322,328))
 switch_pp_npxx = set(switch_npxx + [51, 79, 106, 113, 118, 121, 130, 131, 132, 141, 158, 208, 211, 219, 268, 272, 282, 285, 286, 288, 316, 318, 319, 320, 323, 326, 282])
-tm6_residues = range(270,299)
+tm6_residues = list(range(270,299))
 bp_residues = [82, 86, 93, 106, 110, 113, 114, 117, 118, 164, 191, 192, 193, 195, 199, 200, 203, 206, 208, 286, 289, 290, 293, 305, 308, 309, 312, 316]
 dihedral_residues = list(set(switch_npxx + tm6_residues))
-skip_5_residues = range(30,340,5)
-skip_3_residues = range(30,340,3)
+skip_5_residues = list(range(30,340,5))
+skip_3_residues = list(range(30,340,3))
 skip5_switches_pp_npxx = list(set(skip_5_residues + list(switch_pp_npxx)))
 skip3_switches_pp_npxx = list(set(skip_3_residues + list(switch_pp_npxx)))
-print(len(skip5_switches_pp_npxx))
+print((len(skip5_switches_pp_npxx)))
 sampling_method = "random"
 precision = "SP"
 sherlock_base = "/scratch/users/enf/b2ar_analysis"
@@ -235,7 +235,7 @@ print to_dock
 if not os.path.exists(analysis_dir): os.makedirs(analysis_dir)
 
 residues_map = generate_residues_map(residues_map_csv)
-new_residues = map_residues(residues_map, range(322,328))
+new_residues = map_residues(residues_map, list(range(322,328)))
 #print new_residues
 #test_residues_map("/home/enf/b2ar_analysis/subsampled_allprot_combined_reimaged/H-01.h5", "/home/enf/b2ar_analysis/exacycle_data/b2ar3p0g2rh1_bi/Trajectories/trj874.lh5", bp_residues, residues_map)
 #test_residues_map_num_atoms("/home/enf/b2ar_analysis/tICA_t5_n_components10_skip5_switches_pp_npxx_contact/clusters1000_n_components10_n_samples10_dist_reimaged/cluster0_sample0.pdb", "/home/enf/b2ar_analysis/exacycle_data/tICA_t10_n_components10_skip5_switches_pp_npxx_contact/cluster0_sample0.pdb", bp_residues, residues_map)

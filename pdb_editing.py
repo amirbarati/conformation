@@ -4,7 +4,7 @@ import multiprocessing as mp
 from PDB_Order_Fixer import PDB_Order_Fixer
 
 def remove_ter_individual(pdb_file):
-	print "removing ter lines in %s" %pdb_file
+	print("removing ter lines in %s" %pdb_file)
 	pdb = file(pdb_file, "rb")
 	lines = pdb.readlines()
 	new_pdb = file(pdb_file, "wb")
@@ -22,7 +22,7 @@ def remove_ter(pdb_dir):
 	pool.terminate()
 
 def reorder_individual(pdb_file):
-	print "reordering %s " %pdb_file
+	print("reordering %s " %pdb_file)
 	fixer = PDB_Order_Fixer(pdb_file, pdb_file)
 	fixer.fix_pdb()
 
@@ -56,7 +56,7 @@ def remove_palm(traj_dir):
 	pdb_files = get_trajectory_files(traj_dir)
 
 	for pdb_file in pdb_files:
-		print pdb_file
+		print(pdb_file)
 		top = md.load(pdb_file).topology
 		indices = [a.index for a in top.atoms]
 		pdb = md.load(pdb_file, atom_indices = indices)
@@ -77,7 +77,7 @@ def pymol_fixpdb(pdb_dir, script_dir):
 
 	new_script.close()
 	command = "/scratch/users/enf/pymol/pymol %s" %script_dir
-	print command
+	print(command)
 	os.system(command)	
 
 

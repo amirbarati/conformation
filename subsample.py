@@ -18,7 +18,7 @@ import glob
 
 def generateData(files):
 	for data in files:
-		print data
+		print(data)
 		yield verboseload(data)
 
 def generateTraj(files, top=None):
@@ -36,7 +36,7 @@ def get_trajectory_files(traj_dir):
 	return sorted(traj_files)
 
 def read_trajectory(directory, filename, stride=10):
-	print("reading %s" %(filename))
+	print(("reading %s" %(filename)))
 	traj = md.load(filename, stride=stride, top="/home/harrigan/compute/wetmsm/gpcr/des/system_mae_to_pdb/des_trajs/DESRES-Trajectory_pnas2011b-H-05-all/system.pdb")
 	return traj
 
@@ -44,7 +44,7 @@ def read_and_save_traj(traj, stride=10):
 	directory = traj.split("/")
 	simulation = directory[len(directory)-2]
 	dcd_file = directory[len(directory)-1]
-	print("analyzing simulation %s file %s" %(simulation, dcd_file))
+	print(("analyzing simulation %s file %s" %(simulation, dcd_file)))
 	top_file = directory[0:len(directory)-2]
 	#print(top_file)
 	top_file.append("system.pdb")
@@ -65,7 +65,7 @@ def read_and_save_traj(traj, stride=10):
 		os.makedirs(new_condition_dir)
 
 	new_file_full = "%s/%s/%s" %(new_root_dir, condition, new_file)
-	print("saving trajectory as %s" %new_file_full)
+	print(("saving trajectory as %s" %new_file_full))
 	traj.save(new_file_full)
 
 
@@ -74,7 +74,7 @@ def read_and_featurize(filename, dihedrals=['chi2'], stride=10):
 	top = md.load_frame(filename, 0).topology
 	#print("got top")
 	atom_indices = [a.index for a in top.atoms if a.residue.resSeq == 93 and a.residue != "POPC" and str(a.residue)[0] == "H"]
-	print(len(atom_indices))
+	print((len(atom_indices)))
 	#atom_indices = [a.index for a in top.atoms if a.residue.chain.index == 0 and a.residue.resSeq != 93 and a.residue != "POPC" and a.residue.resSeq != 130 and a.residue.resSeq != 172 and a.residue.resSeq != 79 and a.residue.resSeq != 341]
 	#print("got indices")
 	traj = md.load(filename, stride=1000, atom_indices=atom_indices)
@@ -112,7 +112,7 @@ def featurize(directory):
 		else:
 			os.makedirs(new_dir)
 
-		print("currently analyzing %s " %sim_dir)
+		print(("currently analyzing %s " %sim_dir))
 		trajs = get_trajectory_files(sim_dir)[0:3]
 		print(trajs)
 
@@ -121,7 +121,7 @@ def featurize(directory):
 		features_i = pool.map(read_and_featurize, trajs)
 		#print(features_i)
 		features = [np.concatenate(np.concatenate(features_i))]
-		print(np.shape(features[0]))
+		print((np.shape(features[0])))
 		combined_dir = "/scratch/users/enf/b2ar_analysis/combined_features"
 		new_file_name = "%s_combined.h5" %(simulation)
 		new_file = "%s/%s" %(combined_dir, new_file_name)
@@ -135,7 +135,7 @@ def fit_and_transform(directory):
 
 	features = generateData(get_trajectory_files(directory))
 	for data in features:
-		print(np.shape(data[0]))
+		print((np.shape(data[0])))
 		tica_model.partial_fit(data[0])
 		print("Fitting: ")
 		print(data)

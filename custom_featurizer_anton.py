@@ -16,12 +16,12 @@ def fix_topology(topology):
 		#print chain
 		for residue in chain.residues:
 			resname = str(residue)
-			if resname in residues.keys():
+			if resname in list(residues.keys()):
 				residues[resname].append(residue)
 			else:
 				residues[resname] = [residue]
 
-	for resname in residues.keys():
+	for resname in list(residues.keys()):
 		fragments = residues[resname]
 		if len(fragments) > 1:
 			main_fragment = fragments[0]
@@ -57,7 +57,7 @@ def fix_traj(traj):
 		new_atom_sequence[i].index = i
 
 	time1 = time.time()
-	print time1 - time0
+	print(time1 - time0)
 	return new_traj
 
 def phi_indices(top, residues = None):
@@ -83,20 +83,20 @@ def phi_indices(top, residues = None):
 		next_c = None
 
 		c_index = c.index
-		c_neighbors = graph.edge[c].keys()
+		c_neighbors = list(graph.edge[c].keys())
 		for c_neighbor in c_neighbors:
 			if c_neighbor.name == "N":
 				n = c_neighbor
 				break
 		
 		if n != None:
-			n_neighbors = graph.edge[n].keys()
+			n_neighbors = list(graph.edge[n].keys())
 			for n_neighbor in n_neighbors:
 				if n_neighbor.name == "CA":
 						ca = n_neighbor
 						break
 		if ca != None:
-			ca_neighbors = graph.edge[ca].keys()
+			ca_neighbors = list(graph.edge[ca].keys())
 			for ca_neighbor in ca_neighbors:
 				if ca_neighbor.name == "C":
 					next_c = ca_neighbor
@@ -104,7 +104,7 @@ def phi_indices(top, residues = None):
 		if n != None and ca != None and next_c != None:
 			phi_tuples.append((c.index, n.index, ca.index, next_c.index))
 		else:
-			print "No phi found for %s " %c.name
+			print("No phi found for %s " %c.name)
 
 	#print("phi angles = %d" %len(phi_tuples))
 	return phi_tuples
@@ -131,21 +131,21 @@ def psi_indices(top, residues = None):
 		next_n = None
 
 		n_index = n.index
-		n_neighbors = graph.edge[n].keys()
+		n_neighbors = list(graph.edge[n].keys())
 		for n_neighbor in n_neighbors:
 			if n_neighbor.name == "CA":
 				ca = n_neighbor
 				break
 		
 		if ca != None:	
-			ca_neighbors = graph.edge[ca].keys()
+			ca_neighbors = list(graph.edge[ca].keys())
 			for ca_neighbor in ca_neighbors:
 				if ca_neighbor.name == "C":
 					c = ca_neighbor
 					break
 
 		if c != None:
-			c_neighbors = graph.edge[c].keys()
+			c_neighbors = list(graph.edge[c].keys())
 			for c_neighbor in c_neighbors:
 				if c_neighbor.name == "N":
 					next_n = c_neighbor
@@ -154,7 +154,7 @@ def psi_indices(top, residues = None):
 		if c != None and ca != None and next_n != None:
 			psi_tuples.append((n.index, c.index, ca.index, next_n.index))
 		else:
-			print "No phs found for %s " %c.name
+			print("No phs found for %s " %c.name)
 
 	#print("psi angles = %d " %len(psi_tuples))
 	return psi_tuples
@@ -200,7 +200,7 @@ def chi1_indices(top, specified_residues = None):
 			chi1_tuples.append(dihedral)
 			#print residue.resSeq
 		elif dihedral != [None, None, None, None] and str(residue.name)[0:3] in chi1_residues:
-			print "no chi1 found for %s" %str(residue)	
+			print("no chi1 found for %s" %str(residue))	
 	return chi1_tuples
 
 
@@ -240,7 +240,7 @@ def chi2_indices(top, specified_residues = None):
 			chi2_tuples.append(dihedral)
 			#print residue.resSeq
 		elif dihedral != [None, None, None, None] and str(residue.name)[0:3] in chi2_residues:
-			print "no chi2 found for %s" %str(residue)		
+			print("no chi2 found for %s" %str(residue))		
 
 
 	return chi2_tuples
@@ -252,7 +252,7 @@ def read_and_featurize_custom(traj_file, features_dir = None, condition=None, di
 	#atom_indices = [a.index for a in top.atoms if a.residue.resSeq != 130]
 	atom_indices = [a.index for a in top.atoms]
 	traj = md.load(traj_file, atom_indices=atom_indices)
-	print traj_file
+	print(traj_file)
 	#print traj
 	#print("loaded trajectory")
 
@@ -298,9 +298,9 @@ def read_and_featurize_custom(traj_file, features_dir = None, condition=None, di
 					#print res._atoms
 					distance_residues.append(res.index)
 		if len(contact_residues) != len(distance_residues):
-			print "Residues are missing"
-			print len(contact_residues)
-			print len(distance_residues)
+			print("Residues are missing")
+			print(len(contact_residues))
+			print(len(distance_residues))
 			#sys.exit()
 			#return None
 		
@@ -318,8 +318,8 @@ def read_and_featurize_custom(traj_file, features_dir = None, condition=None, di
 
 	b = time.time()
 
-	print("new features %s has shape: " %traj_file)
-	print(np.shape(manual_features))
+	print(("new features %s has shape: " %traj_file))
+	print((np.shape(manual_features)))
 
 	if condition is None:
 		condition = get_condition(traj_file)
@@ -365,9 +365,9 @@ def read_and_featurize_iter(traj_file, features_dir = None, condition=None, dihe
 						#print res._atoms
 						distance_residues.append(res.index)
 			if len(contact_residues) != len(distance_residues):
-				print "Residues are missing"
-				print len(contact_residues)
-				print len(distance_residues)
+				print("Residues are missing")
+				print(len(contact_residues))
+				print(len(distance_residues))
 				#sys.exit()
 				#return None
 			
@@ -387,8 +387,8 @@ def read_and_featurize_iter(traj_file, features_dir = None, condition=None, dihe
 
 	b = time.time()
 
-	print("new features %s has shape: " %traj_file)
-	print(np.shape(manual_features))
+	print(("new features %s has shape: " %traj_file))
+	print((np.shape(manual_features)))
 
 	if condition is None:
 		condition = get_condition(traj_file)
@@ -417,7 +417,7 @@ def featurize_custom(traj_dir, features_dir, traj_ext, dihedral_residues, dihedr
 		dihedral_residues = map_residues(residues_map, dihedral_residues)
 		contact_residues = map_residues(residues_map, contact_residues)
 
-	print contact_residues	
+	print(contact_residues)	
 
 	featurize_partial = partial(read_and_featurize_iter, features_dir = features_dir, dihedral_residues = dihedral_residues, dihedral_types = dihedral_types, contact_residues = contact_residues)
 	#pool.map(featurize_partial, trajs)
@@ -429,12 +429,12 @@ def featurize_custom(traj_dir, features_dir, traj_ext, dihedral_residues, dihedr
 
 
 def featurize_known_traj(traj_dir, inactive, features_dir):
-	print("currently featurizing %s" %traj_dir.split("/")[len(traj_dir.split("/"))-1])
+	print(("currently featurizing %s" %traj_dir.split("/")[len(traj_dir.split("/"))-1]))
 	traj = md.load(traj_dir)
 	rmsds = rmsd_npxxy(traj, inactive)
 	helix6_helix3_distances = helix6_helix3_dist(traj)
 	features = np.transpose(np.concatenate([[rmsds], [np.concatenate(helix6_helix3_distances)]]))
-	print np.shape(features)
+	print(np.shape(features))
 
 	filename = "%s/%s" %(features_dir, traj_dir.split("/")[len(traj_dir.split("/"))-1])
 	verbosedump(features, filename)
@@ -468,7 +468,7 @@ def featurize_known(directory, inactive_dir, active_dir):
 	print("Completed featurizing")
 
 def compute_pnas_coords_and_distance(traj_file, inactive, active, scale = 7.14, residues_map = None):
-	print "featurizing %s" %traj_file
+	print("featurizing %s" %traj_file)
 	traj = md.load(traj_file)
 	inactive_tuple = np.array([helix6_helix3_dist(inactive) / scale, rmsd_npxxy(inactive, inactive)])
 	active_tuple = np.array([helix6_helix3_dist(active) / scale, rmsd_npxxy(active, inactive)])
@@ -528,7 +528,7 @@ def featurize_pnas_distance(traj_dir, features_dir, ext, inactive_dir, active_di
 	write_map_to_csv(active_distances_csv, convert_np_to_map(active_distances), ["frame", "pnas_distance_active"])
 	print("Completed featurizing")
 def load_pdb_traj(pdb_file):
-	print pdb_file
+	print(pdb_file)
 	return md.load_frame(pdb_file, index = 0)
 
 def featurize_pnas_distance_pdbs(traj_dir, new_filename, features_dir, inactive_dir, active_dir, inactive_distances_dir, active_distances_dir, coords_dir):

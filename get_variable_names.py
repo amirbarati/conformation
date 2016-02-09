@@ -248,7 +248,7 @@ def get_ref_ktica_dirs(tica_dir):
 
 def get_common_residues(residues_map_csv, contact_residues):
   residues_map = generate_residues_map(residues_map_csv)
-  contact_residues = [res for res in contact_residues if res.resSeq in residues_map.keys()]
+  contact_residues = [res for res in contact_residues if res.resSeq in list(residues_map.keys())]
   return contact_residues
 
 def get_common_residues_pkl(base):
@@ -267,13 +267,13 @@ def find_common_residues(structures, save_file):
       top = md.load(structure).topology 
       for residue in top.residues:
         if residue.is_protein: 
-          res = Residue(resSeq = residue.resSeq, chain_id=residue.chain.id)
+          res = Residue(resSeq = residue.resSeq, chain_id=residue.chain.id, res_name = "%s%d" %(residue.name, residue.resSeq))
           #res = Residue(resSeq = residue.resSeq)
           structure_residues.add(res)
       all_residues.append(structure_residues)
     common_residues = list(set.intersection(*all_residues))
-    print(sorted([r.resSeq for r in common_residues]))
-    print("There are %d common residues between input structures" %len(common_residues))
+    print((sorted([r.resSeq for r in common_residues])))
+    print(("There are %d common residues between input structures" %len(common_residues)))
     import pickle
     with open(save_file, "wb") as f:
       pickle.dump(common_residues, f)

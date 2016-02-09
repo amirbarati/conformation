@@ -118,6 +118,6 @@ if __name__ == '__main__':
     req = InstallRequirement.from_line(sys.argv[1], None)
     finder = MyPackageFinder([], ['http://pypi.python.org/simple/'])
     versions = finder.find_requirement(req, False)
-    print 'Versions of %s' % sys.argv[1]
+    print('Versions of %s' % sys.argv[1])
     for v in versions:
-        print v[1]
+        print(v[1])

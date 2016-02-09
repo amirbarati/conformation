@@ -38,7 +38,7 @@ import sys
 
 def generateData(files):
 	for data in files:
-		print data
+		print(data)
 		yield verboseload(data)
 
 def generateTraj(files, top=None):
@@ -117,7 +117,7 @@ def get_condition(filename):
 	return condition 
 
 def read_trajectory(directory, filename, stride=10):
-	print("reading %s" %(filename))
+	print(("reading %s" %(filename)))
 	traj = md.load(filename, stride=stride, top="/home/harrigan/compute/wetmsm/gpcr/des/system_mae_to_pdb/des_trajs/DESRES-Trajectory_pnas2011b-H-05-all/system.pdb")
 	return traj
 
@@ -143,7 +143,7 @@ def subsample_traj(traj, stride=5, top=None):
 	simulation = directory[len(directory)-2]
 	dcd_file = directory[len(directory)-1]
 	condition = "%s-%s" %(simulation.split('-')[1], simulation.split('-')[2])
-	print("analyzing simulation %s file %s" %(simulation, dcd_file))
+	print(("analyzing simulation %s file %s" %(simulation, dcd_file)))
 	top_file = top
 
 	top = md.load_frame(traj, 0, top=top_file).topology
@@ -160,7 +160,7 @@ def subsample_traj(traj, stride=5, top=None):
 	new_condition_dir = "%s/%s" %(new_root_dir, condition)
 
 	new_file_full = "%s/%s/%s" %(new_root_dir, condition, new_file)
-	print("saving trajectory as %s" %new_file_full)
+	print(("saving trajectory as %s" %new_file_full))
 	traj.save(new_file_full)
 
 
@@ -219,12 +219,12 @@ def fix_topology(topology):
 		#print chain
 		for residue in chain.residues:
 			resname = str(residue)
-			if resname in residues.keys():
+			if resname in list(residues.keys()):
 				residues[resname].append(residue)
 			else:
 				residues[resname] = [residue]
 
-	for resname in residues.keys():
+	for resname in list(residues.keys()):
 		fragments = residues[resname]
 		if len(fragments) > 1:
 			main_fragment = fragments[0]
@@ -260,7 +260,7 @@ def fix_traj(traj):
 		new_atom_sequence[i].index = i
 
 	time1 = time.time()
-	print time1 - time0
+	print(time1 - time0)
 	return new_traj
 
 
@@ -287,20 +287,20 @@ def phi_indices(top, residues = None):
 		next_c = None
 
 		c_index = c.index
-		c_neighbors = graph.edge[c].keys()
+		c_neighbors = list(graph.edge[c].keys())
 		for c_neighbor in c_neighbors:
 			if c_neighbor.name == "N":
 				n = c_neighbor
 				break
 		
 		if n != None:
-			n_neighbors = graph.edge[n].keys()
+			n_neighbors = list(graph.edge[n].keys())
 			for n_neighbor in n_neighbors:
 				if n_neighbor.name == "CA":
 						ca = n_neighbor
 						break
 		if ca != None:
-			ca_neighbors = graph.edge[ca].keys()
+			ca_neighbors = list(graph.edge[ca].keys())
 			for ca_neighbor in ca_neighbors:
 				if ca_neighbor.name == "C":
 					next_c = ca_neighbor
@@ -308,7 +308,7 @@ def phi_indices(top, residues = None):
 		if n != None and ca != None and next_c != None:
 			phi_tuples.append((c.index, n.index, ca.index, next_c.index))
 		else:
-			print "No phi found for %s " %c.name
+			print("No phi found for %s " %c.name)
 
 	#print("phi angles = %d" %len(phi_tuples))
 	return phi_tuples
@@ -335,21 +335,21 @@ def psi_indices(top, residues = None):
 		next_n = None
 
 		n_index = n.index
-		n_neighbors = graph.edge[n].keys()
+		n_neighbors = list(graph.edge[n].keys())
 		for n_neighbor in n_neighbors:
 			if n_neighbor.name == "CA":
 				ca = n_neighbor
 				break
 		
 		if ca != None:	
-			ca_neighbors = graph.edge[ca].keys()
+			ca_neighbors = list(graph.edge[ca].keys())
 			for ca_neighbor in ca_neighbors:
 				if ca_neighbor.name == "C":
 					c = ca_neighbor
 					break
 
 		if c != None:
-			c_neighbors = graph.edge[c].keys()
+			c_neighbors = list(graph.edge[c].keys())
 			for c_neighbor in c_neighbors:
 				if c_neighbor.name == "N":
 					next_n = c_neighbor
@@ -358,7 +358,7 @@ def psi_indices(top, residues = None):
 		if c != None and ca != None and next_n != None:
 			psi_tuples.append((n.index, c.index, ca.index, next_n.index))
 		else:
-			print "No phs found for %s " %c.name
+			print("No phs found for %s " %c.name)
 
 	#print("psi angles = %d " %len(psi_tuples))
 	return psi_tuples
@@ -404,7 +404,7 @@ def chi1_indices(top, specified_residues = None):
 			chi1_tuples.append(dihedral)
 			#print residue.resSeq
 		elif dihedral != [None, None, None, None] and str(residue.name)[0:3] in chi1_residues:
-			print "no chi1 found for %s" %str(residue)	
+			print("no chi1 found for %s" %str(residue))	
 	return chi1_tuples
 
 
@@ -444,7 +444,7 @@ def chi2_indices(top, specified_residues = None):
 			chi2_tuples.append(dihedral)
 			#print residue.resSeq
 		elif dihedral != [None, None, None, None] and str(residue.name)[0:3] in chi2_residues:
-			print "no chi2 found for %s" %str(residue)		
+			print("no chi2 found for %s" %str(residue))		
 
 
 	return chi2_tuples
@@ -456,7 +456,7 @@ def read_and_featurize_custom(traj_file, features_dir = None, condition=None, di
 	#atom_indices = [a.index for a in top.atoms if a.residue.resSeq != 130]
 	atom_indices = [a.index for a in top.atoms]
 	traj = md.load(traj_file, atom_indices=atom_indices)
-	print traj_file
+	print(traj_file)
 	#print traj
 	#print("loaded trajectory")
 
@@ -501,9 +501,9 @@ def read_and_featurize_custom(traj_file, features_dir = None, condition=None, di
 					#print res._atoms
 					distance_residues.append(res.index)
 		if len(contact_residues) != len(distance_residues):
-			print "SOMETHING WENT WRONG"
-			print len(contact_residues)
-			print len(distance_residues)
+			print("SOMETHING WENT WRONG")
+			print(len(contact_residues))
+			print(len(distance_residues))
 			sys.exit()
 			return None
 		
@@ -517,8 +517,8 @@ def read_and_featurize_custom(traj_file, features_dir = None, condition=None, di
 
 	b = time.time()
 
-	print("new features %s has shape: " %traj_file)
-	print(np.shape(manual_features))
+	print(("new features %s has shape: " %traj_file))
+	print((np.shape(manual_features)))
 
 	if condition is None:
 		condition = get_condition(traj_file)
@@ -587,12 +587,12 @@ def pnas_distance(traj_file, inactive_file, active_file):
 	active = md.load(active_file)
 	scale = 7.14
 	inactive_tuple = np.array([rmsd_npxxy(inactive, inactive), helix6_helix3_dist(inactive) / scale])
-	print inactive_tuple
+	print(inactive_tuple)
 	active_tuple = np.array([rmsd_npxxy(active, inactive), helix6_helix3_dist(active) / scale])
 	traj_tuple = np.array([rmsd_npxxy(traj, inactive), helix6_helix3_dist(traj) / scale])
 	active_dist = np.linalg.norm(traj_tuple - active_tuple)
 	inactive_dist = np.linalg.norm(traj_tuple - inactive_tuple)
-	print [inactive_dist, active_dist]
+	print([inactive_dist, active_dist])
 	return [inactive_dist, active_dist]
 
 def pnas_distances(traj_dir, inactive_file, active_file):
@@ -622,13 +622,13 @@ def pnas_distances(traj_dir, inactive_file, active_file):
 
 
 def featurize_known_traj(traj_dir, inactive_dir, features_dir, active_dir = None):
-	print("currently featurizing %s" %traj_dir.split("/")[len(traj_dir.split("/"))-1])
+	print(("currently featurizing %s" %traj_dir.split("/")[len(traj_dir.split("/"))-1]))
 	traj = md.load(traj_dir)
 	inactive = md.load(inactive_dir)
 	rmsds = rmsd_npxxy(traj, inactive)
 	helix6_helix3_distances = helix6_helix3_dist(traj)
 	features = np.transpose(np.concatenate([[rmsds], [np.concatenate(helix6_helix3_distances)]]))
-	print np.shape(features)
+	print(np.shape(features))
 
 	filename = "%s/%s" %(features_dir, traj_dir.split("/")[len(traj_dir.split("/"))-1])
 	verbosedump(features, filename)
@@ -681,8 +681,8 @@ def fit_and_transform(features_directory, model_dir, stride=5, lag_time=10, n_co
 		if np.shape(features[1]) != np.shape(features[1])[1]:
 			for i in range(0, len(features)):
 				features[i] = np.transpose(features[i])
-		print np.shape(features[0])
-		print np.shape(features[1])
+		print(np.shape(features[0]))
+		print(np.shape(features[1]))
 		if not os.path.exists(fit_model_filename):
 			print("fitting data to tICA model")
 			fit_model = tica_model.fit(features)
@@ -699,7 +699,7 @@ def fit_and_transform(features_directory, model_dir, stride=5, lag_time=10, n_co
 		fit_model = verboseload(fit_model_filename)
 		transformed_data = verboseload(projected_data_filename)
 
-	print fit_model.summarize()
+	print(fit_model.summarize())
 
 	#active_pdb = md.load(active_pdb_file)
 	#top = active_pdb.topology
@@ -725,7 +725,7 @@ def plot_hex(transformed_data_file):
 def save_pdb(traj_dir, clusterer, i):
 	location = clusterer.cluster_ids_[i,:]
 	traj = get_trajectory_files(traj_dir)[location[0]]
-	print("traj = %s, frame = %d" %(traj, location[1]))
+	print(("traj = %s, frame = %d" %(traj, location[1])))
 	conformation = md.load_frame(traj, location[1])
 	conformation.save_pdb("/scratch/users/enf/b2ar_analysis/clusters_1000_allprot/%d.pdb" %i)
 	return None
@@ -736,7 +736,7 @@ def get_cluster_centers(clusterer_dir, traj_dir):
 	centers = clusterer.cluster_centers_
 
 	save_pdb_partial = partial(save_pdb, traj_dir = traj_dir, clusterer = clusterer)
-	indices = range(0, np.shape(centers)[0])
+	indices = list(range(0, np.shape(centers)[0]))
 	pool = mp.Pool(mp.cpu_count())
 	pool.map(save_pdb_partial, indices)
 	pool.terminate()
@@ -775,16 +775,16 @@ def plot_tica_and_clusters(tica_dir, transformed_data_dir, clusterer_dir, lag_ti
 def plot_all_tics_and_clusters(tica_dir, transformed_data_dir, clusterer_dir, lag_time, cluster_ids = False):
 	transformed_data = verboseload(transformed_data_dir)
 	num_tics = np.shape(transformed_data[0])[1]
-	print "Looking at %d tICS" %num_tics
+	print("Looking at %d tICS" %num_tics)
 	for i in range(0,num_tics):
 		for j in range(i+1,num_tics):
 			plot_tica_and_clusters(tica_dir, transformed_data_dir, clusterer_dir, lag_time, component_i = i, component_j = j, cluster_ids = cluster_ids)
-	print "Printed all tICA coords and all requested clusters"
+	print("Printed all tICA coords and all requested clusters")
 
 def cluster(data_dir, traj_dir, n_clusters, lag_time):
 	clusterer_dir = "/scratch/users/enf/b2ar_analysis/clusterer_%d_t%d.h5" %(n_clusters, lag_time)
 	if (os.path.exists(clusterer_dir)):
-		print "Already clustered"
+		print("Already clustered")
 	else:
 		reduced_data = verboseload(data_dir)
 		trajs = np.concatenate(reduced_data)
@@ -795,9 +795,9 @@ def cluster(data_dir, traj_dir, n_clusters, lag_time):
 def cluster_kmeans(tica_dir, data_dir, traj_dir, n_clusters, lag_time):
 	clusterer_dir = "%s/clusterer_%dclusters.h5" %(tica_dir, n_clusters)
 	if (os.path.exists(clusterer_dir)):
-		print "Already clustered"
+		print("Already clustered")
 	else:
-		print "Clustering by KMeans"
+		print("Clustering by KMeans")
 		reduced_data = verboseload(data_dir)
 		trajs = np.concatenate(reduced_data)
 		clusterer = KMeans(n_clusters = n_clusters, n_jobs=-1)
@@ -814,7 +814,7 @@ def plot_timescales(clusterer_dir, n_clusters, lag_time):
 	n_timescales = 5
 
 	msm_timescales = implied_timescales(sequences, lag_times, n_timescales=n_timescales, msm=MarkovStateModel(verbose=False))
-	print msm_timescales
+	print(msm_timescales)
 
 	for i in range(n_timescales):
 		plt.plot(lag_times, msm_timescales[:,i])
@@ -839,7 +839,7 @@ def reimage_traj(traj_file, traj_dir, save_dir, ext):
 		h5_filename = file_lastname
 		new_h5_file = "%s/%s" %(save_dir, h5_filename)
 		traj_pytraj.save(new_h5_file)
-		print "saving %s" %h5_filename
+		print("saving %s" %h5_filename)
 	else:
 		traj_file_lastname = traj_file.split("/")[len(traj_file.split("/"))-1]
 		traj_filename = traj_file_lastname.split(".")[0]
@@ -861,8 +861,8 @@ def reimage_traj(traj_file, traj_dir, save_dir, ext):
 		new_dcd_file = "%s/%s" %(save_dir, dcd_filename)
 		new_top_file = "%s/%s" %(save_dir, top_filename)
 		new_h5_file = "%s/%s" %(save_dir, h5_filename)
-		print new_dcd_file
-		print new_top_file
+		print(new_dcd_file)
+		print(new_top_file)
 		traj_pytraj.save(new_dcd_file)
 		traj_pytraj.save(new_top_file)
 
@@ -876,9 +876,9 @@ def reimage_traj(traj_file, traj_dir, save_dir, ext):
 
 
 def reimage_trajs(traj_dir, ext = ".pdb"):
-	print "traj dir = %s" %traj_dir
+	print("traj dir = %s" %traj_dir)
 	new_dir = "%s_reimaged" %traj_dir
-	print "new dir = %s" %new_dir
+	print("new dir = %s" %new_dir)
 
 	if not os.path.exists(new_dir): os.makedirs(new_dir)
 
@@ -899,7 +899,7 @@ def remove_palm(traj_dir):
 	pdb_files = get_trajectory_files(traj_dir)
 
 	for pdb_file in pdb_files:
-		print pdb_file
+		print(pdb_file)
 		top = md.load(pdb_file).topology
 		indices = [a.index for a in top.atoms]
 		pdb = md.load(pdb_file, atom_indices = indices)
@@ -910,10 +910,10 @@ def build_msm(clusterer_dir, lag_time):
 	n_clusters = np.shape(clusterer.cluster_centers_)[0]
 	labels = clusterer.labels_
 	msm_modeler = MarkovStateModel(lag_time=lag_time)
-	print("fitting msm to trajectories with %d clusters and lag_time %d" %(n_clusters, lag_time))
+	print(("fitting msm to trajectories with %d clusters and lag_time %d" %(n_clusters, lag_time)))
 	msm_modeler.fit_transform(labels)
 	verbosedump(msm_modeler, "/scratch/users/enf/b2ar_analysis/msm_model_%d_clusters_t%d" %(n_clusters, lag_time))
-	print("fitted msm to trajectories with %d states" %(msm_modeler.n_states_))
+	print(("fitted msm to trajectories with %d states" %(msm_modeler.n_states_)))
 	#np.savetxt("/scratch/users/enf/b2ar_analysis/msm_%d_clusters_t%d_transmat.csv" %(n_clusters, lag_time), msm_modeler.transmat_, delimiter=",")
 	#G = nx.from_numpy_matrix(msm_modeler.transmat_)
 	#nx.write_edgelist(G, "/scratch/users/enf/b2ar_analysis/msm_%d_clusters_t%d_edgelist" %(n_clusters, lag_time), msm_modeler.transmat_, delimiter=",")
@@ -944,7 +944,7 @@ def construct_graph(msm_modeler_dir, n_clusters, tica_lag_time, msm_lag_time, in
 	graph = nx.DiGraph()
 	msm_modeler = verboseload(msm_modeler_dir)
 	mapping = msm_modeler.mapping_
-	inv_mapping = {v: k for k, v in mapping.items()}
+	inv_mapping = {v: k for k, v in list(mapping.items())}
 	transmat = msm_modeler.transmat_
 
 	for i in range(0, msm_modeler.n_states_):
@@ -955,7 +955,7 @@ def construct_graph(msm_modeler_dir, n_clusters, tica_lag_time, msm_lag_time, in
 				original_j = inv_mapping[j]
 				graph.add_edge(original_i, original_j, prob = float(prob), inverse_prob = 1.0 / float(prob))
 
-	print(graph.number_of_nodes())
+	print((graph.number_of_nodes()))
 
 	if inactive is not None:
 		rmsd_file = open(inactive,"rb")
@@ -963,7 +963,7 @@ def construct_graph(msm_modeler_dir, n_clusters, tica_lag_time, msm_lag_time, in
 		for line in rmsd_lines:
 			line = line.split(";")
 			original_id = int(line[0])
-			if original_id in mapping.keys():
+			if original_id in list(mapping.keys()):
 				rmsd = line[1]
 				graph.node[original_id]["rmsd_to_inactive"] = float(rmsd)
 
@@ -973,7 +973,7 @@ def construct_graph(msm_modeler_dir, n_clusters, tica_lag_time, msm_lag_time, in
 		for line in rmsd_lines:
 			line = line.split(";")
 			original_id = int(line[0])
-			if original_id in mapping.keys():
+			if original_id in list(mapping.keys()):
 				rmsd = line[1]
 				graph.node[original_id]["rmsd_to_active"] = float(rmsd)
 
@@ -988,7 +988,7 @@ def rmsd_to_structure(clusters_dir, ref_dir, text):
 	rmsds = np.zeros(shape=(len(pdbs),2))
 
 	for i in range(0,len(pdbs)):
-		print i 
+		print(i) 
 		pdb_file = pdbs[i]
 		pdb = md.load_frame(pdb_file, index=0)
 		rmsd = md.rmsd(pdb, ref, 0)
@@ -1014,7 +1014,7 @@ def rmsd_pymol(pdb_dir, ref_dir, script_dir, rmsd_dir):
 
 	new_script.close()
 	command = "/scratch/users/enf/pymol/pymol %s" %script_dir
-	print command
+	print(command)
 	os.system(command)
 
 def convert_csv_to_map_nocombine(filename):
@@ -1035,7 +1035,7 @@ def convert_csv_to_map_nocombine(filename):
 
 		cluster = line[0].split('.')[0]
 		rmsd = float(line[1].split('\\')[0])
-		if rmsd > 3.0: print "%s %f" %(cluster, rmsd)
+		if rmsd > 3.0: print("%s %f" %(cluster, rmsd))
 
 		rmsd_map[cluster] = rmsd
 	return rmsd_map
@@ -1046,7 +1046,7 @@ def convert_csv_to_map(filename):
 	rmsd_map = {}
 	i = 0
 	for line in lines:
-		print line
+		print(line)
 		if i == 0:
 			i += 1
 			continue
@@ -1061,7 +1061,7 @@ def convert_csv_to_map(filename):
 		cluster = line[0].split('_')[0]
 		rmsd = float(line[1].split('\\')[0])
 
-		if cluster in rmsd_map.keys():
+		if cluster in list(rmsd_map.keys()):
 			rmsd_map[cluster].append(rmsd)
 		else:
 			rmsd_map[cluster] = [rmsd]
@@ -1069,7 +1069,7 @@ def convert_csv_to_map(filename):
 
 def calc_mean_and_stdev(rmsd_map):
 	stats_map = {}
-	for key in rmsd_map.keys():
+	for key in list(rmsd_map.keys()):
 		rmsds = np.array(rmsd_map[key])
 		mean = np.mean(rmsds, axis = 0)
 		stdev = np.std(rmsds, axis = 0)
@@ -1126,12 +1126,12 @@ def pprep_prot(pdb):
 	new_pdb = pdb_name.rsplit( ".", 1 )[ 0 ]
 	new_pdb = "%s.mae" %(new_pdb)
 	if os.path.exists(new_pdb): 
-		print "already prepped and mae'd protein"
+		print("already prepped and mae'd protein")
 		return
 	ref = "/scratch/users/enf/b2ar_analysis/3P0G_pymol_prepped.pdb"
 
 	command = "$SCHRODINGER/utilities/prepwizard -WAIT -disulfides -fix -noepik -noimpref -noprotassign -reference_st_file %s -NOLOCAL %s %s" %(ref, pdb_name, new_pdb)
-	print command
+	print(command)
 	os.system(command)
 	return
 
@@ -1155,11 +1155,11 @@ def generate_grid_input(mae, grid_center, tica_dir, n_clusters, n_samples):
 	grid_file = "%s/%s.zip" %(output_dir, mae_last_name)
 
 	if os.path.exists(grid_job) and os.path.exists(new_mae):
-		print "Already created that grid job, skipping"
+		print("Already created that grid job, skipping")
 		return
 
 	cmd = "$SCHRODINGER/run $SCHRODINGER/mmshare-v27013/python/common/delete_atoms.py \"res.pt BIA \" %s %s" %(mae, new_mae)
-	print cmd
+	print(cmd)
 	subprocess.call(cmd, shell=True)
 
 	gridfile = open(grid_job, "wb")
@@ -1178,14 +1178,14 @@ def generate_grid(grid_file, grid_dir):
 	grid_zip = grid_file.rsplit( ".", 1)[0]
 	grid_zip = "%s.zip" %grid_zip
 	if os.path.exists(grid_zip):
-		print "already generated grid; skipping"
+		print("already generated grid; skipping")
 		return
 
 	os.chdir(grid_dir)
 	grid_command = "$SCHRODINGER/glide %s -OVERWRITE -WAIT" %grid_file
 
 	subprocess.call(grid_command, shell = True)
-	print "completed grid generation job"
+	print("completed grid generation job")
 	return 
 
 def generate_grids(mae_dir, grid_center, tica_dir, n_clusters, n_samples):
@@ -1214,7 +1214,7 @@ def generate_grids(mae_dir, grid_center, tica_dir, n_clusters, n_samples):
 def dock(dock_job):
 	cmd = "$SCHRODINGER/glide %s -OVERWRITE -WAIT" %dock_job
 	subprocess.call(cmd, shell = True)
-	print "Completed docking job %s" %dock_job
+	print("Completed docking job %s" %dock_job)
 	return
 
 
@@ -1229,7 +1229,7 @@ def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP"):
 		grid_file_no_ext = grid_filename.rsplit(".", 1)[0]
 		maegz_name = "%s/%s.maegz" %(docking_dir, grid_file_no_ext)
 		if os.path.exists(maegz_name):
-			print "already docked %s" %grid_file_no_ext
+			print("already docked %s" %grid_file_no_ext)
 			continue
 		dock_job_name = "%s/%s.in" %(docking_dir, grid_file_no_ext)
 		dock_jobs.append(dock_job_name)
@@ -1256,9 +1256,9 @@ def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP"):
 
 def merge_samples(results_map):
 	merged_results = {}
-	for key in results_map.keys():
+	for key in list(results_map.keys()):
 		cluster = key.split("_")[0]
-		if cluster not in merged_results.keys():
+		if cluster not in list(merged_results.keys()):
 			merged_results[cluster] = [results_map[key]]
 		else:
 			merged_results[cluster].append(results_map[key])
@@ -1292,11 +1292,11 @@ def analyze_docking_results(docking_dir):
 			if len(line) >= 3:
 				if (line[0] == "Best" and line[1] == "XP" and line[2] == "pose:"):
 					xp_score = float(line[6])
-					print "%f, %f" %(xp_score, score)
+					print("%f, %f" %(xp_score, score))
 					if xp_score < score: score = xp_score
 				elif  (line[0] == "Best" and line[1] == "Emodel="):
 					xp_score = float(line[8])
-					print "%f, %f" %(xp_score, score)
+					print("%f, %f" %(xp_score, score))
 					if xp_score < score: score = xp_score
 		scores[conformation] = score
 
@@ -1325,8 +1325,8 @@ def make_clusters_map(clusterer):
 			cluster = trajectory[j]
 			clusters_map[cluster].add((i,j))
 
-	for cluster in clusters_map.keys():
-		print len(clusters_map[cluster])
+	for cluster in list(clusters_map.keys()):
+		print(len(clusters_map[cluster]))
 
 	return clusters_map
 
@@ -1337,25 +1337,25 @@ def dist_to_means(clusterer_dir, features_dir):
 	features = verboseload(features_dir)
 	feature_distances = {}
 
-	for i in range(0, len(clusters_map.keys())):
+	for i in range(0, len(list(clusters_map.keys()))):
 		indices = clusters_map[i]
 		k_mean = clusterer.cluster_centers_[i]
-		print k_mean
+		print(k_mean)
 		find_cos_partial = partial(find_cos, k_mean=k_mean, features = features)
-		feature_distances_i = map(find_cos_partial, indices)
+		feature_distances_i = list(map(find_cos_partial, indices))
 		feature_distances[i] = feature_distances_i
 
-	print(feature_distances[0][0:10])
+	print((feature_distances[0][0:10]))
 	sorted_map = {}
 
-	print(feature_distances.keys())
-	print(len(feature_distances.keys()))
+	print((list(feature_distances.keys())))
+	print((len(list(feature_distances.keys()))))
 
-	for i in range(0, len(feature_distances.keys())):
+	for i in range(0, len(list(feature_distances.keys()))):
 		sorted_features = sorted(feature_distances[i], key = lambda x: x[2], reverse = True)
 		sorted_map[i] = sorted_features
 
-	print sorted_map[0][0:10]
+	print(sorted_map[0][0:10])
 	return sorted_map
 
 def sample_clusters(clusterer_dir, features_dir, traj_dir, save_dir, n_samples):
@@ -1366,7 +1366,7 @@ def sample_clusters(clusterer_dir, features_dir, traj_dir, save_dir, n_samples):
 
 	trajectories = get_trajectory_files(traj_dir)
 
-	for cluster in range(0, len(clusters_map.keys())):
+	for cluster in range(0, len(list(clusters_map.keys()))):
 		for s in range(0, n_samples):
 			sample = clusters_map[cluster][s]
 			traj_id = sample[0]
@@ -1415,7 +1415,7 @@ def combine_rmsd_docking_maps(rmsd_csv, docking_csv):
 			if j == 0: continue
 			docking_map.append(line[j])
 
-	print docking_map[docking_map.keys()[0]]
+	print(docking_map[list(docking_map.keys())[0]])
 
 def output_msm_graph(msm):
 	return
@@ -1430,8 +1430,8 @@ n_samples = 10
 feature_types = "_switches_npxx_tm6_bp"
 
 switch_residues = [130, 131, 208, 211, 219, 268, 272, 286, 288, 316, 322, 323, 326]
-switch_npxx = [130, 131, 208, 211, 219, 268, 272, 286, 288, 316] + range(322,328)
-tm6_residues = range(269, 299)
+switch_npxx = [130, 131, 208, 211, 219, 268, 272, 286, 288, 316] + list(range(322,328))
+tm6_residues = list(range(269, 299))
 bp_residues = [82, 86, 93, 106, 110, 113, 114, 117, 118, 164, 191, 192, 193, 195, 199, 200, 203, 206, 208, 286, 289, 290, 293, 305, 308, 309, 312, 316]
 dihedral_residues = list(set(switch_npxx + tm6_residues))
 

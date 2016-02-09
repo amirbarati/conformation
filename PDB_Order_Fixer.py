@@ -70,7 +70,7 @@ class PDB_Order_Fixer:
 			residue_key = (res_name, chain, res_number)
 
 
-			if residue_key in residue_lines.keys():
+			if residue_key in list(residue_lines.keys()):
 				residue_lines[residue_key].append(i)
 			else:
 				residue_lines[residue_key] = [i]

@@ -26,7 +26,7 @@ def fix_pdb(pdb_dir):
 	pdbs = get_trajectory_files(pdb_dir)
 
 	for i in range(0,len(pdbs)):
-		print i 
+		print(i) 
 		pdb_file = pdbs[i]
 		pdb_name = pdb_file.split("/")[len(pdb_file.split("/"))-1]
 		cmd.load(pdb_file, str(i))

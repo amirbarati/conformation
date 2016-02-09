@@ -127,7 +127,7 @@ contact_residues = get_common_residues(residues_map_csv, contact_residues)
 print("BEGINNING tICA ANALYSIS")
 
 from b2ar_tica_config import *
-print feature_name
+print(feature_name)
 '''
 featurize_pnas_distance(traj_dir, pnas_features_dir, traj_ext, inactive_dir,
                             active_dir, inactive_pnas_distances_dir,
@@ -226,7 +226,7 @@ agonist_ligands = [a for a in agonist_ligands if "TA" not in a]
 from b2ar_ktica_config import *
 print("BEGINNING kernel tICA ANALYSIS")
 
-print feature_name
+print(feature_name)
 tica_dir = get_ktica_dir(tica_dir, n_components, feature_name, 
                          wolf_string, shrinkage_string)
 ref_tica_dir, ref_tica_coords, ref_nystroem, ref_ktica_projected_data_filename = get_ref_ktica_dirs(tica_dir)

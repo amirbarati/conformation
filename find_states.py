@@ -16,7 +16,7 @@ def fit_and_plot(pipeline, trajectories):
     transformed = pipeline.fit_transform(trajectories)
     transformed = np.concatenate(transformed)
 
-    print('Eiegenvaue sum', pipeline.named_steps['tica'].eigenvalues_.sum())
+    print(('Eiegenvaue sum', pipeline.named_steps['tica'].eigenvalues_.sum()))
 
     x = transformed[:, 0]
     y = transformed[:, 1]
@@ -67,7 +67,7 @@ if not (os.path.isfile("reduced_phi_psi_chi_stride10.h5")):
 	fitted_model = tica_model.fit(features)
 	reduced_data = fitted_model.transform(features)
 	verbosedump(reduced_data, "reduced_phi_psi_chi_stride10.h5")
-	print(tica_model.summarize())
+	print((tica_model.summarize()))
 else:
 	reduced_data = verboseload("reduced_phi_psi_chi_stride10.h5")
 
@@ -78,7 +78,7 @@ clusters = clusterer.fit_transform(reduced_data)[0]
 center_locations = []
 
 for i in range(0, len(clusters)):
-	print i
+	print(i)
 	for j in range(0, len(clusterer.cluster_centers_)):
 		if np.linalg.norm(reduced_data[0][i] - clusterer.cluster_centers_[j]) < 0.001:
 			print("found match")

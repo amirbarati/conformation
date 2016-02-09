@@ -22,12 +22,12 @@ def fix_topology(topology):
 		#print chain
 		for residue in chain.residues:
 			resname = str(residue)
-			if resname in residues.keys():
+			if resname in list(residues.keys()):
 				residues[resname].append(residue)
 			else:
 				residues[resname] = [residue]
 
-	for resname in residues.keys():
+	for resname in list(residues.keys()):
 		fragments = residues[resname]
 		if len(fragments) > 1:
 			main_fragment = fragments[0]
@@ -63,7 +63,7 @@ def fix_traj(traj):
 		new_atom_sequence[i].index = i
 
 	time1 = time.time()
-	print time1 - time0
+	print(time1 - time0)
 	return new_traj
 
 def phi_indices(top, residues = None):
@@ -89,20 +89,20 @@ def phi_indices(top, residues = None):
 		next_c = None
 
 		c_index = c.index
-		c_neighbors = graph.edge[c].keys()
+		c_neighbors = list(graph.edge[c].keys())
 		for c_neighbor in c_neighbors:
 			if c_neighbor.name == "N":
 				n = c_neighbor
 				break
 		
 		if n != None:
-			n_neighbors = graph.edge[n].keys()
+			n_neighbors = list(graph.edge[n].keys())
 			for n_neighbor in n_neighbors:
 				if n_neighbor.name == "CA":
 						ca = n_neighbor
 						break
 		if ca != None:
-			ca_neighbors = graph.edge[ca].keys()
+			ca_neighbors = list(graph.edge[ca].keys())
 			for ca_neighbor in ca_neighbors:
 				if ca_neighbor.name == "C":
 					next_c = ca_neighbor
@@ -110,7 +110,7 @@ def phi_indices(top, residues = None):
 		if n != None and ca != None and next_c != None:
 			phi_tuples.append((c.index, n.index, ca.index, next_c.index))
 		else:
-			print "No phi found for %s " %c.name
+			print("No phi found for %s " %c.name)
 
 	#print("phi angles = %d" %len(phi_tuples))
 	return phi_tuples
@@ -137,21 +137,21 @@ def psi_indices(top, residues = None):
 		next_n = None
 
 		n_index = n.index
-		n_neighbors = graph.edge[n].keys()
+		n_neighbors = list(graph.edge[n].keys())
 		for n_neighbor in n_neighbors:
 			if n_neighbor.name == "CA":
 				ca = n_neighbor
 				break
 		
 		if ca != None:	
-			ca_neighbors = graph.edge[ca].keys()
+			ca_neighbors = list(graph.edge[ca].keys())
 			for ca_neighbor in ca_neighbors:
 				if ca_neighbor.name == "C":
 					c = ca_neighbor
 					break
 
 		if c != None:
-			c_neighbors = graph.edge[c].keys()
+			c_neighbors = list(graph.edge[c].keys())
 			for c_neighbor in c_neighbors:
 				if c_neighbor.name == "N":
 					next_n = c_neighbor
@@ -160,7 +160,7 @@ def psi_indices(top, residues = None):
 		if c != None and ca != None and next_n != None:
 			psi_tuples.append((n.index, c.index, ca.index, next_n.index))
 		else:
-			print "No psis found for %s " %c.residue
+			print("No psis found for %s " %c.residue)
 
 	#print("psi angles = %d " %len(psi_tuples))
 	return psi_tuples
@@ -206,7 +206,7 @@ def chi1_indices(top, specified_residues = None):
 			chi1_tuples.append(dihedral)
 			#print residue.resSeq
 		elif dihedral != [None, None, None, None] and str(residue.name)[0:3] in chi1_residues:
-			print "no chi1 found for %s" %str(residue)	
+			print("no chi1 found for %s" %str(residue))	
 	return chi1_tuples
 
 
@@ -246,7 +246,7 @@ def chi2_indices(top, specified_residues = None):
 			chi2_tuples.append(dihedral)
 			#print residue
 		elif dihedral != [None, None, None, None] and str(residue.name)[0:3] in chi2_residues:
-			print "no chi2 found for %s" %str(residue)		
+			print("no chi2 found for %s" %str(residue))		
 
 
 	return chi2_tuples
@@ -256,7 +256,7 @@ def convert_residue_pairs_to_mdtraj_indices(top, residue_pairs):
 	for pair in residue_pairs:
 		indices = [r.index for r in top.residues if pair[0].is_mdtraj_res_equivalent(r) and not r.is_water]
 		if len(indices) == 0:
-			print("FATAL: No residues in trajectory for residue %d chain %s" % (pair[0].resSeq, pair[0].chain_id))
+			print(("FATAL: No residues in trajectory for residue %d chain %s" % (pair[0].resSeq, pair[0].chain_id)))
 			return None
 		else:
 			ind_i = indices[0]
@@ -268,7 +268,7 @@ def convert_residue_pairs_to_mdtraj_indices(top, residue_pairs):
 
 		indices = [r.index for r in top.residues if pair[1].is_mdtraj_res_equivalent(r) and not r.is_water]
 		if len(indices) == 0:
-			print("FATAL: No residues in trajectory for residue %d chain %s" % (pair[1].resSeq, pair[1].chain_id))
+			print(("FATAL: No residues in trajectory for residue %d chain %s" % (pair[1].resSeq, pair[1].chain_id)))
 			return None
 		else:
 			ind_j = indices[0]
@@ -279,7 +279,7 @@ def convert_residue_pairs_to_mdtraj_indices(top, residue_pairs):
 						ind_j = j
 
 		resIndices.append((ind_i, ind_j))
-	print("looking at %d pairs for trajectory" %len(resIndices))
+	print(("looking at %d pairs for trajectory" %len(resIndices)))
 	return(resIndices)
 
 
@@ -327,8 +327,8 @@ def read_and_featurize(traj_file, features_dir = None, condition=None,
 					chunk_features = md.compute_contacts(chunk, contacts = residue_pairs, scheme = 'closest-heavy', ignore_nonprotein=False)[0]
 					contact_features.append(chunk_features)
 				contact_features = np.concatenate(contact_features)
-			except Exception,e:
-				print str(e)
+			except Exception as e:
+				print(str(e))
 				print("Failed")
 				return
 		else:
@@ -338,8 +338,8 @@ def read_and_featurize(traj_file, features_dir = None, condition=None,
 				else:
 					traj = md.load(traj_file)
 				contact_features =  md.compute_contacts(traj, contacts = residue_pairs, scheme = 'closest-heavy', ignore_nonprotein=False)[0]
-			except Exception,e:
-				print str(e)
+			except Exception as e:
+				print(str(e))
 				print("Failed for traj")
 				return
 		if len(dihedral_residues) > 0: 
@@ -347,8 +347,8 @@ def read_and_featurize(traj_file, features_dir = None, condition=None,
 		else:
 			manual_features = contact_features
 
-	print("new features %s has shape: " %traj_file)
-	print(np.shape(manual_features))
+	print(("new features %s has shape: " %traj_file))
+	print((np.shape(manual_features)))
 
 	if condition is None:
 		condition = traj_file.split("/")[len(traj_file.split("/"))-1]
@@ -358,6 +358,8 @@ def read_and_featurize(traj_file, features_dir = None, condition=None,
 
 def compute_contacts_below_cutoff(traj_file_frame, cutoff = 100000.0, contact_residues = [], anton = False, structure=None):
 	traj_file = traj_file_frame[0]
+	print("structure")
+	print(structure)
 	if structure is not None:
 		frame = md.load_frame(traj_file, index=0, top=structure)
 	else:
@@ -372,16 +374,20 @@ def compute_contacts_below_cutoff(traj_file_frame, cutoff = 100000.0, contact_re
 
 	for i in range(0, len(contact_residues)):
 		residue = contact_residues[i]
-		indices = [r.index for r in top.residues if residue.is_mdtraj_res_equivalent(r)]
+		indices = [res.index for res in top.residues if residue.is_mdtraj_res_equivalent(res)]
 		if len(indices) == 0:
-			print("No residues in trajectory for residue %d chain %s" %(residue.resSeq, residue.chain_id))
+			print(("No residues in trajectory for residue %d chain %s" %(residue.resSeq, residue.chain_id)))
 			continue
 		else:
 			ind = indices[0]
 			for j in indices:
 				if j != ind: 
 					#print("Warning: multiple res objects for residue %d " %residue)
-					if "CB" in [str(a) for a in r.atoms for r in top.residues if r.index == ind]:
+					matching_residues = [res for res in top.residues if res.index==ind]
+					matching_atoms = []
+					for matching_residue in matching_residues:
+						matching_atoms += [str(a) for a in matching_residue.atoms]
+					if "CB" in matching_atoms:
 						ind = j
 			res_indices.append(ind)
 			residue.res_name = str(top.residue(ind))
@@ -400,17 +406,25 @@ def compute_contacts_below_cutoff(traj_file_frame, cutoff = 100000.0, contact_re
 		mdtraj_index0 = residue_to_mdtraj_index[res0]
 		mdtraj_index1 = residue_to_mdtraj_index[res1]
 		mdtraj_index_combinations.append((mdtraj_index0, mdtraj_index1))
-		pair = sorted([res0, res1])
+		pair = [res0, res1]
 		contact_features.append(pair)
 
-
+	
+	print("mdraj_index_combinations[0:10]")
+	print(mdtraj_index_combinations[0:10])
+	print("contact_features[0:10]")
+	print(contact_features[0:10])	
 	final_residue_pairs = []
 	final_mdtraj_index_pairs = []
 
-	print("About to compute %d features" %len(mdtraj_index_combinations))
+	print(("About to compute %d features" %len(mdtraj_index_combinations)))
 	distances = md.compute_contacts(frame, contacts = mdtraj_index_combinations, scheme = 'closest-heavy', ignore_nonprotein=False)[0]
 	#print(distances)
-	print(np.shape(distances))
+	print((np.shape(distances)))
+	print("cutoff")
+	print(cutoff)
+	print("distances[0:10]")
+	print(distances[0:10])
 	for i in range(0, len(distances[0])):
 		distance = distances[0][i]
 		#print(distance)
@@ -418,7 +432,7 @@ def compute_contacts_below_cutoff(traj_file_frame, cutoff = 100000.0, contact_re
 			final_mdtraj_index_pairs.append(mdtraj_index_combinations[i])
 			final_residue_pairs.append(contact_features[i])
 
-	print("There are %d residue-residue contacts below cutoff in structure." %len(final_residue_pairs))
+	print(("There are %d residue-residue contacts below cutoff in structure." %len(final_residue_pairs)))
 	
 	return final_residue_pairs
 
@@ -441,12 +455,13 @@ def which_trajs_to_featurize(traj_dir, traj_ext, features_dir):
 def featurize_contacts_custom(traj_dir, features_dir, traj_ext, structures, 
 															traj_top_structure = None,
 															contact_residue_pairs_file = None, 
-															dihedral_residues = None, 
+															dihedral_residues = [], 
 															dihedral_types = None, 
 															contact_residues = None, 
 															agonist_bound = False, 
 															residues_map = None, 
 															contact_cutoff = None, 
+															user_specified_contact_residue_pairs = [],
 															parallel = False, exacycle = False,
 															iterative=True):
 	'''
@@ -465,14 +480,17 @@ def featurize_contacts_custom(traj_dir, features_dir, traj_ext, structures,
 		if exacycle: contact_residue_pairs = [residues_map[key] for key in contact_residue_pairs]
 	else:
 		contact_residue_pairs = []
-		for structure in structures: 
+		for structure in structures:
+			print("structure")
+			print(structure) 
 			structure_contact_residue_pairs = compute_contacts_below_cutoff([structure,0], cutoff = contact_cutoff, contact_residues = contact_residues, anton = False, structure = traj_top_structure)
 			for pair in structure_contact_residue_pairs:
 				if pair not in contact_residue_pairs: contact_residue_pairs.append(pair)
 		#ordering = np.argsort([r[0].resSeq for r in contact_residue_pairs]).tolist()
 		#contact_residue_pairs = [contact_residue_pairs[i] for i in ordering]
-		print("There are %d pairs of residues to be used in contact featurization." % len(contact_residue_pairs))
+		print(("There are %d pairs of residues to be used in contact featurization." % len(contact_residue_pairs)))
 		print("Saving contact feature residue pairs to disk.")
+		contact_residue_pairs += user_specified_contact_residue_pairs
 		with open(contact_residue_pairs_file, "wb") as f:
 			pickle.dump(contact_residue_pairs, f)
 
@@ -490,7 +508,7 @@ def featurize_contacts_custom(traj_dir, features_dir, traj_ext, structures,
 
 def save_feature_residues_pkl(traj_dir, features_dir, traj_ext, structures, contact_residue_pairs_file = None, dihedral_residues = None, dihedral_types = None, contact_residues = None, agonist_bound = False, residues_map = None, contact_cutoff = None, parallel = False, exacycle = False):
 	if residues_map is not None:
-		contact_residues = [r for r in contact_residues if r in residues_map.keys()]
+		contact_residues = [r for r in contact_residues if r in list(residues_map.keys())]
 		if exacycle: contact_residues = [residues_map[key] for key in contact_residues]	
 
 	if contact_residue_pairs_file == "" or (not os.path.exists(contact_residue_pairs_file)):
@@ -505,15 +523,15 @@ def save_feature_residues_pkl(traj_dir, features_dir, traj_ext, structures, cont
 		contact_residue_pairs = generate_features(contact_residue_pairs_file)
 		if exacycle: contact_residue_pairs = [residues_map[key] for key in contact_residue_pairs]
 	print(contact_residue_pairs)
-	print("Number of contact pairs = %d" %len(contact_residue_pairs))
+	print(("Number of contact pairs = %d" %len(contact_residue_pairs)))
 
 def featurize_known_traj(traj_dir, inactive, features_dir):
-	print("currently featurizing %s" %traj_dir.split("/")[len(traj_dir.split("/"))-1])
+	print(("currently featurizing %s" %traj_dir.split("/")[len(traj_dir.split("/"))-1]))
 	traj = md.load(traj_dir)
 	rmsds = rmsd_npxxy(traj, inactive)
 	helix6_helix3_distances = helix6_helix3_dist(traj)
 	features = np.transpose(np.concatenate([[rmsds], [np.concatenate(helix6_helix3_distances)]]))
-	print np.shape(features)
+	print(np.shape(features))
 
 	filename = "%s/%s" %(features_dir, traj_dir.split("/")[len(traj_dir.split("/"))-1])
 	verbosedump(features, filename)
@@ -548,7 +566,7 @@ def featurize_known(directory, inactive_dir, active_dir):
 
 def compute_pnas_coords_and_distance(traj_file, inactive, active, scale = 7.14, residues_map = None, structure=None, 
 	connector_residues=[], npxxy_residues=[], tm6_tm3_residues=[]):
-	print "featurizing %s" %traj_file
+	print("featurizing %s" %traj_file)
 	if structure is not None:
 		traj = md.load(traj_file, top=structure)
 	else:
@@ -573,7 +591,7 @@ def compute_pnas_coords_and_distance(traj_file, inactive, active, scale = 7.14, 
 def compute_user_defined_features(traj_file, inactive, active, structure=None,
 																	feature_name_residues_dict = {}):
 
-	print "featurizing %s" %traj_file
+	print("featurizing %s" %traj_file)
 	if structure is not None:
 		traj = md.load(traj_file, top=structure)
 	else:
@@ -581,7 +599,7 @@ def compute_user_defined_features(traj_file, inactive, active, structure=None,
 
 	
 	features = []
-	for name, residues in feature_name_residues_dict.iteritems():
+	for name, residues in feature_name_residues_dict.items():
 		if name == "tm6_tm3_dist":
 			features.append(helix6_helix3_dist(traj, residues=residues))	
 		elif name == "rmsd_npxxy_active":
@@ -626,16 +644,16 @@ def reaction_coordinate_sampler(traj_dir, traj_ext, rxn_coord_file,
 																feature_name_residues_dict, coords_bounds_dict, save_file):
 	rxn_coords = verboseload(rxn_coord_file)
 	concatenated_rxn_coords = np.concatenate(rxn_coords)
-	print(np.shape(concatenated_rxn_coords))
+	print((np.shape(concatenated_rxn_coords)))
 
-	titles = feature_name_residues_dict.keys()
+	titles = list(feature_name_residues_dict.keys())
 
 	traj_files = get_trajectory_files(traj_dir, traj_ext)
 	traj_files = [os.path.basename(t) for t in traj_files]
 	coord_to_trajectories_dict = {}
 
-	for coord, bounds in coords_bounds_dict.iteritems():
-		print("Analyzing %s" % coord)
+	for coord, bounds in coords_bounds_dict.items():
+		print(("Analyzing %s" % coord))
 		column = titles.index(coord)
 		coord_to_trajectories_dict[coord] = []
 		for i, projected_traj in enumerate(rxn_coords):
@@ -707,7 +725,7 @@ def featurize_pnas_distance(traj_dir, features_dir, ext, inactive_dir,
 	print("Completed featurizing")
 
 def load_pdb_traj(pdb_file):
-	print pdb_file
+	print(pdb_file)
 	return md.load_frame(pdb_file, index = 0)
 
 def featurize_pnas_distance_pdbs(traj_dir, new_filename, features_dir, inactive_dir, active_dir, inactive_distances_dir, active_distances_dir, coords_dir, scale = 7.14):
@@ -757,7 +775,7 @@ def featurize_sasa_individual(traj_file, bp_residues, anton, stride):
 	#	return []
 
 	bp_atoms = [a.index for a in top.atoms if a.residue.resSeq in bp_residues]
-	print(np.shape(sasa))
+	print((np.shape(sasa)))
 	sasa = sasa[:, bp_atoms]
 	total_sasa = sasa.sum(axis=1)
 	return(total_sasa)
@@ -766,10 +784,10 @@ def featurize_sasa(traj_dir, traj_ext, bp_residues, sasa_file, residues_map = No
 	trajs = get_trajectory_files(traj_dir, traj_ext)
 
 	
-	print("therer are initially %d bp residues" %len(bp_residues))
+	print(("therer are initially %d bp residues" %len(bp_residues)))
 	if residues_map is not None:
 		bp_residues = map_residues(residues_map, bp_residues)
-	print("therer are now %d bp residues" %len(bp_residues))
+	print(("therer are now %d bp residues" %len(bp_residues)))
 
 	featurize_partial = partial(featurize_sasa_individual, bp_residues = bp_residues, anton = anton, stride = stride)
 	pool = mp.Pool(mp.cpu_count())
@@ -822,34 +840,34 @@ def sample_tIC_extremes(tica_projected_coords_dir, features_dir, standardized_fe
 	tica_coords = verboseload(tica_projected_coords_dir)
 	tica_concatenated = np.concatenate(tica_coords)
 	print("np shape of tica_concatenated is")
-	print(np.shape(tica_concatenated))
+	print((np.shape(tica_concatenated)))
 	del(tica_coords)
 
 	standardized_features = load_file_list(get_trajectory_files(standardized_features_dir, ext))
 	standardized_features_concatenated = np.concatenate(standardized_features)
 	print("np shape of standardized_features_concatenated is ")
-	print(np.shape(standardized_features_concatenated))
+	print((np.shape(standardized_features_concatenated)))
 	del(standardized_features)
 
 	features = load_file_list(get_trajectory_files(features_dir, ext))
 	features_concatenated = np.concatenate(features)
 	del(features)
 	print("np shape of features_concatenated is ")
-	print(np.shape(features_concatenated))
+	print((np.shape(features_concatenated)))
 
 	print("Loaded standardized features, finding extrema now")
 
 	for j in range(0,np.shape(tica_concatenated)[1]):
-		print("Analyzing tIC%d" %j)
+		print(("Analyzing tIC%d" %j))
 		tIC = tica_concatenated[:,j]
-		print(np.shape(tIC))
+		print((np.shape(tIC)))
 		low_percentile = np.percentile(tIC, percentile)
 		high_percentile = np.percentile(tIC, (100. - percentile))
 		low_indices = np.where(tIC < low_percentile)[0]
 		high_indices = np.where(tIC > high_percentile)[0]
 		low_features = standardized_features_concatenated[low_indices,:]
 		print(low_features)
-		print(np.shape(low_features))
+		print((np.shape(low_features)))
 		high_features = standardized_features_concatenated[high_indices,:]
 		np.savetxt("%s/tIC.%d_standardized_low_values.csv" %(tica_extremes_dir, (j+1)), low_features,  delimiter=",")
 		np.savetxt("%s/tIC.%d_standardized_high_values.csv" %(tica_extremes_dir, (j+1)),high_features,  delimiter=",")
@@ -869,7 +887,7 @@ def find_most_important_residues_in_tIC(traj_file, tica_object, tic_features_csv
 		tica = verboseload(tica_object)
 	except:
 		tica = load_dataset(tica_object)
-	print traj_file
+	print(traj_file)
 	traj = md.load_frame(traj_file, 0)
 	#traj = fix_traj(traj)
 	top = traj.topology 
@@ -900,12 +918,12 @@ def find_most_important_residues_in_tIC(traj_file, tica_object, tic_features_csv
 		#
 
 	for i in range(0, np.shape(tica.components_)[0]):
-		print i
+		print(i)
 		index_components = [(j,abs(tica.components_[i][j])) for j in range(0,np.shape(tica.components_)[1])]
 		feature_coefs_per_tIC[i] = [component[1] for component in index_components]
 		duplicated_feature_coefs_per_tIC[i] = [j for k in feature_coefs_per_tIC[i] for j in (k, k)] 
 		index_components = sorted(index_components, key= lambda x: x[1],reverse=True)
-		print(index_components[0:10])
+		print((index_components[0:10]))
 		list_i = [index_components[j][0] for j in range(0,len(index_components))]
 		top_indices_per_tIC[i] = list_i
 	
@@ -931,7 +949,7 @@ def find_most_important_residues_in_tIC(traj_file, tica_object, tic_features_csv
 
 def save_features_to_residues_map(traj_file, residue_pairs, feature_residues_csv, cutoff, residues_map = None, exacycle = False):
 	if residues_map is not None:
-		contact_residues = [r for r in contact_residues if r in residues_map.keys()]
+		contact_residues = [r for r in contact_residues if r in list(residues_map.keys())]
 		if exacycle: contact_residues = [residues_map[key] for key in contact_residues]
 
 	traj = md.load_frame(traj_file, 0)
@@ -939,7 +957,7 @@ def save_features_to_residues_map(traj_file, residue_pairs, feature_residues_csv
 	top = traj.topology 
 	residue_pairs, residue_infos = compute_contacts_below_cutoff([traj_file, [0]], cutoff = cutoff, contact_residues = contact_residues, anton = False)
 	if exacycle:
-		reverse_residues_map = {v: k for k, v in residues_map.items()}
+		reverse_residues_map = {v: k for k, v in list(residues_map.items())}
 		new_residue_pairs = []
 		for residue_pair in residue_pairs:
 			new_residue_pair = [reverse_residues_map[residue_pair[0]], reverse_residues_map[residue_pair[1]]]
@@ -952,7 +970,7 @@ def save_features_to_residues_map(traj_file, residue_pairs, feature_residues_csv
 			new_residue_infos.append(new_residue_info)
 		residue_infos = new_reisdue_infos
 
-	print("There are: %d residue pairs" %len(residue_pairs))
+	print(("There are: %d residue pairs" %len(residue_pairs)))
 	f = open(feature_residues_csv, "wb")
 	f.write("feature, residue.1.resSeq, residue.2.resSeq, residue.1.res, residue.1.chain, residue.2.res, residue.2.chain,\n")
 	for i in range(0, len(residue_infos)):

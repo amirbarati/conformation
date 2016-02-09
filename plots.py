@@ -48,7 +48,7 @@ def plot_timescales(operator_file, plot_file, title):
   print(timescales)
   df = pd.DataFrame(columns=['timescales'])
   df['timescales'] = np.array(timescales)
-  df.index = range(1,len(timescales)+1)
+  df.index = list(range(1,len(timescales)+1))
   plt.figure()
   df.plot(kind='bar'); plt.axhline(0, color='k')
   plt.title(title)

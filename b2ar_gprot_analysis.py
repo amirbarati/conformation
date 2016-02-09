@@ -131,7 +131,7 @@ print("BEGINNING tICA ANALYSIS")
 
 #compute_user_defined_features_wrapper(traj_dir, traj_ext, inactive_dir, active_dir, None,
 #                                          feature_name_residues_dict, user_defined_features_file)
-plot_columns(pnas_features_dir, user_defined_features_file, titles = [key for key,value in feature_name_residues_dict.iteritems()], tICA=False, scale=1.0, refcoords_file=None)
+plot_columns(pnas_features_dir, user_defined_features_file, titles = [key for key,value in feature_name_residues_dict.items()], tICA=False, scale=1.0, refcoords_file=None)
 #reaction_coordinate_sampler(traj_dir, traj_ext, user_defined_features_file, 
 #                                feature_name_residues_dict, coords_bounds_dict, reaction_coordinates_trajs_file)
 
@@ -193,7 +193,7 @@ interpret_tIC_rf(rf_dir, feature_residues_pkl, n_tica_components=5, percentile=9
 from b2ar_gprot_ktica_config import *
 print("BEGINNING kernel tICA ANALYSIS")
 
-print feature_name
+print(feature_name)
 
 tica_dir = get_ktica_dir(tica_dir, n_components, feature_name, 
                          wolf_string, shrinkage_string)
