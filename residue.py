@@ -35,6 +35,39 @@ class Residue(object):
 
     return True
 
+class Atom(object):
+  def __init__(self, atom_id=None, resSeq=None, chain_id=None, atom_name=None, res_name=None):
+    self.resSeq = resSeq
+    self.chain_id = chain_id
+    self.atom_name = atom_name
+    self.atom_id = atom_id
+    self.res_name = res_name
+
+  def __repr__(self):
+    return "%s-%s" %(self.res_name, self.atom_name)
+
+  def __eq__(self, other):
+    return self.__dict__ == other.__dict__
+
+  def __hash__(self):
+    return hash(self.__repr__())
+
+  def __ne__(self, other):
+    return (not self.__eq__(other))
+
+  def is_mdtraj_atom_equivalent(self, mdtraj_atom):
+    if self.resSeq != mdtraj_atom.residue.resSeq:
+      return False
+    if self.chain_id is not None and (self.chain_id != mdtraj_atom.residue.chain.id):
+      return False
+    if self.atom_name is not None and (self.atom_name != mdtraj_atom.name):
+      return False
+    if self.atom_id is not None and (self.atom_id != mdtraj_atom.index):
+      return False
+    if self.res_name is not None and (self.res_name != mdtraj_atom.residue.name):
+      return False
+
+    return True
 
 
 class ContactFeature(object):

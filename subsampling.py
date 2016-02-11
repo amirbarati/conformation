@@ -7,7 +7,7 @@ from glob import glob
 from functools import partial 
 
 def reimage(traj_file):
-	print(("Examining %s" %traj_file))
+	print("Examining %s" %traj_file)
 	traj = md.load(traj_file)
 	#traj = fix_traj(traj)
 	top = traj.topology
@@ -55,7 +55,7 @@ def subsample_traj(traj, stride=5, top=None):
 	simulation = directory[len(directory)-2]
 	dcd_file = directory[len(directory)-1]
 	condition = "%s-%s" %(simulation.split('-')[1], simulation.split('-')[2])
-	print(("analyzing simulation %s file %s" %(simulation, dcd_file)))
+	print("analyzing simulation %s file %s" %(simulation, dcd_file))
 	top_file = top
 
 	top = md.load_frame(traj, 0, top=top_file).topology
@@ -72,7 +72,7 @@ def subsample_traj(traj, stride=5, top=None):
 	new_condition_dir = "%s/%s" %(new_root_dir, condition)
 
 	new_file_full = "%s/%s/%s" %(new_root_dir, condition, new_file)
-	print(("saving trajectory as %s" %new_file_full))
+	print("saving trajectory as %s" %new_file_full)
 	traj.save(new_file_full)
 
 
@@ -121,24 +121,45 @@ def subsample(directory, stride=5):
 		first_frame.save_pdb("/scratch/users/enf/b2ar_analysis/%s_firstframe.pdb" %condition)
 		print("trajectory has been subsampled_allprot, combined, and saved")
 
-def combine_subsample_copy(traj_directory, new_directory):
-	head = traj_directory.split("/")[len(traj_directory.split("/"))-1]
+def combine_subsample_copy(traj_directory, new_directory, topology, stem_directory, new_prefix=""):
+	head = os.path.basename(traj_directory.strip("/"))
+	print(head)
+	new_filename = "%s/%s_%s.nc" %(new_directory, new_prefix, head)
+	new_h5_filename = "%s/%s_%s.h5" %(new_directory, new_prefix, head)
+	if os.path.exists(new_filename): return
+
 	subprocess.call("cd %s" %traj_directory, shell=True)
-	subprocess.call("cp $SCRATCH/md_simulations/auto_reimage.in ./", shell=True)
+	os.chdir(traj_directory)
+	subprocess.call("cp /home/enf/xstream_scratch/md_simulations/input_files/auto_reimage_vsp.in %s" % traj_directory, shell=True)
+	print("Finished copying auto reimager")
+	#subprocess.call("cp %s/system.prmtop ./" % stem_directory, shell=True)
+	subprocess.call("bash auto_reimage_vsp.in", shell=True)
+	print("finished reimaging")
 	files = glob('1_thru_*_skip_10_reimaged.nc')
 	max_nc = [path.split("_")[2] for path in files]
 	latest_traj = files[np.array(max_nc).argmin()]
+	
+	traj = md.load(latest_traj, top=topology)
+	print("loaded traj")
+	traj.save(new_h5_filename)
+	print("saved h5 traj")
+	subprocess.call("cp %s %s" %(latest_traj, new_filename), shell=True)
+	print("finished copying traj")
 
-	new_filename = "%s/%s.nc" %(new_directory, head)
-	subprocess.call("cp %s %s" %(newest, new_filename), shell=True)
 	return
 
-def subsample_amber(stem_directory, new_directory):
+def subsample_amber(stem_directory, new_directory, new_prefix=""):
 	if not os.path.exists(new_directory): os.makedirs(new_directory)
-
-	paths = glob('rep_*/')
-	combine_subsample_copy_partial = partial(combine_subsample_copy, new_directory=new_directory)
-	pool = mp.Pool(mp.cpu_count())
+	
+	paths = glob("%s/rep_*/" % stem_directory)
+	print(paths)
+	topology = "%s/system.pdb" % stem_directory
+	combine_subsample_copy_partial = partial(combine_subsample_copy, new_directory=new_directory, topology = topology, stem_directory = stem_directory, new_prefix=new_prefix)
+	#for path in paths:
+	#	print("path to reimage")
+	#	print(path)
+	#	combine_subsample_copy_partial(path)
+	pool = mp.Pool(mp.cpu_count()/4)
 	pool.map(combine_subsample_copy_partial, paths)
 	pool.terminate()
 	return 

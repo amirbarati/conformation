@@ -282,11 +282,34 @@ def convert_residue_pairs_to_mdtraj_indices(top, residue_pairs):
 	print(("looking at %d pairs for trajectory" %len(resIndices)))
 	return(resIndices)
 
+def convert_atom_to_mdtraj_index(top, atom):
+	matching_atom = [a.index for a in top.atoms if atom.is_mdtraj_atom_equivalent(a)][0]
+	return matching_atom
+
+def convert_atom_residue_pairs_to_mdtraj_indices(top, atom_residue_pairs):
+	atom_residue_index_pairs = []
+	for pair in atom_residue_pairs:
+		atom_mdtraj_index = convert_atom_to_mdtraj_index(top, pair[0])
+		indices = [r.index for r in top.residues if pair[1].is_mdtraj_res_equivalent(r) and not r.is_water]
+		if len(indices) == 0:
+			print(("FATAL: No residues in trajectory for residue %d chain %s" % (pair[1].resSeq, pair[1].chain_id)))
+			return None
+		else:
+			ind_i = indices[0]
+			for j in indices:
+				if j != ind_i: 
+					#print("Warning: multiple res objects for residue %d " %resSeq0)
+					if "CB" in [str(a) for a in r.atoms for r in top.residues if r.index == ind_i]:
+						ind_i = j
+		atom_residue_mdtraj_indices = (atom_mdtraj_index, ind_i)
+		atom_residue_index_pairs.append(atom_residue_mdtraj_indices)
+	return atom_residue_index_pairs
 
 
 def read_and_featurize(traj_file, features_dir = None, condition=None, 
 											 dihedral_types = ["phi", "psi", "chi1", "chi2"], 
-											 dihedral_residues = None, residue_pairs = [], 
+											 dihedral_residues = None, residue_pairs = [],
+											 atom_residue_pairs = [], 
 											 iterative = True, structure = None):
 
 	dihedral_indices = []
@@ -347,6 +370,50 @@ def read_and_featurize(traj_file, features_dir = None, condition=None,
 		else:
 			manual_features = contact_features
 
+	if len(atom_residue_pairs) > 0:
+		if structure is not None:
+			top = md.load_frame(traj_file, index=0, top=structure).topology
+		else:
+			top = md.load_frame(traj_file, index=0).topology
+		chains = [c for c in  top.chains]
+		if chains[0].id == 'A' and chains[0].n_residues < 2:
+			chains[0].id = 'B'
+			chains[1].id = 'A'
+			chains[2].id = 'D'
+			chains[3].id = 'C'
+
+		atom_residue_pairs = convert_atom_residue_pairs_to_mdtraj_indices(top, atom_residue_pairs)
+		print("mdtraj indices of atoms, residues to featurize:")
+		print(atom_residue_pairs)
+		contact_features = []
+		if iterative:
+			try:
+				for chunk in md.iterload(traj_file, chunk = 5000):
+					chunk_features = compute_atom_residue_pair_distances(chunk, contacts=atom_residue_pairs, scheme='closest-heavy')[0]
+					contact_features.append(chunk_features)
+				contact_features = np.concatenate(contact_features)
+			except Exception as e:
+				print(str(e))
+				print("Failed")
+				return
+		else:
+			try:
+				if structure is not None:
+					traj = md.load(traj_file, top=structure)
+				else:
+					traj = md.load(traj_file)
+					contact_features = compute_atom_residue_pair_distances(traj, contacts=atom_residue_pairs, scheme='closest-heavy')[0]
+			except Exception as e:
+				print(str(e))
+				print("Failed for traj")
+				return
+		if len(residue_pairs) > 0:
+			manual_features = np.column_stack((manual_features, contact_features))
+		else:
+			manual_features = contact_features
+
+
+
 	print(("new features %s has shape: " %traj_file))
 	print((np.shape(manual_features)))
 
@@ -355,6 +422,46 @@ def read_and_featurize(traj_file, features_dir = None, condition=None,
 		condition = condition.split(".")[0]
 
 	save_dataset(manual_features, "%s/%s.dataset" %(features_dir, condition))
+
+def compute_atom_residue_pair_distances(traj, contacts, scheme='closest-heavy'):
+	"""
+	Computes the closest distance between a given atom and a given residue, and repeats
+	for each such (atom_index, residue_index) tuple in list `contacts`
+
+	Example input:
+	traj = rep1.h5
+	contacts = [(10, 30), (7, 24), (3, 89)]
+	"""
+	if scheme == 'closest':
+	    residue_membership = [[atom.index for atom in residue.atoms]
+	                          for residue in traj.topology.residues]
+	elif scheme == 'closest-heavy':
+	    # then remove the hydrogens from the above list
+	    residue_membership = [[atom.index for atom in residue.atoms if "H" not in atom.name]
+	                          for residue in traj.topology.residues]
+
+	residue_lens = [len(ainds) for ainds in residue_membership]
+
+	atom_pairs = []
+	n_atom_pairs_per_atom_residue_pair = []
+	for pair in contacts:
+	    atom_pairs.extend(list(itertools.product([pair[0]], residue_membership[pair[1]])))
+	    n_atom_pairs_per_atom_residue_pair.append(residue_lens[pair[1]])
+
+	atom_distances = md.compute_distances(traj, atom_pairs)
+
+	# now squash the results based on residue membership
+	n_atom_residue_pairs = len(contacts)
+	distances = np.zeros((len(traj), n_atom_residue_pairs), dtype=np.float32)
+	n_atom_pairs_per_atom_residue_pair = np.asarray(n_atom_pairs_per_atom_residue_pair)
+
+	for i in xrange(n_atom_residue_pairs):
+	    index = int(np.sum(n_atom_pairs_per_atom_residue_pair[:i]))
+	    n = n_atom_pairs_per_atom_residue_pair[i]
+	    distances[:, i] = atom_distances[:, index : index + n].min(axis=1)
+
+	return distances, contacts
+
 
 def compute_contacts_below_cutoff(traj_file_frame, cutoff = 100000.0, contact_residues = [], anton = False, structure=None):
 	traj_file = traj_file_frame[0]
@@ -462,8 +569,10 @@ def featurize_contacts_custom(traj_dir, features_dir, traj_ext, structures,
 															residues_map = None, 
 															contact_cutoff = None, 
 															user_specified_contact_residue_pairs = [],
+															user_specified_atom_residue_pairs = [],
 															parallel = False, exacycle = False,
-															iterative=True):
+															iterative=True,
+															load_from_file=False):
 	'''
 	Nb: The input to this function, either contact_residues or contact_residue_pairs_file, must contain instances 
 	of object Residue(). The .resSeq attribute of each such instance must refer to residue numbering in your reference
@@ -474,7 +583,7 @@ def featurize_contacts_custom(traj_dir, features_dir, traj_ext, structures,
 		is not a consensus residue numbering for the same protein.
 	'''
 	trajs = which_trajs_to_featurize(traj_dir, traj_ext, features_dir)
-	if os.path.exists(contact_residue_pairs_file):
+	if load_from_file:
 		contact_residue_pairs = generate_features(contact_residue_pairs_file)
 		print("Which contacts to measure already chosen.")
 		if exacycle: contact_residue_pairs = [residues_map[key] for key in contact_residue_pairs]
@@ -488,14 +597,20 @@ def featurize_contacts_custom(traj_dir, features_dir, traj_ext, structures,
 				if pair not in contact_residue_pairs: contact_residue_pairs.append(pair)
 		#ordering = np.argsort([r[0].resSeq for r in contact_residue_pairs]).tolist()
 		#contact_residue_pairs = [contact_residue_pairs[i] for i in ordering]
-		print(("There are %d pairs of residues to be used in contact featurization." % len(contact_residue_pairs)))
-		print("Saving contact feature residue pairs to disk.")
 		contact_residue_pairs += user_specified_contact_residue_pairs
+		final_features = contact_residue_pairs + user_specified_atom_residue_pairs
+		print(("There are %d contact pairs to be used in contact featurization." % len(final_features)))
+		print("Saving contact feature residue pairs to disk.")
 		with open(contact_residue_pairs_file, "wb") as f:
-			pickle.dump(contact_residue_pairs, f)
+			pickle.dump(final_features, f)
 
 	print("About to featurize trajectories based on the chosen featurization scheme.")
-	featurize_partial = partial(read_and_featurize, features_dir = features_dir, dihedral_residues = dihedral_residues, dihedral_types = dihedral_types, residue_pairs = contact_residue_pairs, iterative=iterative, structure=traj_top_structure)
+	print("contact_residue_pairs=")
+	print(contact_residue_pairs)
+	#print("atom_residue_pairs=")
+	featurize_partial = partial(read_and_featurize, features_dir = features_dir, dihedral_residues = dihedral_residues,
+								dihedral_types = dihedral_types, residue_pairs = contact_residue_pairs,
+								atom_residue_pairs=user_specified_atom_residue_pairs, iterative=iterative, structure=traj_top_structure)
 	if parallel:
 		pool = mp.Pool(mp.cpu_count())
 		pool.map(featurize_partial, trajs)
