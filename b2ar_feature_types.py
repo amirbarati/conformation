@@ -23,7 +23,8 @@ helix_residues["tm6"] = list(range(267,299))
 helix_residues["ecl3"] = list(range(299,305))
 helix_residues["tm7"] = list(range(305,330))
 
-cutoff = 1.0
+cutoff = 0.66
+feature_name = "all_residues_2rh1_3sn6_under_cutoff%dA" %(int(10*cutoff))
 
 
 helix_residues["tm8"] = list(range(330,340))
@@ -45,6 +46,17 @@ tm_residues = helix_residues["tm1"] + helix_residues["tm2"] + helix_residues["tm
 sampling_method = "random"
 precision = "SP"
 
+tm6_tm3_residues = convert_list_to_resobject_list([("A", 131), ("C", 272)])
+npxxy_residues = convert_list_to_resobject_list([("C", r) for r in range(322,327)])
+connector_residues = convert_list_to_resobject_list([("A", 121), ("C", 282)])
+
+feature_name_residues_dict = {}
+feature_name_residues_dict["tm6_tm3_dist"] = tm6_tm3_residues
+feature_name_residues_dict["rmsd_npxxy_active"] = npxxy_residues
+feature_name_residues_dict["rmsd_npxxy_inactive"] = npxxy_residues
+feature_name_residues_dict["rmsd_connector_active"] = connector_residues
+feature_name_residues_dict["rmsd_connector_inactive"] = connector_residues
+
 #feature_types = "_switches_tm6"
 #feature_types = "_switches_npxx_tm6_bp"
 #feature_types = "_switches_npxx_tm6_dihedrals_switches_npxx_contact"
@@ -60,7 +72,7 @@ precision = "SP"
 #feature_types = "reimaged_notrajfix_tm_residues_under_cutoff%dnm" %(int(cutoff))
 #feature_types = "reimaged_notrajfix_tm_residues_2rh1_3sn6_under_cutoff%dnm" %(int(cutoff))
 #feature_types = "reimaged_notrajfix_all_residues_under_cutoff%dnm" %(int(cutoff))
-feature_name = "all_residues_2rh1_3sn6_under_cutoff%dnm" %(int(cutoff))
+#feature_name = "all_residues_2rh1_3sn6_under_cutoff%dnm" %(int(cutoff))
 #feature_name = "tm_residues_2rh1_3sn6_under_cutoff%dnm" %(int(cutoff))
 #feature_types = "reference_receptors"
 #contact_residues = convert_list_to_resobject_list([("A", r) for r in tm_residues])

@@ -293,13 +293,12 @@ def plot_tica(transformed_data_dir, lag_time):
 
 
 
-def plot_tica_and_clusters(component_j, transformed_data, clusterer, lag_time, component_i, label = "dot", active_cluster_ids = [], intermediate_cluster_ids = [], inactive_cluster_ids = [], inactive_subsample=5, intermediate_subsample=5, tica_dir = "", center_i=None, center_j=None):
+def plot_tica_and_clusters(component_j, transformed_data, lag_time, component_i, n_clusters, main="", label = "dot", active_cluster_ids = [], intermediate_cluster_ids = [], inactive_cluster_ids = [], inactive_subsample=5, intermediate_subsample=5, tica_dir = "", center_i=None, center_j=None, centers=None):
 
 	trajs = np.concatenate(transformed_data)
 	plt.hexbin(trajs[:,component_i], trajs[:,component_j], bins='log', mincnt=1, cmap=plt.cm.RdYlBu_r)
 	plt.xlabel("tIC %d" %(component_i + 1))
 	plt.ylabel('tIC %d' %(component_j+1))
-	centers = clusterer.cluster_centers_
 	indices = [j for j in range(0,len(active_cluster_ids),1)]
 
 	if center_i is None:
@@ -329,22 +328,25 @@ def plot_tica_and_clusters(component_j, transformed_data, clusterer, lag_time, c
 			plt.annotate('%d' %i, xy=(center[center_i],center[center_j]), xytext=(center[center_i], center[center_j]),size=6)
 
 
-	pp = PdfPages("%s/c%d_c%d_clusters%d.pdf" %(tica_dir, component_i, component_j, np.shape(centers)[0]))
+	pp = PdfPages("%s/%s_c%d_c%d_clusters%d.pdf" %(tica_dir, main, (component_i+1), (component_j+1), n_clusters))
 	pp.savefig()
 	pp.close()
 	plt.clf()
 
-def plot_all_tics_and_clusters(tica_dir, transformed_data_dir, clusterer_dir, lag_time, label = "dot", active_cluster_ids = [], intermediate_cluster_ids = [], inactive_cluster_ids = [], inactive_subsample=5, intermediate_subsample=5):
+def plot_all_tics_and_clusters(tica_dir, transformed_data_dir, clusterer_dir, lag_time, tic_range=None, main="", label = "dot", active_cluster_ids = [], intermediate_cluster_ids = [], inactive_cluster_ids = [], inactive_subsample=5, intermediate_subsample=5, custom_cluster_centers=None):
 	try:
 		transformed_data = verboseload(transformed_data_dir)
 	except:
 		transformed_data = load_dataset(transformed_data_dir)
-	clusterer = verboseload(clusterer_dir)
+	if custom_cluster_centers is None:
+		clusterer = verboseload(clusterer_dir)
+		centers = clusterer.cluster_centers_
 	num_tics = np.shape(transformed_data[0])[1]
-	print("Looking at %d tICS" %num_tics)
-	for i in range(0,num_tics):
+	if tic_range == None:
+		tic_range = range(0,num_tics)
+	for i in tic_range:
 		js = list(range(i+1, num_tics))
-		plot_partial = partial(plot_tica_and_clusters, tica_dir = tica_dir, transformed_data = transformed_data, clusterer = clusterer, lag_time = lag_time, label = label, active_cluster_ids = active_cluster_ids, intermediate_cluster_ids = intermediate_cluster_ids, inactive_cluster_ids = inactive_cluster_ids, inactive_subsample=inactive_subsample, intermediate_subsample=intermediate_subsample, component_i = i)
+		plot_partial = partial(plot_tica_and_clusters, n_clusters = len(centers), tica_dir = tica_dir, main=main, transformed_data = transformed_data, lag_time = lag_time, label = label, active_cluster_ids = active_cluster_ids, intermediate_cluster_ids = intermediate_cluster_ids, inactive_cluster_ids = inactive_cluster_ids, inactive_subsample=inactive_subsample, intermediate_subsample=intermediate_subsample, component_i = i, centers=centers)
 		for j in js:
 			plot_partial(j)
 		#pool = mp.Pool(mp.cpu_count())
@@ -364,18 +366,24 @@ def plot_tica_component_i_j(tica_dir, transformed_data_dir, lag_time, component_
 	pp.close()
 	plt.clf()
 
-def plot_column_pair(i, num_columns, save_dir, titles, data, refcoords):
-	print((titles[i]))
+def plot_column_pair(i, num_columns, save_dir, titles, data, refcoords, main, axes=None):
 	for j in range(i+1, num_columns):
 		plt.hexbin(data[:,i],  data[:,j], bins = 'log', mincnt=1,cmap=plt.cm.RdYlBu_r)
+		if axes is not None:
+			x1 = axes[i][0]
+			x2 = axes[i][1]
+			y1 = axes[j][0]
+			y2 = axes[j][1]
+			plt.axis((x1, x2, y1, y2))	
 		if refcoords is not None:
 			print([refcoords[0,i], refcoords[0,j]])
-			plt.scatter([refcoords[0,i]], [refcoords[0,j]], marker = 's', c='w',s=15)
+			plt.scatter([refcoords[0,i]], [refcoords[0,j]], marker = 's', c='g',s=15)
 			plt.scatter([refcoords[1,i]], [refcoords[1,j]], marker = 'v', c='k',s=15)
 		if titles is not None: 
-			pp = PdfPages("%s/%s_%s.pdf" %(save_dir, titles[i], titles[j]))
+			pp = PdfPages("%s/%s_%s_%s.pdf" %(save_dir, main, titles[i], titles[j]))
 			plt.xlabel(titles[i])
 			plt.ylabel(titles[j])
+			plt.title(main)
 			pp.savefig()
 			pp.close()
 			plt.clf()
@@ -387,9 +395,11 @@ def plot_column_pair(i, num_columns, save_dir, titles, data, refcoords):
 			pp.close()
 			plt.clf()
 
-def plot_columns(save_dir, data_file, titles = None, tICA = False, scale = 1.0, refcoords_file = None):
+def plot_columns(save_dir, data_file, titles = None, main = "", tICA = False, scale = 1.0, refcoords_file = None, axes=None, concatenate=True):
 	data = verboseload(data_file)
-	data = np.concatenate(data)
+	if concatenate:
+		data = np.concatenate(data)
+
 	data[:,0] *= scale
 
 	if(refcoords_file is not None):
@@ -400,12 +410,12 @@ def plot_columns(save_dir, data_file, titles = None, tICA = False, scale = 1.0, 
 	print(refcoords)
 
 	num_columns = np.shape(data)[1]
-	plot_column_pair_partial = partial(plot_column_pair, num_columns = num_columns, save_dir = save_dir, titles = titles, data = data, refcoords = refcoords)
-	#pool = mp.Pool(mp.cpu_count())
-	#pool.map(plot_column_pair_partial, range(0,num_columns))
-	#pool.terminate()
-	for i in range(0,num_columns):
-		plot_column_pair_partial(i)
+	plot_column_pair_partial = partial(plot_column_pair, main = main, num_columns = num_columns, save_dir = save_dir, titles = titles, data = data, refcoords = refcoords, axes=None)
+	pool = mp.Pool(mp.cpu_count())
+	pool.map(plot_column_pair_partial, range(0,num_columns))
+	pool.terminate()
+	#for i in range(0,num_columns):
+	#	plot_column_pair_partial(i)
 
 	print("Done plotting columns")
 	return
@@ -477,6 +487,7 @@ def plot_timescales(clusterer_dir, n_clusters, lag_time):
 	pp = PdfPages("/scratch/users/enf/b2ar_analysis/kmeans_%d_%d_implied_timescales.pdf" %(n_clusters, lag_time))
 	pp.savefig()
 	pp.close()
+	plt.clf()
 
 def rmsd_to_structure(clusters_dir, ref_dir, text):
 	pdbs = get_trajectory_files(clusters_dir)

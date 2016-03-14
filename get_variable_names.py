@@ -41,10 +41,16 @@ def get_corner_plot_file(tica_dir):
 def get_timescales_plot_file(tica_dir):
   return("%s/tICA_timescales_plot.pdf" % tica_dir)
 
-def get_ktica_dir(tica_dir, n_components, feature_types, 
-                  wolf_string, shrinkage_string):
-  ktica_dir = "%s/ktICA_n_components%d_random_specified_regularization%s%s" % (tica_dir, 
-                n_components, wolf_string, shrinkage_string)
+def get_ktica_dir(tica_dir, is_sparse, lag_time, n_components, feature_types, 
+                 wolf_string, shrinkage_string, rho_string):
+  if is_sparse == "":
+    ktica_dir = "%s/%sktICA_n_components%d_random_specified_regularization%s%s" % (tica_dir, 
+                  is_sparse, n_components, wolf_string, shrinkage_string)
+  else:
+    ktica_dir = "%s/%sktICA_t%d_n_components%d%s_regularization%s%s%s" %(tica_dir, is_sparse,
+                                                                 lag_time, n_components, 
+                                                                 feature_types, wolf_string, 
+                                                                 shrinkage_string, rho_string)
   make_directory_if_not_exist(ktica_dir)
   return ktica_dir
   

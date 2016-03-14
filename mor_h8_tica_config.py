@@ -3,22 +3,18 @@ import sys
 import csv
 
 exacycle = False
-parallel_featurize = False
-load_feature_parallel = True
 
 
-n_clusters = 1000
+n_clusters = 300
 lag_time = 5
 if exacycle:
   lag_time *= 2
 
 msm_lag_time = 5
-n_components = 25
+n_components = 10
 n_samples = 10
 n_macrostates = 25
 n_trees = 100
-
-sampling_method = "random"
 
 precision = "SP"
 
@@ -40,8 +36,8 @@ elif wolf and sparse:
   wolf_string = "_wolf_"
   shrinkage = None
   shrinkage_string = "autoShrinkage"
-  rho = 0.01
-  rho_string = "_rho0pt01"
+  rho = 0.005
+  rho_string = "_rho0pt005"
 else:
   wolf_string = ""
   shrinkage = 0.001
@@ -50,11 +46,16 @@ else:
   rho_string = ""
 
 traj_ext = ".h5"
-base = "/home/enf/b2ar_analysis"
-traj_dir = "/home/enf/b2ar_analysis/subsampled_reimaged_amber"
+base = "/home/enf/md_simulations/MOR/h8_reimaged" 
+traj_dir = "/home/enf/md_simulations/MOR/h8_reimaged"
 structure = None
-pnas_features_dir = "/home/enf/b2ar_analysis/all_pnas_features"
+pnas_features_dir = "/home/enf/md_simulations/MOR/h8_reimaged/pnas_features"
 if not os.path.exists(pnas_features_dir): os.makedirs(pnas_features_dir)
-inactive_dir = "/home/enf/b2ar_analysis/2RH1_prepped.pdb"
-active_dir = "/home/enf/b2ar_analysis/3P0G_pymol_prepped.pdb"
+iterative = False
+featurize_parallel = True
+inactive_dir = "/home/enf/md_simulations/MOR/4dkl_R_for_conformation.pdb"
+active_dir = "/home/enf/md_simulations/MOR/5c1m.pdb"
+simulation_structure = "/home/enf/md_simulations/MOR/rep_5-0-ionized.pdb"
 
+sampling_method = "random"
+precision = "SP"

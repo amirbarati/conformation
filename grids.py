@@ -49,15 +49,18 @@ an .mae file, which is required for docking.
 '''
 
 def pprep_prot(pdb, ref, extension = ".mae"):
-	pdb_name = pdb.split("/")[len(pdb.split("/"))-1]
-	new_pdb = pdb_name.rsplit( ".", 1 )[ 0 ]
-	new_pdb = "%s%s" %(new_pdb, extension)
-	if os.path.exists(new_pdb): 
+	pdb_noext = os.path.splitext(pdb)[0]
+	mae_filename =  "%s.mae" % pdb_noext
+	if os.path.exists(mae_filename): 
 		print("already prepped and mae'd protein")
 		return
-	command = "$SCHRODINGER/utilities/prepwizard -WAIT -disulfides -fix -noepik -noimpref -noprotassign -reference_st_file %s -NOLOCAL %s %s" %(ref, pdb_name, new_pdb)
+	current_directory = os.getcwd()
+	os.chdir(os.path.dirname(pdb))
+	mae_filename = os.path.basename(mae_filename)
+	command = "$SCHRODINGER/utilities/prepwizard -WAIT -disulfides -fix -noepik -noimpref -noprotassign -reference_st_file %s -NOLOCAL %s %s" %(ref, pdb, mae_filename)
 	print(command)
-	os.system(command)
+	subprocess.call(command, shell=True)
+	os.chdir(current_directory)
 	return
 
 def remove_path_and_extension(directory):
@@ -66,8 +69,9 @@ def remove_path_and_extension(directory):
 	filename_no_pv = filename_no_ext.split("_pv")[0]
 	return(filename_no_pv)
 
-def pprep(pdb_dir, ref, indices = None, chosen_receptors = None, extension = ".mae"):
+def pprep(pdb_dir, ref, indices = None, chosen_receptors = None, extension = ".mae", worker_pool=None):
 	pdbs = get_trajectory_files(pdb_dir, ext = ".pdb")
+	"""
 	print((len(chosen_receptors)))
 	print((len(pdbs)))
 	if indices is not None:
@@ -77,13 +81,19 @@ def pprep(pdb_dir, ref, indices = None, chosen_receptors = None, extension = ".m
 		pdbs = [pdb for pdb in pdbs if remove_path_and_extension(pdb) in chosen_receptors]
 	print((len(pdbs)))
 	os.chdir(pdb_dir)
-	
+	"""
 	pprep_partial = partial(pprep_prot, ref = ref, extension = extension)
-
-	num_workers = mp.cpu_count()
-	pool = mp.Pool(num_workers)
-	pool.map(pprep_partial, pdbs)
-	pool.terminate()
+	print(len(pdbs))
+	print(pdbs[0:3])
+	if worker_pool is not None:
+		worker_pool.map_sync(pprep_partial, pdbs)
+	else:
+		num_workers = mp.cpu_count()
+		pool = mp.Pool(num_workers)
+		pool.map(pprep_partial, pdbs)
+		pool.terminate()
+	print("Done prepping proteins")
+	#time.sleep(10)
 
 
 '''
@@ -225,12 +235,15 @@ def unzip_file(filename_grid_dir):
 		unzip(filename)
 	return
 
-def unzip_receptors(grid_dir, receptors):
+def unzip_receptors(grid_dir, receptors, worker_pool=None):
 	print("Unzipping selected grid files")
 	grids = ["%s/%s.zip" %(grid_dir,receptor) for receptor in receptors if not os.path.exists("%s/%s.grd" %(grid_dir, receptor))]
-	pool = mp.Pool(mp.cpu_count())
-	pool.map(unzip, grids)
-	pool.terminate()
+	if worker_pool is not None:
+		worker_pool.map_sync(unzip, grids)
+	else:
+		pool = mp.Pool(mp.cpu_count())
+		pool.map(unzip, grids)
+		pool.terminate()
 
 	#filename_grid_dirs = [(grid, grid_dir) for grid in grids]
 	#num_workers = mp.cpu_count()
@@ -241,7 +254,7 @@ def unzip_receptors(grid_dir, receptors):
 	return
 
 
-def generate_grids(mae_dir, grid_center, grid_dir, remove_lig = None, indices = None, chosen_receptors = None):
+def generate_grids(mae_dir, grid_center, grid_dir, remove_lig = None, indices = None, chosen_receptors = None, worker_pool=None):
 	print(grid_dir)
 	if not os.path.exists(grid_dir): os.makedirs(grid_dir)
 
@@ -262,12 +275,15 @@ def generate_grids(mae_dir, grid_center, grid_dir, remove_lig = None, indices = 
 	if indices is not None:
 		grid_files = grid_files[indices[0] : indices[1]]
 
-	num_workers = mp.cpu_count()
-	pool = mp.Pool(num_workers)
-	pool.map(grid_partial, grid_files)
-	#for grid_file in grid_files:
-	#	grid_partial(grid_file)
-	pool.terminate()
+	if worker_pool is not None:
+		worker_pool.map_sync(grid_partial, grid_files)
+	else:
+		num_workers = mp.cpu_count()
+		pool = mp.Pool(num_workers)
+		pool.map(grid_partial, grid_files)
+		#for grid_file in grid_files:
+		#	grid_partial(grid_file)
+		pool.terminate()
 
 	#zips = get_trajectory_files(grid_dir, ".zip")
 	#pool = mp.Pool(num_workers)
@@ -286,24 +302,27 @@ def run_command(cmd):
 
 def dock(dock_job):
 	signal.alarm(180)
+	docking_dir = os.path.dirname(dock_job)
+	os.chdir(docking_dir)
 	cmd = "$SCHRODINGER/glide %s -OVERWRITE -WAIT -strict" %dock_job
 	try:
 		run_command(cmd)
+		os.chdir("/home/enf/b2ar_analysis/conformation")
 	except TimeoutException:
 		print("Docking job timed out")
+		os.chdir("/home/enf/b2ar_analysis/conformation")
 		return
 	else:
+		os.chdir("/home/enf/b2ar_analysis/conformation")
 		signal.alarm(0)
 	return
 
-
-def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP", chosen_jobs = False, parallel = False, grid_ext = ".zip"):
+def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP", chosen_jobs = False, parallel = False, grid_ext = ".zip", worker_pool=None):
 	if not os.path.exists(docking_dir): os.makedirs(docking_dir)
-	os.chdir(docking_dir)
 
 	#grid_subdirs = [x[0] for x in os.walk(grid_dir)]
 	#grid_subdirs = grid_subdirs[1:]
-	unzip_receptors(grid_dir, chosen_jobs)
+	#unzip_receptors(grid_dir, chosen_jobs, worker_pool)
 	grid_files = get_trajectory_files(grid_dir, grid_ext)
 	dock_jobs = []
 	for grid_file in grid_files:
@@ -338,13 +357,17 @@ def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP", chos
 
 	print("Written all docking job input files")
 	#print dock_jobs
-
-	if parallel:
+	if worker_pool is not None:
+		print("MAPPING OVER WORKER POOL")
+		worker_pool.map_sync(dock, dock_jobs)
+	elif parallel:
 		num_workers = mp.cpu_count()
 		pool = mp.Pool(num_workers)
 		pool.map(dock, dock_jobs)
 		pool.terminate()
 	else:
+		print("DOCKING IN SERIES")
+		os.chdir(odcking_dir)
 		for job in dock_jobs:
 			dock(job)
 
@@ -419,7 +442,7 @@ parallel --> if you set it to "both" it will run in parallel over both ligands a
 	if you pass "receptor": it will parallelize over receptors. Recommedned if n_receptors > n_ligands
 '''
 
-def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "SP", ext = "-out.maegz", chosen_ligands = False, chosen_receptors = False, parallel = False, grid_ext = ".zip"):
+def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "SP", ext = "-out.maegz", chosen_ligands = False, chosen_receptors = False, parallel = False, grid_ext = ".zip", worker_pool=None):
 	ligands = get_trajectory_files(ligands_dir, ext = ext)
 	print("ligands")
 	print(ligands)
@@ -490,7 +513,7 @@ def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "
 				if lig_no_ext not in chosen_ligands: continue
 			lig_dir = "%s/%s" %(docking_dir, lig_no_ext)
 			if not os.path.exists(lig_dir): os.makedirs(lig_dir)
-			dock_conformations(grid_dir, lig_dir, ligand, precision = precision, chosen_jobs = chosen_receptors, grid_ext=grid_ext)
+			dock_conformations(grid_dir, lig_dir, ligand, precision = precision, chosen_jobs = chosen_receptors, grid_ext=grid_ext, worker_pool=worker_pool)
 
 '''
 

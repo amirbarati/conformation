@@ -135,9 +135,20 @@ def landmark_ktica(features_dir, combined_features_file=None, ktica_dir="", feat
 				features_concatenated = np.concatenate(features)
 				landmarks = features_concatenated[indices,:]
 				verbosedump(landmarks, landmarks_dir)
+	else:
+		if combined_features_file is not None and os.path.exists(combined_features_file): 
+			features = verboseload(combined_features_file)
+		else:
+			features = load_file_list(get_trajectory_files(features_dir, ext = feature_ext))
+		
+		print("np.shape(features)")
+		print(np.shape(features))
 
-		ktica(features, landmarks, projected_data_filename, nystroem_data_filename, fit_model_filename, sparse, shrinkage, wolf, rho,
-					n_components=n_components, lag_time=lag_time, refcoords_csv=refcoords_csv)
+		landmarks = verboseload(landmarks_dir)
+		print((np.shape(landmarks)))
+
+	ktica(features, landmarks, projected_data_filename, nystroem_data_filename, fit_model_filename, sparse, shrinkage, wolf, rho,
+				n_components=n_components, lag_time=lag_time, refcoords_csv=refcoords_csv)
 
 
 def landmark_ktica_ticaTraj(tica_dir, clusterer_dir, ktica_dir, clusters_map_file = "", landmarks_dir = "", nystroem_components=1000, n_components=10, lag_time=5, nystroem_data_filename = "", fit_model_filename = "", projected_data_filename = "", landmark_subsample=1, sparse = False, wolf = True, rho = 0.01, shrinkage = None):

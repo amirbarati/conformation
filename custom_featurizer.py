@@ -286,6 +286,20 @@ def convert_atom_to_mdtraj_index(top, atom):
 	matching_atom = [a.index for a in top.atoms if atom.is_mdtraj_atom_equivalent(a)][0]
 	return matching_atom
 
+def convert_residue_to_mdtraj_index(top, residue):
+	indices = [r.index for r in top.residues if residue.is_mdtraj_res_equivalent(r) and not r.is_water]
+	if len(indices) == 0:
+		print(("FATAL: No residues in trajectory for residue %d chain %s" % (residue.resSeq, residue.chain_id)))
+		return None
+	else:
+		ind_i = indices[0]
+		for j in indices:
+			if j != ind_i: 
+				#print("Warning: multiple res objects for residue %d " %resSeq0)
+				if "CB" in [str(a) for a in r.atoms for r in top.residues if r.index == ind_i]:
+					ind_i = j
+	return ind_i 
+
 def convert_atom_residue_pairs_to_mdtraj_indices(top, atom_residue_pairs):
 	atom_residue_index_pairs = []
 	for pair in atom_residue_pairs:
@@ -383,8 +397,6 @@ def read_and_featurize(traj_file, features_dir = None, condition=None,
 			chains[3].id = 'C'
 
 		atom_residue_pairs = convert_atom_residue_pairs_to_mdtraj_indices(top, atom_residue_pairs)
-		print("mdtraj indices of atoms, residues to featurize:")
-		print(atom_residue_pairs)
 		contact_features = []
 		if iterative:
 			try:
@@ -583,6 +595,7 @@ def featurize_contacts_custom(traj_dir, features_dir, traj_ext, structures,
 		is not a consensus residue numbering for the same protein.
 	'''
 	trajs = which_trajs_to_featurize(traj_dir, traj_ext, features_dir)
+	if not os.path.exists(features_dir): os.makedirs(features_dir)
 	if load_from_file:
 		contact_residue_pairs = generate_features(contact_residue_pairs_file)
 		print("Which contacts to measure already chosen.")
@@ -597,6 +610,22 @@ def featurize_contacts_custom(traj_dir, features_dir, traj_ext, structures,
 				if pair not in contact_residue_pairs: contact_residue_pairs.append(pair)
 		#ordering = np.argsort([r[0].resSeq for r in contact_residue_pairs]).tolist()
 		#contact_residue_pairs = [contact_residue_pairs[i] for i in ordering]
+		
+		top = md.load_frame(get_trajectory_files(traj_dir, traj_ext)[0], index=0).topology
+		for residue_pair in user_specified_contact_residue_pairs:
+			res_i, res_j = residue_pair
+			mdtraj_i = convert_residue_to_mdtraj_index(top, res_i)
+			res_i.res_name = top.residue(mdtraj_i).__repr__().title()
+			mdtraj_j = convert_residue_to_mdtraj_index(top, res_j)
+			res_j.res_name = top.residue(mdtraj_j).__repr__().title()
+
+		for atom_residue_pair in user_specified_atom_residue_pairs:
+			atom_i, res_j = atom_residue_pair
+			mdtraj_i = convert_atom_to_mdtraj_index(top, atom_i)
+			atom_i.mdtraj_rep = top.atom(mdtraj_i).__repr__().title()
+			mdtraj_j = convert_residue_to_mdtraj_index(top, res_j)
+			res_j.res_name = top.residue(mdtraj_j).__repr__().title()
+		
 		contact_residue_pairs += user_specified_contact_residue_pairs
 		final_features = contact_residue_pairs + user_specified_atom_residue_pairs
 		print(("There are %d contact pairs to be used in contact featurization." % len(final_features)))
@@ -605,7 +634,6 @@ def featurize_contacts_custom(traj_dir, features_dir, traj_ext, structures,
 			pickle.dump(final_features, f)
 
 	print("About to featurize trajectories based on the chosen featurization scheme.")
-	print("contact_residue_pairs=")
 	print(contact_residue_pairs)
 	#print("atom_residue_pairs=")
 	featurize_partial = partial(read_and_featurize, features_dir = features_dir, dihedral_residues = dihedral_residues,
@@ -617,6 +645,7 @@ def featurize_contacts_custom(traj_dir, features_dir, traj_ext, structures,
 		pool.terminate()
 	else:
 		for traj in trajs:
+			print("Featurizing %s" % traj)
 			featurize_partial(traj)
 
 	print("Completed featurizing")
@@ -714,7 +743,9 @@ def compute_user_defined_features(traj_file, inactive, active, structure=None,
 
 	
 	features = []
-	for name, residues in feature_name_residues_dict.items():
+	for name in sorted(feature_name_residues_dict.keys()):
+		print name
+		residues = feature_name_residues_dict[name]
 		if name == "tm6_tm3_dist":
 			features.append(helix6_helix3_dist(traj, residues=residues))	
 		elif name == "rmsd_npxxy_active":
@@ -748,7 +779,7 @@ def compute_user_defined_features_wrapper(traj_dir, traj_ext, inactive_file, act
 	trajs = get_trajectory_files(traj_dir, traj_ext)
 	#features = []
 	#for traj in trajs:
-	#	features.append(compute_user_defined_features_partial(traj))
+	#		features.append(compute_user_defined_features_partial(traj))
 	pool = mp.Pool(mp.cpu_count())
 	features = pool.map(compute_user_defined_features_partial, trajs)
 	pool.terminate()
@@ -761,13 +792,14 @@ def reaction_coordinate_sampler(traj_dir, traj_ext, rxn_coord_file,
 	concatenated_rxn_coords = np.concatenate(rxn_coords)
 	print((np.shape(concatenated_rxn_coords)))
 
-	titles = list(feature_name_residues_dict.keys())
+	titles = sorted(list(feature_name_residues_dict.keys()))
 
 	traj_files = get_trajectory_files(traj_dir, traj_ext)
 	traj_files = [os.path.basename(t) for t in traj_files]
 	coord_to_trajectories_dict = {}
 
-	for coord, bounds in coords_bounds_dict.items():
+	for coord in coords_bounds_dict.keys():
+		bounds = coords_bounds_dict[coord]
 		print(("Analyzing %s" % coord))
 		column = titles.index(coord)
 		coord_to_trajectories_dict[coord] = []
@@ -777,7 +809,7 @@ def reaction_coordinate_sampler(traj_dir, traj_ext, rxn_coord_file,
 			span = True
 			for k in range(0, len(bounds)-1):
 				indices = np.nonzero((projection > bounds[k]) & (projection < bounds[k+1]))[0]
-				if len(indices) < 25:
+				if len(indices) < 50:
 					span = False
 			if span: coord_to_trajectories_dict[coord].append(traj_files[i])
 

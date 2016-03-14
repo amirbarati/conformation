@@ -20,6 +20,13 @@ import pandas as pd
 import operator
 from sklearn import preprocessing
 from sklearn.linear_model import LassoCV, LassoLarsCV, LassoLarsIC, lasso_path, LogisticRegressionCV
+import seaborn as sns
+from sklearn.neighbors.kde import KernelDensity
+from sklearn.grid_search import GridSearchCV
+from scipy.signal import argrelextrema
+from scipy import spatial
+from msmbuilder.utils import KDTree
+
 
 from pandas import *
 #from rpy2.robjects.packages import importr
@@ -224,21 +231,21 @@ def plot_component_importances(df, save_dir, tic_i, component):
   pp.close()
   plt.clf()
 
-'''
+
 def plot_importances_df(df, title, save_file):
   df = df.sort_values(by="feature_importance")
   bar_width = 0.2
   index = np.arange(start=1, stop=len(df.keys())+1, step=1)
   plt.barh(index, df["feature_importance"].tolist(), bar_width, alpha=opacity, color='b',label='Feature importance')
-  plt.xlabel('tIC')
-  plt.ylabel('Overall Importance')
+  plt.ylabel('tIC')
+  plt.xlabel('Overall Importance')
   plt.title(title)
   plt.xticks(index + bar_width, top_df["feature_name"].tolist(), rotation='vertical')
   pp = PdfPages(save_file)
   pp.savefig()
   pp.close()
   plt.clf()
-'''
+
 
 def plot_column_pair(i, num_columns, save_dir, titles, data, gmm_means, refcoords):
   for j in range(i+1, num_columns):
@@ -442,28 +449,8 @@ def compute_overall_rf_models(features_dir, projected_tica_coords, gmm_dir, save
     except:
       continue
 
-def rank_tICs_by_docking_rf(docking_csv, tica_coords_csv, model_pkl, importances_pkl, plot_file, n_trees=500):
-  docking = pd.read_csv(docking_csv, header=0, index_col=0)
-  tica_coords = pd.read_csv(tica_coords_csv, header=0, index_col=0)
-  tica_coords = tica_coords.loc[docking.index]
 
-  rfr = RandomForestRegressor(n_estimators=n_trees, max_features='sqrt', oob_score=True, n_jobs=-1)
-  rfr.fit(X=tica_coords, y=docking)
 
-  '''
-  with open(model_pkl, "wb") as f:
-    pickle.dump(rfr, f)
-
-  with open(importances_pkl, "wb") as f:
-    pickle.dump(rfr.feature_importances_, importances_pkl)
-  '''
-
-  df = pd.DataFrame(columns=('feature_name', 'feature_importance'))
-  df['feature_name'] = tica_coords.columns.values.tolist()
-  df['feature_importance'] = rfr.feature_importances_
-  print(df)
-  plot_importances_df(df, "Random Forest Regression of Docking Score on tICs", plot_file)
-  df.sort_values(by='feature_importance')
 
 def plot_coef_path(df, filename):
   plt.figure()
@@ -513,7 +500,45 @@ def rank_tICs_by_logistic_lasso(docking_csv, tica_coords_csv, plot_file, cutoff)
   #print(docking_values)
   #print(np.max(docking_values))
   tica_values = preprocessing.normalize(tica.values)
-                       
+  
+  X = diabetes.data
+
+  y = diabetes.target
+
+  X /= X.std(axis=0)  # Standardize data (easier to set the l1_ratio parameter)
+
+  # Compute paths
+
+  eps = 5e-3  # the smaller it is the longer is the path
+
+  print("Computing regularization path using the lasso...")
+  alphas_lasso, coefs_lasso, _ = lasso_path(X, y, eps, fit_intercept=False)
+
+  print("Computing regularization path using the positive lasso...")
+  alphas_positive_lasso, coefs_positive_lasso, _ = lasso_path(
+      X, y, eps, positive=True, fit_intercept=False)
+  print("Computing regularization path using the elastic net...")
+  alphas_enet, coefs_enet, _ = enet_path(
+      X, y, eps=eps, l1_ratio=0.8, fit_intercept=False)
+
+  print("Computing regularization path using the positve elastic net...")
+  alphas_positive_enet, coefs_positive_enet, _ = enet_path(
+      X, y, eps=eps, l1_ratio=0.8, positive=True, fit_intercept=False)
+
+  # Display results
+
+  plt.figure(1)
+  ax = plt.gca()
+  ax.set_color_cycle(2 * ['b', 'r', 'g', 'c', 'k'])
+  l1 = plt.plot(-np.log10(alphas_lasso), coefs_lasso.T)
+  l2 = plt.plot(-np.log10(alphas_enet), coefs_enet.T, linestyle='--')
+
+  plt.xlabel('-Log(alpha)')
+  plt.ylabel('coefficients')
+  plt.title('Lasso and Elastic-Net Paths')
+  plt.legend((l1[-1], l2[-1]), ('Lasso', 'Elastic-Net'), loc='lower left')
+  plt.axis('tight')
+
 
 def compute_one_vs_all_rf_models_MSM(features_dir, projected_tica_coords, clusterer_dir, msm_rf_dir, feature_residues_map, n_trees=10, states_to_analyze=None):
   feature_names = generate_features(feature_residues_map)
@@ -631,5 +656,116 @@ def plot_tICs_vs_docking(docking_csv, tica_coords_csv, plot_file, chosen_ligand=
   index = pd.Index(docking.values).astype(np.float64)
   df = pd.DataFrame(np.hstack((tica.values,docking.values)), columns=tica_names+[chosen_ligand])
   df.sort(columns=chosen_ligand, inplace=True)
-  df = pd.DataFrame(df[tica_names].values[:,list(range(0,11))], index=df[chosen_ligand], columns=list(range(1,12)))
+  df = pd.DataFrame(df[tica_names].values[:,list(range(0,np.shape(tica)[1]))], index=df[chosen_ligand], columns=list(range(1,np.shape(tica)[1] + 1)))
   plot_df_rolling(df, plot_file)
+
+def sample_tIC_regions(tica_coords_file, save_dir):
+  if not os.path.exists(save_dir):
+    os.makedirs(save_dir)
+  tica_coords = np.concatenate(load_file(tica_coords_file))
+  print(np.shape(tica_coords))
+  for j in range(0, np.shape(tica_coords)[1]):
+    print("Fitting KDE to tIC %d" % (j+1))
+    grid = GridSearchCV(KernelDensity(),
+                    {'bandwidth': np.linspace(0.1, 1.0, 10)},
+                    cv=5, n_jobs=-1) # 20-fold cross-validation
+    tic_coords = tica_coords[:,j].reshape(-1, 1)
+    grid.fit(tic_coords)
+    print grid.best_params_
+    kde = KernelDensity(kernel='gaussian', bandwidth=grid.best_params_["bandwidth"]).fit(tic_coords)
+    verbosedump(kde, os.path.join(save_dir, "kde_model_tIC_%d.h5" % (j+1)))
+    
+    s = np.linspace(np.min(tic_coords), np.max(tic_coords), 100)
+    e = kde.score_samples(s.reshape(-1,1))
+    
+    plt.plot(s, e)
+    pp = PdfPages(os.path.join(save_dir, "tIC_%d_kde.pdf" %(j+1)))
+    plt.title("Kernel Density Estimator for tIC %d" % (j+1))
+    pp.savefig()
+    pp.close()
+    plt.clf()    
+
+def sample_tIC_regions_silverman(tica_coords_file, save_dir):
+  if not os.path.exists(save_dir):
+    os.makedirs(save_dir)
+  tica_coords = np.concatenate(load_file(tica_coords_file))
+  print(np.shape(tica_coords))
+  for j in range(0, np.shape(tica_coords)[1]):
+    print("Fitting KDE to tIC %d" % (j+1))
+    tic_coords = tica_coords[:,j]
+    bandwidth = 1.06 * np.std(tic_coords) * np.power(np.shape(tic_coords)[0], -.2)
+    tic_coords = tica_coords[:,j].reshape(-1, 1)
+    print("bandwidth = %f" % bandwidth)
+    kde = KernelDensity(kernel='gaussian', bandwidth=bandwidth).fit(tic_coords)
+    verbosedump(kde, os.path.join(save_dir, "kde_model_tIC_%d.h5" % (j+1)))
+    
+    s = np.linspace(np.min(tic_coords), np.max(tic_coords), 100)
+    e = kde.score_samples(s.reshape(-1,1))
+    
+    plt.plot(s, e)
+    pp = PdfPages(os.path.join(save_dir, "tIC_%d_kde.pdf" %(j+1)))
+    plt.title("Kernel Density Estimator for tIC %d" % (j+1))
+    pp.savefig()
+    pp.close()
+    plt.clf()    
+
+#thanks to this for code suggestion:
+#http://stackoverflow.com/questions/35094454/how-would-one-use-kernel-density-estimation-as-a-one-1d-clustering-method-in-sci
+def get_kde_mins_and_maxes(tica_coords_file, kde_dir):
+  tica_coords = np.concatenate(load_file(tica_coords_file))
+  print(np.shape(tica_coords))
+
+  j = 0
+  kde_file = os.path.join(kde_dir, "kde_model_tIC_%d.h5" % (j+1))
+  while(os.path.exists(kde_file)):
+    print("Finding maxima for tIC %d" % (j+1))
+    tic_coords = tica_coords[:,j].reshape(-1,1)
+    s = np.linspace(np.min(tic_coords), np.max(tic_coords), 1000)
+    kde = verboseload(kde_file)
+    e = kde.score_samples(s.reshape(-1,1))
+    mi, ma = argrelextrema(e, np.less)[0], argrelextrema(e, np.greater)[0]
+    minima = s[mi]
+    maxima = s[ma]
+
+    print("minima:")
+    print(minima)
+    print("maxima")
+    print(maxima)
+
+    verbosedump(minima, os.path.join(kde_dir, "kde_model_tIC_%d_minima.h5" % (j+1)))
+    verbosedump(maxima, os.path.join(kde_dir, "kde_model_tIC_%d_maxima.h5" % (j+1)))
+    j += 1
+    kde_file = os.path.join(kde_dir, "kde_model_tIC_%d.h5" % (j+1))
+
+
+
+def sample_kde_maxima(tica_coords_file, kde_dir, trajs):
+  tica_coords = load_file(tica_coords_file)
+  print(np.shape(tica_coords))
+
+  j = 0
+  kde_maxima_file = os.path.join(kde_dir, "kde_model_tIC_%d_maxima.h5" % (j+1))
+  while(os.path.exists(kde_maxima_file)):
+    tic_coords = [tic_coord[:,j].reshape(-1,1) for tic_coord in tica_coords]
+    print(np.shape(tic_coords))
+    print(np.shape(tic_coords[0]))
+    maxima = verboseload(kde_maxima_file)
+    #point = np.zeros(np.shape(tica_coords[0])[1])
+    for i in range(0, np.shape(maxima)[0]):
+      maximum = maxima[i]
+      #point[j] = maximum
+      point = [maximum]
+      distances, indices = KDTree(tic_coords).query(point, 5)
+      print("Indices:")
+      print(indices)
+      for ind, index in enumerate(indices):
+        print(index)
+        sample = md.load_frame(trajs[index[0]], index=index[1])
+        sample.save(os.path.join(kde_dir, "tIC_%d_%s_%d.pdb" %((j+1), str(maximum), ind)))
+      
+
+    j += 1
+    kde_maxima_file = os.path.join(kde_dir, "kde_model_tIC_%d_maxima.h5" % (j+1))
+
+
+

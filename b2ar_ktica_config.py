@@ -18,7 +18,7 @@ n_trees = 100
 
 landmark_subsample = 5
 
-sparse = False
+sparse = True
 wolf = True
 
 is_sparse = ""
@@ -36,8 +36,8 @@ elif wolf and sparse:
   wolf_string = "_wolf_"
   shrinkage = None
   shrinkage_string = "autoShrinkage"
-  rho = 0.1
-  rho_string = "_rho0pt1"
+  rho = 0.0001
+  rho_string = "_rho0pt0001"
 else:
   wolf_string = ""
   shrinkage = 0.001

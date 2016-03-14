@@ -14,7 +14,7 @@ from msmbuilder.utils import KDTree
 import multiprocessing as mp
 from functools import partial
 
-def plot_timescales(clusterer_dir, n_clusters, tica_dir, lag_times=list(range(1,50))):
+def plot_timescales(clusterer_dir, n_clusters, tica_dir, main="", lag_times=list(range(1,50))):
 	clusterer = verboseload(clusterer_dir)
 	print(clusterer)
 	sequences = clusterer.labels_
@@ -29,20 +29,24 @@ def plot_timescales(clusterer_dir, n_clusters, tica_dir, lag_times=list(range(1,
 		plt.plot(lag_times, msm_timescales[:,i])
 	plt.xlabel("Lag time (ns)")
 	plt.ylabel("Implied Timescales (ns)")
+	plt.title(main)
 	plt.semilogy()
-	pp = PdfPages("%s/n_clusters%d_implied_timescales.pdf" %(tica_dir, n_clusters))
+	pp = PdfPages("%s/%s_n_clusters%d_implied_timescales.pdf" %(tica_dir, main, n_clusters))
 	pp.savefig()
 	pp.close()
+	plt.clf()
 
-def build_msm(clusterer_dir, lag_time, msm_model_dir):
+def build_msm(clusterer_dir, lag_time, msm_model_dir, prior_counts=0.0):
 	clusterer = verboseload(clusterer_dir)
 	n_clusters = np.shape(clusterer.cluster_centers_)[0]
 	labels = clusterer.labels_
-	msm_modeler = MarkovStateModel(lag_time=lag_time)
+	msm_modeler = MarkovStateModel(lag_time=lag_time, prior_counts=prior_counts)
 	print(("fitting msm to trajectories with %d clusters and lag_time %d" %(n_clusters, lag_time)))
 	msm_modeler.fit_transform(labels)
+	print(msm_modeler)
 	verbosedump(msm_modeler, msm_model_dir)
 	print(("fitted msm to trajectories with %d states" %(msm_modeler.n_states_)))
+	return msm_modeler
 	'''
 	#np.savetxt("/scratch/users/enf/b2ar_analysis/msm_%d_clusters_t%d_transmat.csv" %(n_clusters, lag_time), msm_modeler.transmat_, delimiter=",")
 	#G = nx.from_numpy_matrix(msm_modeler.transmat_)

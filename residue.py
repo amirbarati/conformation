@@ -9,7 +9,9 @@ class Residue(object):
     self.res_name = res_name
 
   def __repr__(self):
-    if self.chain_id is not None:
+    if self.res_name is not None:
+      return self.res_name
+    elif self.chain_id is not None:
       return "%s%d" % (self.chain_id, self.resSeq)
     else:
       return str(self.resSeq)
@@ -27,24 +29,28 @@ class Residue(object):
     if self.resSeq != mdtraj_res.resSeq:
       return False
 
-    if self.chain_id is not None and (self.chain_id != mdtraj_res.chain.id):
+    if self.chain_id is not None and (str(self.chain_id) != str(mdtraj_res.chain.id)):
       return False
 
-    if self.chain_name is not None and (self.chain_name != mdtraj_res.chain.id):
+    if self.chain_name is not None and (str(self.chain_name) != str(mdtraj_res.chain.id)):
       return False 
 
     return True
 
 class Atom(object):
-  def __init__(self, atom_id=None, resSeq=None, chain_id=None, atom_name=None, res_name=None):
+  def __init__(self, atom_id=None, resSeq=None, chain_id=None, atom_name=None, res_name=None, mdtraj_rep=None):
     self.resSeq = resSeq
     self.chain_id = chain_id
     self.atom_name = atom_name
     self.atom_id = atom_id
     self.res_name = res_name
+    self.mdtraj_rep = mdtraj_rep
 
   def __repr__(self):
-    return "%s-%s" %(self.res_name, self.atom_name)
+    if self.mdtraj_rep is None:
+      return "%s-%s" %(self.res_name, self.atom_name)
+    else:
+      return self.mdtraj_rep
 
   def __eq__(self, other):
     return self.__dict__ == other.__dict__

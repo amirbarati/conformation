@@ -11,6 +11,7 @@ import os
 
 from matplotlib.backends.backend_pdf import PdfPages
 from sklearn import preprocessing
+from sklearn.linear_model import lasso_path
 import matplotlib
 matplotlib.style.use('ggplot')
 from matplotlib import rcParams
@@ -82,14 +83,15 @@ def get_feature_list(feature_residues_csv, structure_file):
   return(feature_list)
 
 def plot_importance_df(df, column_name, ylabel, title, analysis_type, save_string, j, save_dir):
-  bar_width = [0.4 for i in range(0,50)]
+  n_rows = min([50, df.shape[0]])
+  bar_width = [0.4 for i in range(0,n_rows)]
   opacity = 0.8
-  index = np.arange(50)
+  index = np.arange(n_rows)
   
   df = df.reindex(df.importance.abs().order(ascending=False).index)
-  df = df[:50]
+  df = df[:n_rows]
   print(df)
-  plt.barh(bottom=np.arange(50), width=df['importance'].values, height=bar_width, 
+  plt.barh(bottom=np.arange(n_rows), width=df['importance'].values, height=bar_width, 
            alpha=opacity, color='b',label='Feature importance')
   plt.ylabel(ylabel)
   plt.xlabel('Overall Importance')
@@ -122,8 +124,10 @@ def compute_residue_importances(df, percentile=95):
 def merge_importances_features(feature_importances_file, feature_residues_map, importances=None):
   with open(feature_residues_map, "rb") as f:
     feature_tuples = pickle.load(f)
-  feature_names = ["%s-%s" %(f[0].res_name.title(), f[1].res_name.title()) 
+  feature_names = ["%s-%s" %(f[0].__repr__().title(), f[1].__repr__().title()) 
                                 for f in feature_tuples]
+  feature_name_tuples = [(res_i.__repr__().title(), res_j.__repr__().title())
+                         for res_i, res_j in feature_tuples]
 
   if importances is None:
     try:
@@ -137,22 +141,22 @@ def merge_importances_features(feature_importances_file, feature_residues_map, i
   rows = []
   for i, feature_importance in enumerate(feature_importances):
     row = [feature_importance[0], 
+                 feature_tuples[i][0].__repr__().title(), feature_tuples[i][1].__repr__().title(), 
                  feature_tuples[i][0].resSeq, feature_tuples[i][1].resSeq, 
-                 feature_tuples[i][0].chain_id, feature_tuples[i][1].chain_id, 
                  feature_importance[1]]
     rows.append(row)
     
-  df = pd.DataFrame(rows, columns=('feature_name', 'res_i', 'res_j', 'chain_i', 'chain_j', 'importance'))
+  df = pd.DataFrame(rows, columns=('feature_name', 'res_i', 'res_j', 'resid_i', 'resid_j', 'importance'))
 
   return df
 
 def compute_per_residue_importance(df, percentile):
   net_df = pd.DataFrame(columns=['residue', 'resid', 'importance'])
   for _, row in df.iterrows():
-    res_i = row['feature_name'].split("-")[0]
-    res_j = row['feature_name'].split("-")[1]
-    resid_i = row['res_i']
-    resid_j = row['res_j']
+    res_i = row['res_i']
+    res_j = row['res_j']
+    resid_i = row['resid_i']
+    resid_j = row['resid_j']
 
     importance = row["importance"]
     if res_i not in net_df.index:
@@ -292,9 +296,124 @@ def plot_top_features_per_tIC(projected_tica_coords_file, features_dir, features
 def top_residues_per_tIC():
   return
 
+def rank_tICs_by_docking_rf(docking_csv, tica_coords_csv, analysis_dir, n_trees=500):
+  docking = pd.read_csv(docking_csv, header=0, index_col=0)
+  tica_coords = pd.read_csv(tica_coords_csv, header=0, index_col=0)
+  tica_coords = tica_coords.loc[docking.index]
+  tica_coords = preprocessing.scale(tica_coords)
+
+  error_rate = []
+
+  # Range of `n_estimators` values to explore.
+  min_estimators = 25
+  max_estimators = 500
+
+  for n_estimators in range(min_estimators, max_estimators + 1,15):
+    rfr = RandomForestRegressor(n_estimators=n_estimators, 
+                                max_features='sqrt', n_jobs=-1, oob_score=True)
+    rfr.fit(tica_coords, docking)
+
+    # Record the OOB error for each `n_estimators=i` setting.
+    oob_error = 1 - rfr.oob_score_
+    error_rate.append((n_estimators, oob_error))
+
+  # Generate the "OOB error rate" vs. "n_estimators" plot.
+
+  n_estimators = [tup[0] for tup in error_rate]
+  errors = [tup[1] for tup in error_rate]
+
+  plt.plot(n_estimators, errors)
+
+  plt.xlim(min_estimators, max_estimators)
+  plt.xlabel("n_estimators")
+  plt.ylabel("OOB error rate")
+  plt.title("Random Forest Regression Model Selection")
+  plt.show()
+
+  pp = PdfPages("%s/docking_tica_rf_oob_plot.pdf" % analysis_dir)
+  pp.savefig(bbox_inches='tight')
+  pp.close()
+  plt.clf()
+
+  best_n_estimators = n_estimators[np.argmin(errors)]
+  print("best_n_estimators")
+  print(best_n_estimators)
+  final_model = RandomForestRegressor(n_estimators=best_n_estimators, 
+                                      max_features='sqrt', n_jobs=-1, oob_score=True)
+  final_model.fit(tica_coords, docking)
+
+  df_rows = []
+  for j in range(0, np.shape(tica_coords)[1]):
+    df_rows.append(["tIC %d" % (j+1), final_model.feature_importances_[j]])
+  df = pd.DataFrame(df_rows, columns=('tIC', 'importance'))
+
+  plot_importance_df(df, "tIC", "Gini Importance of tIC", "Gini Importance of tICs in Predicting Docking Score", "docking_vs_tICA_rf", "", 0, analysis_dir)
 
 
+def rank_tICs_by_docking_logistic(docking_csv, tica_coords_csv, analysis_dir, n_trees=500):
+  docking = pd.read_csv(docking_csv, header=0, index_col=0)
+  tica_coords = pd.read_csv(tica_coords_csv, header=0, index_col=0)
+  tica_coords = tica_coords.loc[docking.index]
 
-    
+  tica_coords = preprocessing.scale(tica_coords)
+  docking = preprocessing.MinMaxScaler(feature_range=(0.01, 0.99)).fit_transform(docking)
+
+  logit = np.log(docking / (1.0-docking))
+
+  eps = 5e-3  # the smaller it is the longer is the path
+
+  print("Computing regularization path using the lasso...")
+  alphas_lasso, coefs_lasso, _ = lasso_path(tica_coords, docking, eps, fit_intercept=False)
+
+  print(np.shape(alphas_lasso))
+  print(np.shape(coefs_lasso))
+
+  df = pd.DataFrame(coefs_lasso[0].T, index=-np.log10(alphas_lasso), columns=["tIC %d" %(j+1) for j in range(0,np.shape(tica_coords)[1])])
+  plt.figure()
+  df.plot(colormap='gist_rainbow')
+
+  plt.xlabel('-Log(alpha)')
+  plt.ylabel('coefficients')
+  plt.title('Lasso and Elastic-Net Paths')
+  plt.axis('tight')
+  plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+  pp = PdfPages("%s/docking_tica_lasso_coefs_plot.pdf" % analysis_dir)
+  pp.savefig(bbox_inches='tight')
+  pp.close()
+  plt.clf()
+
+def rank_tICs_by_docking_mord(docking_csv, tica_coords_csv, analysis_dir, n_trees=500):
+  docking = pd.read_csv(docking_csv, header=0, index_col=0)
+  tica_coords = pd.read_csv(tica_coords_csv, header=0, index_col=0)
+  tica_coords = tica_coords.loc[docking.index]
+
+  tica_coords = preprocessing.scale(tica_coords)
+
+  from mord import OrdinalRidge
+
+  c_range = [float(i)/10000. for i in range(10600,10900)]
+  print(c_range)
+  coefs = np.zeros((len(c_range), np.shape(tica_coords)[1]))
+
+  for j, C in enumerate(range(1,10)):
+    lad = OrdinalRidge(alpha=C, fit_intercept=True, normalize=False, copy_X=True, max_iter=None, tol=0.001, solver='auto')
+    lad.fit(tica_coords, docking)
+    coefs[j,:] = lad.coef_
+
+  print(coefs)
+  print(np.shape(coefs))
+  df = pd.DataFrame(coefs, index=c_range, columns=["tIC %d" %(j+1) for j in range(0,np.shape(tica_coords)[1])])
+  plt.figure()
+  df.plot(colormap='gist_rainbow')
+
+  plt.xlabel('-Log(alpha)')
+  plt.ylabel('coefficients')
+  plt.title('Lasso and Elastic-Net Paths')
+  plt.axis('tight')
+  #plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+  pp = PdfPages("%s/docking_tica_lasso_mord_coefs_plot.pdf" % analysis_dir)
+  pp.savefig(bbox_inches='tight')
+  pp.close()
+  plt.clf()
 
 

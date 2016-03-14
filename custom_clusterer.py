@@ -251,7 +251,7 @@ def get_samples(cluster, trajectories, clusters_map, clusterer_dir, features_dir
 	return indices
 
 
-def sample_clusters(clusterer_dir, features_dir, traj_dir, traj_ext, save_dir, n_samples, method, clusters_map_file = "", tICs=None, structure=None):
+def sample_clusters(clusterer_dir, features_dir, traj_dir, traj_ext, save_dir, n_samples, method, clusters_map_file = "", tICs=None, structure=None, worker_pool=None):
 	if method == "cos":	
 		clusters_map = cos_to_means(clusterer_dir, features_dir)
 	elif method == "dist":
@@ -264,9 +264,13 @@ def sample_clusters(clusterer_dir, features_dir, traj_dir, traj_ext, save_dir, n
 	trajectories = get_trajectory_files(traj_dir, traj_ext)
 	
 	sampler = partial(get_samples, trajectories = trajectories, clusters_map = clusters_map, clusterer_dir = clusterer_dir, features_dir = features_dir, traj_dir = traj_dir, save_dir = save_dir, n_samples = n_samples, method = method, structure=structure)
-	num_workers = mp.cpu_count()
-	pool = mp.Pool(num_workers)
-	list_of_indices = pool.map(sampler, clusters)
+	if worker_pool is not None:
+		list_of_indices = worker_pool.map_sync(sampler, clusters)
+	else:
+		num_workers = mp.cpu_count()
+		pool = mp.Pool(num_workers)
+		list_of_indices = pool.map(sampler, clusters)
+		pool.terminate()
 	print("Done sampling, now saving clusters map")
 	for i in clusters:
 		print(i)
@@ -280,7 +284,7 @@ def sample_clusters(clusterer_dir, features_dir, traj_dir, traj_ext, save_dir, n
 			json.dump(clusters_map, f)
 
 
-	pool.terminate()
+	
 	#for cluster in clusters:
 	#	if cluster != 118: continue
 	#	sampler(cluster)
@@ -290,7 +294,7 @@ def sample_clusters(clusterer_dir, features_dir, traj_dir, traj_ext, save_dir, n
 
 
 
-def get_pnas(cluster, clusters_map, pnas_active_distances, pnas_coords, tica_coords, feature_coords, n_samples):
+def get_pnas(cluster, clusters_map, pnas_coords, tica_coords, feature_coords, n_samples):
 		distances = []
 		coords = []
 		tica_coords_list = []
@@ -303,8 +307,6 @@ def get_pnas(cluster, clusters_map, pnas_active_distances, pnas_coords, tica_coo
 			print(sample)
 			traj_id = sample[0]
 			frame = sample[1]
-			print((pnas_active_distances[traj_id]))
-			print((np.shape(pnas_active_distances[traj_id])))
 			pnas_coord = pnas_coords[traj_id][frame]
 			tica_coord = tica_coords[traj_id][frame]
 			if feature_coords is not None: 
@@ -363,7 +365,7 @@ def cluster_pnas_distances(clusterer_dir, features_dir, pnas_coords_dir, project
 			if features_dir is not None: feature_coord = pnas_feature[i][2]
 		except:
 			continue
-		for j in range(0, len(pnas_distance)):
+		for j in range(0, len(pnas_coord)):
 			pnas_coords_map["cluster%d_sample%d" %(i,j)] = pnas_coord[j]
 			tica_coords_map["cluster%d_sample%d" %(i,j)] = tica_coord[j]
 			if features_dir is not None: feature_coords_map["cluster%d_sample%d" %(i,j)] = feature_coord[j]
@@ -394,7 +396,7 @@ def sample_features(clusterer_dir, features_dir, features_ext, n_samples, method
 
 	features = load_file_list(None, features_dir, features_ext)
 
-	sampler = partial(get_pnas, clusters_map = clusters_map, pnas_active_distances = active_pnas_distances, pnas_coords = pnas_coords, tica_coords = tica_coords, n_samples = n_samples)
+	sampler = partial(get_pnas, clusters_map = clusters_map, pnas_coords = pnas_coords, tica_coords = tica_coords, n_samples = n_samples)
 	num_workers = mp.cpu_count()
 	#pool = mp.Pool(num_workers)
 	pnas_feature = []
