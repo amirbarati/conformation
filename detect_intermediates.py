@@ -1,8 +1,9 @@
 from sklearn import mixture
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 import numpy as np 
-import matplotlib.pyplot as plt
 import matplotlib
+reload(matplotlib)
+from matplotlib import pyplot as plt
 matplotlib.style.use('ggplot')
 from msmbuilder.dataset import dataset, _keynat, NumpyDirDataset
 from msmbuilder.utils import verbosedump, verboseload
@@ -26,7 +27,7 @@ from sklearn.grid_search import GridSearchCV
 from scipy.signal import argrelextrema
 from scipy import spatial
 from msmbuilder.utils import KDTree
-
+from matplotlib.pyplot import cm 
 
 from pandas import *
 #from rpy2.robjects.packages import importr
@@ -461,13 +462,34 @@ def plot_coef_path(df, filename):
   pp.close()
   plt.clf()
 
-def plot_df_rolling(df, filename):
-  plt.figure()
-  pd.rolling_mean(df, 100).plot(colormap='gist_rainbow')
-  plt.legend(loc='center left', bbox_to_anchor=(1.0,0.5))  
-  pp = PdfPages(filename)
-  pp.savefig(bbox_inches='tight')
-  pp.close()
+def plot_df_rolling(df, filename, return_fig=True, subplots=True, smoothing=100, include_original=False):
+  plt.clf()
+  if subplots:
+    color=iter(cm.rainbow(np.linspace(0,1,len(df.columns.values))))
+    fig, axes = plt.subplots(nrows=len(df.columns.values), ncols=1, figsize=(8.0, len(df.columns.values)*3.0))
+    for i,var in enumerate(df.columns.values):
+      c = next(color)
+      pd.rolling_mean(df, smoothing)[var].plot(ax=axes[i], title=var, c=c)
+      if include_original:
+        df[var].plot(ax=axes[i], title=var, c=c, alpha=0.2)
+
+      axes[i].legend(loc='center left', bbox_to_anchor=(1.0,0.5)) 
+      axes[i].set_title("")
+    #axes[0].set_ylabel('Distance in Angstroms')
+    #pd.rolling_mean(df, 100).plot(colormap='gist_rainbow', subplots=True, ax=f.gca(), layout=(1,5))
+  else:
+    fig = plt.figure()
+    pd.rolling_mean(df, smoothing).plot(colormap='gist_rainbow', subplots=True, ax=fig.gca())
+
+  #plt.legend(loc='center left', bbox_to_anchor=(1.0,0.5))
+  #plt.rc('text', usetex=True)
+  plt.savefig(filename, bbox_inches='tight', dpi=300)
+  #pp = PdfPages(filename)
+  #pp.savefig(bbox_inches='tight')
+  #pp.close()
+  if return_fig:
+    return
+
   plt.clf()
 
 def compute_docking_cutoff(docking_csv, plot_file):
@@ -637,7 +659,7 @@ def interpret_msm_rf(msm_dir, feature_residues_pkl, n_msm_states=25, percentile=
         pickle.dump(residue_importances_df, f)
 
 
-def plot_tICs_vs_docking(docking_csv, tica_coords_csv, plot_file, chosen_ligand="docking"):
+def plot_tICs_vs_docking(docking_csv, tica_coords_csv, plot_file, chosen_ligand="docking", max_tIC=10):
   docking = pd.read_csv(docking_csv, header=0, index_col=0)
   docking.columns = [c.rstrip().lstrip() for c in docking.columns]
   tica = pd.read_csv(tica_coords_csv, header=0, index_col=0)
@@ -656,7 +678,7 @@ def plot_tICs_vs_docking(docking_csv, tica_coords_csv, plot_file, chosen_ligand=
   index = pd.Index(docking.values).astype(np.float64)
   df = pd.DataFrame(np.hstack((tica.values,docking.values)), columns=tica_names+[chosen_ligand])
   df.sort(columns=chosen_ligand, inplace=True)
-  df = pd.DataFrame(df[tica_names].values[:,list(range(0,np.shape(tica)[1]))], index=df[chosen_ligand], columns=list(range(1,np.shape(tica)[1] + 1)))
+  df = pd.DataFrame(df[tica_names].values[:,list(range(0,max_tIC))], index=df[chosen_ligand], columns=list(range(1,max_tIC + 1)))
   plot_df_rolling(df, plot_file)
 
 def sample_tIC_regions(tica_coords_file, save_dir):
@@ -767,5 +789,23 @@ def sample_kde_maxima(tica_coords_file, kde_dir, trajs):
     j += 1
     kde_maxima_file = os.path.join(kde_dir, "kde_model_tIC_%d_maxima.h5" % (j+1))
 
-
+def calculate_cluster_averages_per_feature(clusterer, features):
+  """
+  Concatenate clusters into one long list
+  Concatenate features
+  for each cluster:
+    np.where 
+    then get those features 
+    np.mean over axis=0
+    store in new matrix 
+  """
+  n_clusters = clusterer.n_clusters 
+  concatenated_clusters = np.concatenate(clusterer.labels_)
+  concatenated_features = np.concatenate(features)
+  cluster_averages = np.zeros((n_clusters, concatenated_features.shape[1]))
+  for i in range(0, n_clusters):
+    rows = np.where(concatenated_clusters == i)
+    means = np.mean(concatenated_features[rows,:], axis=0)
+    cluster_averages[i,:] = means
+  return cluster_averages
 

@@ -293,10 +293,17 @@ def plot_tica(transformed_data_dir, lag_time):
 
 
 
-def plot_tica_and_clusters(component_j, transformed_data, lag_time, component_i, n_clusters, main="", label = "dot", active_cluster_ids = [], intermediate_cluster_ids = [], inactive_cluster_ids = [], inactive_subsample=5, intermediate_subsample=5, tica_dir = "", center_i=None, center_j=None, centers=None):
+def plot_tica_and_clusters(component_j, transformed_data, lag_time, component_i, n_clusters, main="", label = "dot", active_cluster_ids = [], intermediate_cluster_ids = [], inactive_cluster_ids = [], inactive_subsample=5, intermediate_subsample=5, tica_dir = "", center_i=None, center_j=None, centers=None, concatenate=True, axes=None):
+	print((component_i, component_j))
+	if concatenate:
+		trajs = np.concatenate(transformed_data)
+	else:
+		trajs = transformed_data
 
-	trajs = np.concatenate(transformed_data)
 	plt.hexbin(trajs[:,component_i], trajs[:,component_j], bins='log', mincnt=1, cmap=plt.cm.RdYlBu_r)
+	if axes is not None:
+		plt.axis((axes[component_i][0], axes[component_i][1], axes[component_j][0], axes[component_j][1]))	
+
 	plt.xlabel("tIC %d" %(component_i + 1))
 	plt.ylabel('tIC %d' %(component_j+1))
 	indices = [j for j in range(0,len(active_cluster_ids),1)]
@@ -333,7 +340,7 @@ def plot_tica_and_clusters(component_j, transformed_data, lag_time, component_i,
 	pp.close()
 	plt.clf()
 
-def plot_all_tics_and_clusters(tica_dir, transformed_data_dir, clusterer_dir, lag_time, tic_range=None, main="", label = "dot", active_cluster_ids = [], intermediate_cluster_ids = [], inactive_cluster_ids = [], inactive_subsample=5, intermediate_subsample=5, custom_cluster_centers=None):
+def plot_all_tics_and_clusters(tica_dir, transformed_data_dir, clusterer_dir, lag_time, tic_range=None, main="", label = "dot", active_cluster_ids = [], intermediate_cluster_ids = [], inactive_cluster_ids = [], inactive_subsample=5, intermediate_subsample=5, custom_cluster_centers=None, concatenate=True, axes=None):
 	try:
 		transformed_data = verboseload(transformed_data_dir)
 	except:
@@ -341,12 +348,16 @@ def plot_all_tics_and_clusters(tica_dir, transformed_data_dir, clusterer_dir, la
 	if custom_cluster_centers is None:
 		clusterer = verboseload(clusterer_dir)
 		centers = clusterer.cluster_centers_
-	num_tics = np.shape(transformed_data[0])[1]
+	print centers
+	if not concatenate:
+		num_tics = np.shape(transformed_data)[1]
+	else:
+		num_tics = np.shape(transformed_data[0])[1]
 	if tic_range == None:
 		tic_range = range(0,num_tics)
 	for i in tic_range:
-		js = list(range(i+1, num_tics))
-		plot_partial = partial(plot_tica_and_clusters, n_clusters = len(centers), tica_dir = tica_dir, main=main, transformed_data = transformed_data, lag_time = lag_time, label = label, active_cluster_ids = active_cluster_ids, intermediate_cluster_ids = intermediate_cluster_ids, inactive_cluster_ids = inactive_cluster_ids, inactive_subsample=inactive_subsample, intermediate_subsample=intermediate_subsample, component_i = i, centers=centers)
+		js = [j for j in tic_range if j > i]
+		plot_partial = partial(plot_tica_and_clusters, n_clusters = len(centers), tica_dir = tica_dir, main=main, transformed_data = transformed_data, lag_time = lag_time, label = label, active_cluster_ids = active_cluster_ids, intermediate_cluster_ids = intermediate_cluster_ids, inactive_cluster_ids = inactive_cluster_ids, inactive_subsample=inactive_subsample, intermediate_subsample=intermediate_subsample, component_i = i, centers=centers, concatenate=concatenate, axes=axes)
 		for j in js:
 			plot_partial(j)
 		#pool = mp.Pool(mp.cpu_count())
@@ -395,7 +406,7 @@ def plot_column_pair(i, num_columns, save_dir, titles, data, refcoords, main, ax
 			pp.close()
 			plt.clf()
 
-def plot_columns(save_dir, data_file, titles = None, main = "", tICA = False, scale = 1.0, refcoords_file = None, axes=None, concatenate=True):
+def plot_columns(save_dir, data_file, titles = None, main = "", tICA = False, scale = 1.0, refcoords_file = None, axes=None, concatenate=True, reshape=True):
 	data = verboseload(data_file)
 	if concatenate:
 		data = np.concatenate(data)
@@ -404,13 +415,15 @@ def plot_columns(save_dir, data_file, titles = None, main = "", tICA = False, sc
 
 	if(refcoords_file is not None):
 		refcoords = load_file(refcoords_file)
+		if reshape:
+			refcoords = np.transpose(np.vstack(refcoords))
 	else:
 		refcoords = None
 	print((np.shape(refcoords)))
 	print(refcoords)
 
 	num_columns = np.shape(data)[1]
-	plot_column_pair_partial = partial(plot_column_pair, main = main, num_columns = num_columns, save_dir = save_dir, titles = titles, data = data, refcoords = refcoords, axes=None)
+	plot_column_pair_partial = partial(plot_column_pair, main = main, num_columns = num_columns, save_dir = save_dir, titles = titles, data = data, refcoords = refcoords, axes=axes)
 	pool = mp.Pool(mp.cpu_count())
 	pool.map(plot_column_pair_partial, range(0,num_columns))
 	pool.terminate()

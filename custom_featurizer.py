@@ -12,6 +12,33 @@ from numpy import random
 import json
 import pickle
 from residue import ContactFeature
+from scipy.stats import gamma 
+from sklearn.metrics.pairwise import pairwise_distances
+
+def compute_average_min_distance(traj, residues_i, residues_j):
+
+  atoms_i = []
+  atoms_j = []
+
+  for residue in residues_i:
+    atoms_i.append([a.index for a in traj.topology.atoms if residue.is_mdtraj_res_equivalent(a.residue) and a.name == "CA"][0])
+  for residue in residues_j:
+    atoms_j.append([a.index for a in traj.topology.atoms if residue.is_mdtraj_res_equivalent(a.residue) and a.name == "CA"][0])
+
+  traj_i = traj.atom_slice(atoms_i)
+  traj_j = traj.atom_slice(atoms_j)
+
+  xyz_i = traj_i.xyz
+  xyz_j = traj_j.xyz
+  
+  distances = np.zeros(traj.n_frames)
+  for frame in range(0, np.shape(xyz_i)[0]):	
+    distances[frame] = np.mean(np.min(pairwise_distances(
+    	X=xyz_i[frame,:], Y=xyz_j[frame,:], metric='euclidean'), axis=0))
+
+  avg_min_distances = distances * 10.
+
+  return avg_min_distances
 
 def fix_topology(topology):
 	
@@ -320,30 +347,17 @@ def convert_atom_residue_pairs_to_mdtraj_indices(top, atom_residue_pairs):
 	return atom_residue_index_pairs
 
 
-def read_and_featurize(traj_file, features_dir = None, condition=None, 
-											 dihedral_types = ["phi", "psi", "chi1", "chi2"], 
-											 dihedral_residues = None, residue_pairs = [],
-											 atom_residue_pairs = [], 
-											 iterative = True, structure = None):
+def apply_gamma_pdf_parameters(contact_features, gamma_pdf_parameters):
+	gamma_features = []
 
-	dihedral_indices = []
-	residue_order = []
-	if len(dihedral_residues) > 0:
-		for dihedral_type in dihedral_types:
-			if dihedral_type == "phi": dihedral_indices.append(phi_indices(fix_topology(top), dihedral_residues))
-			if dihedral_type == "psi": dihedral_indices.append(psi_indices(fix_topology(top), dihedral_residues))
-			if dihedral_type == "chi1": dihedral_indices.append(chi1_indices(fix_topology(top), dihedral_residues))
-			if dihedral_type == "chi2": dihedral_indices.append(chi2_indices(fix_topology(top), dihedral_residues))
+	for param in gamma_pdf_parameters:
+		param_features = np.apply_along_axis(gamma.pdf, 0, contact_features, a=param[0], loc=param[1], scale=param[2])
+		gamma_features.append(param_features)
 
-		dihedral_angles = []
+	gamma_features = np.hstack(gamma_features)
+	return gamma_features
 
-		for dihedral_type in dihedral_indices:
-			angles = np.transpose(ManualDihedral.compute_dihedrals(traj=traj,indices=dihedral_type))
-			dihedral_angles.append(np.sin(angles))
-			dihedral_angles.append(np.cos(angles))
-
-		manual_features = np.transpose(np.concatenate(dihedral_angles))
-
+def custom_compute_distances(residue_pairs, scheme, gamma_pdf_parameters, traj_file, structure, iterative):
 	if len(residue_pairs) > 0:
 		if structure is not None:
 			top = md.load_frame(traj_file, index=0, top=structure).topology
@@ -361,7 +375,7 @@ def read_and_featurize(traj_file, features_dir = None, condition=None,
 		if iterative:
 			try:
 				for chunk in md.iterload(traj_file, chunk = 5000):
-					chunk_features = md.compute_contacts(chunk, contacts = residue_pairs, scheme = 'closest-heavy', ignore_nonprotein=False)[0]
+					chunk_features = md.compute_contacts(chunk, contacts = residue_pairs, scheme = scheme, ignore_nonprotein=False)[0]
 					contact_features.append(chunk_features)
 				contact_features = np.concatenate(contact_features)
 			except Exception as e:
@@ -374,15 +388,50 @@ def read_and_featurize(traj_file, features_dir = None, condition=None,
 					traj = md.load(traj_file, top=structure)
 				else:
 					traj = md.load(traj_file)
-				contact_features =  md.compute_contacts(traj, contacts = residue_pairs, scheme = 'closest-heavy', ignore_nonprotein=False)[0]
+				contact_features = md.compute_contacts(traj, contacts = residue_pairs, scheme = scheme, ignore_nonprotein=False)[0]
 			except Exception as e:
 				print(str(e))
 				print("Failed for traj")
 				return
-		if len(dihedral_residues) > 0: 
-			manual_features = np.column_stack((manual_features, contact_features))
-		else:
-			manual_features = contact_features
+
+		if gamma_pdf_parameters is not None:
+			contact_features = apply_gamma_pdf_parameters(contact_features, gamma_pdf_parameters)
+
+		return contact_features	
+
+def read_and_featurize(traj_file, features_dir = None, condition=None, 
+											 dihedral_types = ["phi", "psi", "chi1", "chi2"], 
+											 dihedral_residues = None, contact_residue_pairs = [],
+											 ca_residue_pairs = [], atom_residue_pairs = [], 
+											 iterative = True, structure = None,
+											 gamma_pdf_parameters=None):
+
+	dihedral_indices = []
+	residue_order = []
+	manual_features = []
+	if len(dihedral_residues) > 0:
+		for dihedral_type in dihedral_types:
+			if dihedral_type == "phi": dihedral_indices.append(phi_indices(fix_topology(top), dihedral_residues))
+			if dihedral_type == "psi": dihedral_indices.append(psi_indices(fix_topology(top), dihedral_residues))
+			if dihedral_type == "chi1": dihedral_indices.append(chi1_indices(fix_topology(top), dihedral_residues))
+			if dihedral_type == "chi2": dihedral_indices.append(chi2_indices(fix_topology(top), dihedral_residues))
+
+		dihedral_angles = []
+
+		for dihedral_type in dihedral_indices:
+			angles = np.transpose(ManualDihedral.compute_dihedrals(traj=traj,indices=dihedral_type))
+			dihedral_angles.append(np.sin(angles))
+			dihedral_angles.append(np.cos(angles))
+
+		manual_features = np.transpose(np.concatenate(dihedral_angles))
+
+	if len(contact_residue_pairs) > 0:
+		manual_features.append(custom_compute_distances(contact_residue_pairs, 'closest-heavy', gamma_pdf_parameters, traj_file, structure, iterative))
+	if len(ca_residue_pairs) > 0:
+		manual_features.append(custom_compute_distances(ca_residue_pairs, 'CA', gamma_pdf_parameters, traj_file, structure, iterative))
+	if len(contact_residue_pairs) > 0 or len(ca_residue_pairs) > 0:
+		manual_features = np.hstack(manual_features)
+
 
 	if len(atom_residue_pairs) > 0:
 		if structure is not None:
@@ -397,6 +446,7 @@ def read_and_featurize(traj_file, features_dir = None, condition=None,
 			chains[3].id = 'C'
 
 		atom_residue_pairs = convert_atom_residue_pairs_to_mdtraj_indices(top, atom_residue_pairs)
+		print(atom_residue_pairs)
 		contact_features = []
 		if iterative:
 			try:
@@ -409,17 +459,22 @@ def read_and_featurize(traj_file, features_dir = None, condition=None,
 				print("Failed")
 				return
 		else:
-			try:
+			if 1==1:
 				if structure is not None:
 					traj = md.load(traj_file, top=structure)
 				else:
 					traj = md.load(traj_file)
 					contact_features = compute_atom_residue_pair_distances(traj, contacts=atom_residue_pairs, scheme='closest-heavy')[0]
-			except Exception as e:
-				print(str(e))
+					print(contact_features)
+					print(np.shape(contact_features))
+			else:
 				print("Failed for traj")
 				return
-		if len(residue_pairs) > 0:
+
+		if gamma_pdf_parameters is not None:
+			contact_features = apply_gamma_pdf_parameters(contact_features, gamma_pdf_parameters)		
+
+		if len(manual_features) > 0:
 			manual_features = np.column_stack((manual_features, contact_features))
 		else:
 			manual_features = contact_features
@@ -556,7 +611,7 @@ def compute_contacts_below_cutoff(traj_file_frame, cutoff = 100000.0, contact_re
 	return final_residue_pairs
 
 
-def which_trajs_to_featurize(traj_dir, traj_ext, features_dir):
+def which_trajs_to_featurize(traj_dir, traj_ext, features_dir, excluded_trajs):
 	all_trajs = get_trajectory_files(traj_dir, traj_ext)
 	trajs = []
 	for fulltraj in all_trajs:
@@ -567,8 +622,16 @@ def which_trajs_to_featurize(traj_dir, traj_ext, features_dir):
 		filename_noext = filename.split(".")[0]
 		if os.path.exists("%s/%s.dataset" %(features_dir, filename_noext)):
 			print("already featurized")	
-		else:
-			trajs.append(fulltraj)
+			continue 
+
+		include = True
+		for excluded_traj in excluded_trajs:
+			if excluded_traj in filename_noext:
+				include = False
+		if not include: continue
+
+		trajs.append(fulltraj)
+
 	return(trajs)	
 
 def featurize_contacts_custom(traj_dir, features_dir, traj_ext, structures, 
@@ -582,9 +645,13 @@ def featurize_contacts_custom(traj_dir, features_dir, traj_ext, structures,
 															contact_cutoff = None, 
 															user_specified_contact_residue_pairs = [],
 															user_specified_atom_residue_pairs = [],
+															gamma_pdf_parameters=None,
 															parallel = False, exacycle = False,
 															iterative=True,
-															load_from_file=False):
+															load_from_file=False,
+															worker_pool=None,
+															schemes=[],
+															excluded_trajs=[]):
 	'''
 	Nb: The input to this function, either contact_residues or contact_residue_pairs_file, must contain instances 
 	of object Residue(). The .resSeq attribute of each such instance must refer to residue numbering in your reference
@@ -594,7 +661,7 @@ def featurize_contacts_custom(traj_dir, features_dir, traj_ext, structures,
 	you can also input a residue_map, a dictionary that maps residue_object --> residue_object. The reason for this is that there
 		is not a consensus residue numbering for the same protein.
 	'''
-	trajs = which_trajs_to_featurize(traj_dir, traj_ext, features_dir)
+	trajs = which_trajs_to_featurize(traj_dir, traj_ext, features_dir, excluded_trajs)
 	if not os.path.exists(features_dir): os.makedirs(features_dir)
 	if load_from_file:
 		contact_residue_pairs = generate_features(contact_residue_pairs_file)
@@ -602,12 +669,25 @@ def featurize_contacts_custom(traj_dir, features_dir, traj_ext, structures,
 		if exacycle: contact_residue_pairs = [residues_map[key] for key in contact_residue_pairs]
 	else:
 		contact_residue_pairs = []
+		ca_residue_pairs = []
 		for structure in structures:
 			print("structure")
 			print(structure) 
 			structure_contact_residue_pairs = compute_contacts_below_cutoff([structure,0], cutoff = contact_cutoff, contact_residues = contact_residues, anton = False, structure = traj_top_structure)
 			for pair in structure_contact_residue_pairs:
 				if pair not in contact_residue_pairs: contact_residue_pairs.append(pair)
+
+		if "CA" in schemes or "ca" in schemes:
+			old_pairs = copy.deepcopy(contact_residue_pairs)
+			t0 = md.load_frame(get_trajectory_files(traj_dir, traj_ext)[0], index=0)
+			residue_pairs = convert_residue_pairs_to_mdtraj_indices(t0.topology, contact_residue_pairs)
+			ca_pairs = md.compute_contacts(t0, contacts = residue_pairs, scheme = 'CA', ignore_nonprotein=False)[1]
+			ca_pairs = [sorted((t0.topology.residue(pair[0]).resSeq, t0.topology.residue(pair[1]).resSeq)) for pair in ca_pairs]
+			for pair in old_pairs:
+				if sorted((pair[0].resSeq, pair[1].resSeq)) in ca_pairs:
+					pair[0].CA = True 
+					pair[1].CA = True
+					ca_residue_pairs.append(pair)
 		#ordering = np.argsort([r[0].resSeq for r in contact_residue_pairs]).tolist()
 		#contact_residue_pairs = [contact_residue_pairs[i] for i in ordering]
 		
@@ -625,9 +705,24 @@ def featurize_contacts_custom(traj_dir, features_dir, traj_ext, structures,
 			atom_i.mdtraj_rep = top.atom(mdtraj_i).__repr__().title()
 			mdtraj_j = convert_residue_to_mdtraj_index(top, res_j)
 			res_j.res_name = top.residue(mdtraj_j).__repr__().title()
-		
+
 		contact_residue_pairs += user_specified_contact_residue_pairs
-		final_features = contact_residue_pairs + user_specified_atom_residue_pairs
+		final_features = contact_residue_pairs + ca_residue_pairs + user_specified_atom_residue_pairs
+
+		if gamma_pdf_parameters is not None:
+			base_features = copy.deepcopy(final_features)
+			final_features = []
+			for param in gamma_pdf_parameters:
+				param_features = copy.deepcopy(base_features)
+				for feature in param_features:
+					feature[0].mean = param[0]
+					feature[0].loc = param[1]
+					feature[0].scale = param[2]
+					feature[1].mean = param[0]
+					feature[1].loc = param[1]
+					feature[1].scale = param[2]
+				final_features += param_features
+
 		print(("There are %d contact pairs to be used in contact featurization." % len(final_features)))
 		print("Saving contact feature residue pairs to disk.")
 		with open(contact_residue_pairs_file, "wb") as f:
@@ -637,9 +732,13 @@ def featurize_contacts_custom(traj_dir, features_dir, traj_ext, structures,
 	print(contact_residue_pairs)
 	#print("atom_residue_pairs=")
 	featurize_partial = partial(read_and_featurize, features_dir = features_dir, dihedral_residues = dihedral_residues,
-								dihedral_types = dihedral_types, residue_pairs = contact_residue_pairs,
-								atom_residue_pairs=user_specified_atom_residue_pairs, iterative=iterative, structure=traj_top_structure)
-	if parallel:
+								dihedral_types = dihedral_types, contact_residue_pairs = contact_residue_pairs, ca_residue_pairs = ca_residue_pairs,
+								atom_residue_pairs=user_specified_atom_residue_pairs, iterative=iterative, structure=traj_top_structure,
+								gamma_pdf_parameters=gamma_pdf_parameters)
+
+	if worker_pool is not None:
+		worker_pool.map_sync(featurize_partial, trajs)
+	elif parallel:
 		pool = mp.Pool(mp.cpu_count())
 		pool.map(featurize_partial, trajs)
 		pool.terminate()
@@ -757,7 +856,9 @@ def compute_user_defined_features(traj_file, inactive, active, structure=None,
 		elif name == "rmsd_connector_inactive":
 			features.append(rmsd_connector(traj, inactive, residues=residues))
 		elif "dist" in name:
-			features.append(compute_distance(traj, residues=residues))
+			features.append(helix6_helix3_dist(traj, residues=residues))
+		elif "packing" in name:
+			features.append(compute_average_min_distance(traj, residues[0], residues[1]))
 		elif "rmsd" in name:
 			if "inactive" in name:
 				features.append(compute_distance(traj, inactive, residues=residues))
@@ -769,7 +870,7 @@ def compute_user_defined_features(traj_file, inactive, active, structure=None,
 	return features
 
 def compute_user_defined_features_wrapper(traj_dir, traj_ext, inactive_file, active_file, structure,
-																					feature_name_residues_dict, save_file):
+																					feature_name_residues_dict, save_file, worker_pool=None, parallel=True):
 	inactive = md.load(inactive_file)
 	active = md.load(active_file)
 	compute_user_defined_features_partial = partial(compute_user_defined_features, 
@@ -777,14 +878,32 @@ def compute_user_defined_features_wrapper(traj_dir, traj_ext, inactive_file, act
 																									structure=structure, 
 																									feature_name_residues_dict=feature_name_residues_dict)
 	trajs = get_trajectory_files(traj_dir, traj_ext)
-	#features = []
-	#for traj in trajs:
-	#		features.append(compute_user_defined_features_partial(traj))
-	pool = mp.Pool(mp.cpu_count())
-	features = pool.map(compute_user_defined_features_partial, trajs)
-	pool.terminate()
 
+	if worker_pool is not None:
+		features = worker_pool.map_sync(compute_user_defined_features_partial, trajs)
+	elif parallel:
+		pool = mp.Pool(mp.cpu_count())
+		features = pool.map(compute_user_defined_features_partial, trajs)
+		pool.terminate()
+	else:
+		features = []
+		for traj in trajs:
+			print(traj)
+			traj_features = compute_user_defined_features_partial(traj)
+			print(np.shape(traj_features))
+			print(traj_features[0,:])
+			features.append(traj_features)	
 	verbosedump(features, save_file)
+
+#credit: http://stackoverflow.com/questions/7352684/how-to-find-the-groups-of-consecutive-elements-from-an-array-in-numpy
+def is_consecutive(data, stepsize=1, min_length=10):
+    consecutives = np.split(data, np.where(np.diff(data) != stepsize)[0]+1)
+    #print(consecutives)
+    for consecutive in consecutives:
+    	if len(consecutive) >= min_length:
+    		return True
+
+    return False
 
 def reaction_coordinate_sampler(traj_dir, traj_ext, rxn_coord_file, 
 																feature_name_residues_dict, coords_bounds_dict, save_file):
@@ -809,8 +928,9 @@ def reaction_coordinate_sampler(traj_dir, traj_ext, rxn_coord_file,
 			span = True
 			for k in range(0, len(bounds)-1):
 				indices = np.nonzero((projection > bounds[k]) & (projection < bounds[k+1]))[0]
-				if len(indices) < 50:
-					span = False
+				#print(indices)
+				if not is_consecutive(indices):
+					span=False
 			if span: coord_to_trajectories_dict[coord].append(traj_files[i])
 
 	print(coord_to_trajectories_dict)

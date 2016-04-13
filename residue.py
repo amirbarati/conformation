@@ -1,20 +1,32 @@
 import pandas as pd
 
 class Residue(object):
-  def __init__(self, resSeq, chain_id=None, chain_name=None, res_name=None, ballosteros_weinstein=None):
+  def __init__(self, resSeq, chain_id=None, chain_name=None, res_name=None, ballosteros_weinstein=None, mean=None, CA=False):
     self.resSeq = resSeq
     self.chain_id = chain_id
     self.chain_name = chain_name
     self.ballosteros_weinstein = ballosteros_weinstein
     self.res_name = res_name
+    self.mean = mean
+    self.CA = CA
 
   def __repr__(self):
+    name = None
     if self.res_name is not None:
-      return self.res_name
+      name = self.res_name
+      if hasattr(self, "CA"):
+        if self.CA:
+          name = "%s_CA" %name
     elif self.chain_id is not None:
-      return "%s%d" % (self.chain_id, self.resSeq)
+      name = "%s%d" % (self.chain_id, self.resSeq) 
     else:
-      return str(self.resSeq)
+      name = str(self.resSeq)
+    if hasattr(self, "mean"):
+      if self.mean is not None:
+        name = "%s-mean%d" %(name, self.mean)
+
+
+    return name
 
   def __eq__(self, other): 
     return self.__dict__ == other.__dict__

@@ -20,7 +20,7 @@ def plot_timescales(clusterer_dir, n_clusters, tica_dir, main="", lag_times=list
 	sequences = clusterer.labels_
 	#print(sequences)
 	#lag_times = list(np.arange(1,150,5))
-	n_timescales = 10
+	n_timescales = 5
 
 	msm_timescales = implied_timescales(sequences, lag_times, n_timescales=n_timescales, msm=MarkovStateModel(verbose=True))
 	print(msm_timescales)
@@ -154,6 +154,7 @@ def construct_graph(msm_modeler_dir, clusterer_dir, n_clusters, tica_lag_time, m
 				graph.node[cluster_id]["macrostate"] = int(macrostate_cluster_id)
 
 	nx.write_graphml(graph, graph_file)
+	return(graph)
 
 def compute_subgraphs(graph = None, graph_file = None, save_base = None):
 	if graph is None:
@@ -259,11 +260,11 @@ def macrostate_pcca(msm_file, clusterer_file, n_macrostates, macrostate_dir):
 def macrostate_bace(msm_file, n_macrosates, clusters_map_file, start_state=None):
 	return
 
-def find_closest_indices_to_cluster_center(tica_coords, clusterer_file):
+def find_closest_indices_to_cluster_center(tica_coords, clusterer_file, k=1):
 	tica = verboseload(tica_coords)
 	clusterer = verboseload(clusterer_file)
 	kd = KDTree(tica)
-	dist, inds = kd.query(clusterer.cluster_centers_)
+	dist, inds = kd.query(clusterer.cluster_centers_, k=k)
 	return inds
 
 def get_frame(traj_index_frame, traj_files):

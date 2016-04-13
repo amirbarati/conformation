@@ -59,6 +59,7 @@ def pprep_prot(pdb, ref, extension = ".mae"):
 	mae_filename = os.path.basename(mae_filename)
 	command = "$SCHRODINGER/utilities/prepwizard -WAIT -disulfides -fix -noepik -noimpref -noprotassign -reference_st_file %s -NOLOCAL %s %s" %(ref, pdb, mae_filename)
 	print(command)
+	print(os.getcwd())
 	subprocess.call(command, shell=True)
 	os.chdir(current_directory)
 	return
@@ -69,7 +70,7 @@ def remove_path_and_extension(directory):
 	filename_no_pv = filename_no_ext.split("_pv")[0]
 	return(filename_no_pv)
 
-def pprep(pdb_dir, ref, indices = None, chosen_receptors = None, extension = ".mae", worker_pool=None):
+def pprep(pdb_dir, ref, indices = None, chosen_receptors = None, extension = ".mae", worker_pool=None, parallel=False):
 	pdbs = get_trajectory_files(pdb_dir, ext = ".pdb")
 	"""
 	print((len(chosen_receptors)))
@@ -87,11 +88,14 @@ def pprep(pdb_dir, ref, indices = None, chosen_receptors = None, extension = ".m
 	print(pdbs[0:3])
 	if worker_pool is not None:
 		worker_pool.map_sync(pprep_partial, pdbs)
-	else:
+	elif parallel:
 		num_workers = mp.cpu_count()
 		pool = mp.Pool(num_workers)
 		pool.map(pprep_partial, pdbs)
 		pool.terminate()
+	else:
+		for pdb in pdbs:
+			pprep_partial(pdb)
 	print("Done prepping proteins")
 	#time.sleep(10)
 
@@ -124,7 +128,7 @@ def prepare_ligand(lig, lig_dir):
 	ligfile.write("DETERMINE_CHIRALITIES   no \n")
 	ligfile.write("IGNORE_CHIRALITIES   no \n")
 	ligfile.write("NUM_STEREOISOMERS   32 \n")
-	ligfile.write("NUM_RING_CONF   6 \n")
+	ligfile.write("NUM_RING_CONF   1 \n")
 	ligfile.close()
 
 	cmd = "$SCHRODINGER/ligprep -WAIT -inp %s" %lig_input
@@ -132,8 +136,10 @@ def prepare_ligand(lig, lig_dir):
 	subprocess.call(cmd, shell=True)
 
 
-def prepare_ligands(lig_dir, ext = ".mae"):
-	ligs = get_trajectory_files(lig_dir, ext)
+def prepare_ligands(lig_dir, exts = [".mae"]):
+	ligs = []
+	for ext in exts:
+		ligs += get_trajectory_files(lig_dir, ext)
 	print(ligs)
 	lig_partial = partial(prepare_ligand, lig_dir = lig_dir)
 
@@ -301,7 +307,7 @@ def run_command(cmd):
 	subprocess.call(cmd, shell = True)
 
 def dock(dock_job):
-	signal.alarm(180)
+	signal.alarm(300)
 	docking_dir = os.path.dirname(dock_job)
 	os.chdir(docking_dir)
 	cmd = "$SCHRODINGER/glide %s -OVERWRITE -WAIT -strict" %dock_job
@@ -565,6 +571,25 @@ def mmgbsa(docking_dir, mmgbsa_dir, chosen_jobs = False):
 	pool.map(mmgbsa_individual, mmgbsa_jobs)
 	pool.terminate()
 	print("Done with MM GBSA calculations")
+
+def convert_maegz_file_to_pdb(maegz):
+	current_dir = os.getcwd()
+	os.chdir(os.path.dirname(maegz))
+	filename_noext = os.path.splitext(maegz)[0]
+	new_filename = "%s.pdb" %filename_noext
+	command = "$SCHRODINGER/utilities/pdbconvert -imae %s -opdb %s" %(maegz, new_filename)
+	subprocess.call(command, shell=True)
+	os.chdir(current_dir)
+	return
+
+
+def convert_maegz_files_to_pdb(maegz_dir, ext, worker_pool=None):
+	maegz_files = get_trajectory_files(maegz_dir, ext)
+	if worker_pool is not None:
+		worker_pool.map_sync(convert_maegz_file_to_pdb, maegz_files)
+	else:
+		for maegz_file in maegz_files:
+			convert_maegz_file_to_pdb(maegz_file)
 
 def mmgbsa_ligands_and_receptors(docking_dir, mmgbsa_dir, ligands, chosen_receptors = False):
 	for ligand in ligands:

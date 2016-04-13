@@ -1,6 +1,9 @@
 import numpy as np
 from msmbuilder.utils import verbosedump, verboseload
-
+import msmbuilder.tpt as tpt 
+import msmbuilder.msm as msm 
+import random 
+import pandas as pd
 
 def resample_by_msm(total_samples, msm_object, clusters_map, num_trajs, save_file):
   equilibrium_populations = msm_object.populations_
@@ -45,25 +48,49 @@ def resample_features_by_msm_equilibirum_pop(features, traj_to_frames, save_file
   verbosedump(resampled_features, save_file)
 
 def generate_msm_traj_index_series(msm_object, start_cluster, n_steps, clusters_map, save_file):
-  msm_trajectory = msm.sample_discrete(state=start_cluster, n_steps=n_steps)
+  inv_map = {v: k for k, v in msm_object.mapping_.items()}
+  msm_trajectory = msm_object.sample_discrete(state=start_cluster, n_steps=n_steps)
 
   traj_index_pairs = []
-  for cluster in msm_trajectory:
-    traj_index_pair = np.random.choice(clusters_map[cluster], size=1)[0]
+  for state in msm_trajectory:
+    cluster = state #inv_map[state]
+    traj_index_pair = random.choice(list(clusters_map[cluster]))
     traj_index_pairs.append(traj_index_pair)
 
   verbosedump(traj_index_pairs, save_file)
+  return traj_index_pairs
 
-def generate_msm_traj_index_series(msm_object, start_cluster, end_cluster, clusters_map, save_file):
-  msm_trajectory = msm.sample_discrete(state=start_cluster, n_steps=n_steps)
+def generate_tpt_traj_index_series(msm_object, sources, sinks, clusters_map, num_paths, remove_path, save_file):
+  net_flux = tpt.net_fluxes(sources, sinks, msm_object)
+  tpt_paths = tpt.paths(sources, sinks, net_flux, remove_path=remove_path, 
+                        num_paths=num_paths, flux_cutoff=0.5)
 
-  traj_index_pairs = []
-  for cluster in msm_trajectory:
-    traj_index_pair = np.random.choice(clusters_map[cluster], size=1)[0]
-    traj_index_pairs.append(traj_index_pair)
+  inv_map = {v: k for k, v in msm_object.mapping_.items()}
 
-  verbosedump(traj_index_pairs, save_file)
+  print(tpt_paths)
+  traj_index_pairs_list = []
+  for path in tpt_paths[0]:
+    print("path = %s" %(str(path)))
+    traj_index_pairs = []
+    for state in path:
+      cluster = inv_map[state]
+      traj_index_pair = random.choice(list(clusters_map[cluster]))
+      traj_index_pairs.append(traj_index_pair)
+    traj_index_pairs_list.append(traj_index_pairs)
 
-def resample_features_by_msm_trajectory(features, traj_index_pairs, save_file):
-  return
+  verbosedump(traj_index_pairs_list, save_file)
+  return traj_index_pairs_list
+
+def resample_features_by_msm_trajectory(features, traj_index_pairs):
+  msm_featurized_traj = np.zeros((len(traj_index_pairs), features[0].shape[1]))
+  df = False
+  for i, traj_index_pair in enumerate(traj_index_pairs):
+    try:
+      msm_featurized_traj[i,:] = features[traj_index_pair[0]][traj_index_pair[1],:]
+    except:
+      msm_featurized_traj[i,:] = features[traj_index_pair[0]].values[traj_index_pair[1],:] 
+      df = True
+  if df: 
+    msm_featurized_traj = pd.DataFrame(msm_featurized_traj, columns=features[0].columns.values)     
+  return msm_featurized_traj
   

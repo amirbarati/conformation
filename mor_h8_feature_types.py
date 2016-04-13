@@ -20,19 +20,27 @@ print(tm6_tm3_residues)
 npxxy_residues =  convert_list_to_resobject_list([("R", r) for r in range(332,337)])
 dry_network_residues = convert_list_to_resobject_list([("R", r) for r in [165, 279, 252]])
 triad_residues = convert_list_to_resobject_list([("R", r) for r in [289, 244, 155]])
+tm6_tm3_residues_new = convert_list_to_resobject_list([("R", 277), ("R", 339)])
+tm3_packing_residues = convert_list_to_resobject_list([("R", r) for r in range(158, 169)])
+tm6_packing_residues = convert_list_to_resobject_list([("R", r) for r in range(274, 286)])
+tm7_packing_residues = convert_list_to_resobject_list([("R", r) for r in range(332, 342)])
 
-cutoff = 1.0
+cutoff = 0.66
 feature_name = "all_residues_4dkl_5c1m_under_cutoff%dA" %(int(10*cutoff))
 #eature_name = "protein_ligand_atom_contacts"
 
 feature_name_residues_dict = {}
 feature_name_residues_dict["tm6_tm3_dist"] = tm6_tm3_residues
+feature_name_residues_dict["res_277_res_339_ca_dist"] = tm6_tm3_residues_new
 feature_name_residues_dict["rmsd_npxxy_active"] = npxxy_residues
 feature_name_residues_dict["rmsd_npxxy_inactive"] = npxxy_residues
 feature_name_residues_dict["rmsd_DRY_inactive"] = dry_network_residues
 feature_name_residues_dict["rmsd_DRY_active"] = dry_network_residues
 feature_name_residues_dict["rmsd_triad_inactive"] = triad_residues
 feature_name_residues_dict["rmsd_triad_active"] = triad_residues
+feature_name_residues_dict["rmsd_triad_active"] = triad_residues
+feature_name_residues_dict["tm6_tm3_packing"] = [tm3_packing_residues, tm6_packing_residues]
+feature_name_residues_dict["tm6_tm7_packing"] = [tm7_packing_residues, tm6_packing_residues]
 
 
 common_residues_pkl = get_common_residues_pkl(base)

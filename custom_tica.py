@@ -3,8 +3,9 @@ from msmbuilder.decomposition import tICA, SparseTICA
 from io_functions import *
 import multiprocessing as mp
 import glob
+from msmbuilder.preprocessing.normalize import Normalize
 
-def fit_and_transform(features_directory, model_dir, stride=5, lag_time=10, n_components = 5, wolf = True, shrinkage = None, rho = 0.05, parallel=True, sparse = True, traj_ext = ".h5"):
+def fit_and_transform(features_directory, model_dir, stride=5, lag_time=10, n_components = 5, wolf = True, shrinkage = None, rho = 0.05, parallel=True, sparse = True, traj_ext = ".h5", normalize=True):
 	if not os.path.exists(model_dir):
 		os.makedirs(model_dir)
 
@@ -44,6 +45,9 @@ def fit_and_transform(features_directory, model_dir, stride=5, lag_time=10, n_co
 			pool = mp.Pool(mp.cpu_count())
 			features = pool.map(load_features, feature_files)
 			pool.terminate()
+
+
+
 		transpose = False
 		for i in range(0, len(features)):
 			if np.shape(features[0])[1] != np.shape(features[i])[1]:
@@ -57,6 +61,13 @@ def fit_and_transform(features_directory, model_dir, stride=5, lag_time=10, n_co
 		print((features[0][0][0:10]))
 		#print(features[1][0][0:10])
 		print((np.shape(features)))
+
+		if normalize:
+			n = Normalize()
+			n.fit_transform_in_place(features)
+
+		print(n.var)
+		print(n.mean)
 
 		print("fitting data to tICA model")
 		fit_model = tica_model.fit(features)

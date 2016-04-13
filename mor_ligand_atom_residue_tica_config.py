@@ -46,15 +46,15 @@ else:
   rho_string = ""
 
 traj_ext = ".h5"
-base = "/home/enf/quintin/Post_Process/GPCR/MOR/LIG_path/BU_path"	
-traj_dir = "/home/enf/quintin/Post_Process/GPCR/MOR/LIG_path/BU_path/h5_trajectories"
+base = "/home/enf/md_simulations/MOR/ligand_binding/h5_trajectories"	
+traj_dir = "/home/enf/md_simulations/MOR/ligand_binding/h5_trajectories"
 structure = None
-pnas_features_dir = "/home/enf/quintin/Post_Process/GPCR/MOR/LIG_path/BU_path/pnas_features"
+pnas_features_dir =  "/home/enf/md_simulations/MOR/ligand_binding/h5_trajectories/pnas_features"
 if not os.path.exists(pnas_features_dir): os.makedirs(pnas_features_dir)
 iterative = False
 featurize_parallel = True
-inactive_dir = "/home/enf/quintin/Post_Process/GPCR/MOR/4dkl_R_for_conformation.pdb"
-active_dir = "/home/enf/quintin/Post_Process/GPCR/MOR/5c1m.pdb"
+inactive_dir = "/home/enf/md_simulations/MOR/4dkl_R_for_conformation.pdb"
+active_dir = "/home/enf/md_simulations/MOR/5c1m.pdb"
 simulation_structure = "/home/enf/quintin/Post_Process/GPCR/MOR/LIG_path/BU_path/Rep_5-0/ionized.pdb"
 
 sampling_method = "random"

@@ -76,4 +76,4 @@ feature_name_residues_dict["rmsd_connector_inactive"] = connector_residues
 #feature_name = "tm_residues_2rh1_3sn6_under_cutoff%dnm" %(int(cutoff))
 #feature_types = "reference_receptors"
 #contact_residues = convert_list_to_resobject_list([("A", r) for r in tm_residues])
-contact_residues = convert_list_to_resobject_list([("A", r) for r in all_residues if r < 265] + [("C", r) for r in all_residues if r >= 265])
+contact_residues = convert_list_to_resobject_list([("A", r) for r in all_residues if r < 228] + [("C", r) for r in all_residues if r >= 265])

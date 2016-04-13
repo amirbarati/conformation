@@ -8,6 +8,9 @@ from copy import deepcopy
 from io_functions import *
 import pandas as pd
 import os
+import copy
+import multiprocessing as mp 
+import pickle 
 
 from matplotlib.backends.backend_pdf import PdfPages
 from sklearn import preprocessing
@@ -83,12 +86,12 @@ def get_feature_list(feature_residues_csv, structure_file):
   return(feature_list)
 
 def plot_importance_df(df, column_name, ylabel, title, analysis_type, save_string, j, save_dir):
-  n_rows = min([50, df.shape[0]])
+  n_rows = df.shape[0]
   bar_width = [0.4 for i in range(0,n_rows)]
   opacity = 0.8
   index = np.arange(n_rows)
-  
-  df = df.reindex(df.importance.abs().order(ascending=False).index)
+  df_copy = copy.deepcopy(df)
+  df = df.reindex(df_copy.importance.abs().order(ascending=False).index)
   df = df[:n_rows]
   print(df)
   plt.barh(bottom=np.arange(n_rows), width=df['importance'].values, height=bar_width, 
@@ -117,7 +120,12 @@ def compute_residue_importances(df, percentile=95):
     residue_importances[res_j].append(np.abs(row['importance']))
 
   for residue in residue_importances.keys():
-    residue_importances[residue] = np.percentile(residue_importances[residue], percentile)
+    if len(residue_importances[residue]) == 0:
+      residue_importances[residue] = 0.
+    elif len(residue_importances[residue]) == 1:
+      residue_importances[residue] = residue_importances[residue][0]
+    else:
+      residue_importances[residue] = np.percentile(residue_importances[residue], percentile)
 
   return(residue_importances)
 
@@ -140,18 +148,20 @@ def merge_importances_features(feature_importances_file, feature_residues_map, i
   feature_importances = list(zip(feature_names, importances.tolist()))
   rows = []
   for i, feature_importance in enumerate(feature_importances):
-    row = [feature_importance[0], 
-                 feature_tuples[i][0].__repr__().title(), feature_tuples[i][1].__repr__().title(), 
-                 feature_tuples[i][0].resSeq, feature_tuples[i][1].resSeq, 
-                 feature_importance[1]]
-    rows.append(row)
+    if np.abs(feature_importance[1]) > 0.0:
+      row = [feature_importance[0], 
+                   feature_tuples[i][0].__repr__().title(), feature_tuples[i][1].__repr__().title(), 
+                   feature_tuples[i][0].resSeq, feature_tuples[i][1].resSeq, 
+                   feature_importance[1], feature_tuples[i]]
+      rows.append(row)
     
-  df = pd.DataFrame(rows, columns=('feature_name', 'res_i', 'res_j', 'resid_i', 'resid_j', 'importance'))
+  df = pd.DataFrame(rows, columns=('feature_name', 'res_i', 'res_j', 'resid_i', 'resid_j', 
+                                   'importance', 'feature'))
 
   return df
 
 def compute_per_residue_importance(df, percentile):
-  net_df = pd.DataFrame(columns=['residue', 'resid', 'importance'])
+  net_df = pd.DataFrame(columns=['residue', 'importance', 'resid'])
   for _, row in df.iterrows():
     res_i = row['res_i']
     res_j = row['res_j']
@@ -160,27 +170,30 @@ def compute_per_residue_importance(df, percentile):
 
     importance = row["importance"]
     if res_i not in net_df.index:
-      net_df.loc[res_i] = [res_i, resid_i, [importance]]
+      net_df.loc[res_i] = [res_i, [importance], resid_i]
     else:
       net_df.loc[res_i]["importance"].append(importance)
+
     if res_j not in net_df.index:
-      net_df.loc[res_j] = [res_j, resid_j, [importance]]
+      net_df.loc[res_j] = [res_j, [importance], resid_j]
     else:
       net_df.loc[res_j]["importance"].append(importance)
 
   net_df["importance"] = net_df["importance"].apply(np.percentile, q=percentile)
 
-  return net_df  
+  return net_df
 
 def interpret_tIC_components(tica_filename, save_dir, feature_residues_pkl, n_tica_components=25, percentile=95):
   tica_object = verboseload(tica_filename)
   tica_components = tica_object.components_
+  features_with_non_zero_importances = []
 
   for j in range(0, np.shape(tica_components)[0]):
     components = tica_components[j,:]
     print(("Interpreting tIC %d" %(j+1)))
     feature_importances_df = merge_importances_features(None, feature_residues_pkl, components)
     residue_importances_df = compute_per_residue_importance(feature_importances_df, percentile)
+    features_with_non_zero_importances += [tuple(feature) for feature in feature_importances_df['feature'].tolist()]
 
     print("feature_importances_df.shape")
     print(feature_importances_df.shape)
@@ -202,6 +215,8 @@ def interpret_tIC_components(tica_filename, save_dir, feature_residues_pkl, n_ti
 
     with open("%s/tIC.%d_residue_importance_df.pkl" %(save_dir, j), "wb") as f:
       pickle.dump(residue_importances_df, f)
+
+  return(list(set(features_with_non_zero_importances)))
 
 def interpret_tIC_rf(rf_dir, feature_residues_pkl, n_tica_components=25, percentile=95):
   for j in range(0, n_tica_components):
@@ -416,4 +431,99 @@ def rank_tICs_by_docking_mord(docking_csv, tica_coords_csv, analysis_dir, n_tree
   pp.close()
   plt.clf()
 
+#from http://stackoverflow.com/questions/20491028/optimal-way-to-compute-pairwise-mutual-information-using-numpy
+from sklearn.metrics import mutual_info_score
+
+def fd_rule(x):
+  return np.ceil((np.max(x) - np.min(x)) / (2. * (np.percentile(x,75)-np.percentile(x,25)) * np.power(len(x), -0.3333)))
+
+def calc_MI(x, y):
+  bin_x, bin_y = fd_rule(x), fd_rule(y)
+  print((bin_x, bin_y))
+  c_xy = np.histogram2d(x, y, [bin_x, bin_y])[0]
+  mi = mutual_info_score(None, None, contingency=c_xy)
+  print(mi)
+  return mi
+
+def compute_MI_matrix(data_i, data_j):
+  MI_matrix = np.zeros((np.shape(data_i)[1], np.shape(data_j)[1]))
+  for i in range(0, np.shape(data_i)[1]):
+    for j in range(0, np.shape(data_j)[1]):
+      MI_matrix[i][j] = calc_MI(data_i[:,i], data_j[:,j])
+  return MI_matrix
+
+from scipy.stats import pearsonr
+
+def compute_pearson_matrix(data_i, data_j):
+  p_matrix = np.zeros((np.shape(data_i)[1], np.shape(data_j)[1]))
+  for i in range(0, np.shape(data_i)[1]):
+    for j in range(0, np.shape(data_j)[1]):
+      p_matrix[i][j] = pearsonr(data_i[:,i], data_j[:,j])[0]
+  return p_matrix
+
+import entropy_estimators as ee
+
+from scipy.stats import ks_2samp
+
+def compute_ks_matrix(data_i, data_j):
+  ks_matrix = np.zeros((np.shape(data_i)[1], np.shape(data_j)[1]))
+  for i in range(0, np.shape(data_i)[1]):
+    for j in range(0, np.shape(data_j)[1]):
+      ks_matrix[i][j] = ks_2samp(data_i[:,i], data_j[:,j])[0]
+      print ks_matrix[i][j]
+  return ks_matrix
+
+
+from scipy.stats import spearmanr
+
+def compute_sr_matrix(data_i, data_j):
+  sr_matrix = np.zeros((np.shape(data_i)[1], np.shape(data_j)[1]))
+  for i in range(0, np.shape(data_i)[1]):
+    for j in range(0, np.shape(data_j)[1]):
+      sr_matrix[i][j] = spearmanr(data_i[:,i], data_j[:,j])[0]
+      print sr_matrix[i][j]
+  return sr_matrix
+
+from scipy.stats import ranksums
+
+def compute_rs_matrix(data_i, data_j):
+  rs_matrix = np.zeros((np.shape(data_i)[1], np.shape(data_j)[1]))
+  for i in range(0, np.shape(data_i)[1]):
+    for j in range(0, np.shape(data_j)[1]):
+      rs_matrix[i][j] = ranksums(data_i[:,i], data_j[:,j])[0]
+      print rs_matrix[i][j]
+  return rs_matrix
+
+
+def find_non_zero_features(important_contact_features, feature_residues):
+  important_contact_features_sorted = [feature for feature in important_contact_features]
+  important_contact_features_pruned = []
+  for feature in important_contact_features_sorted:
+      if feature not in important_contact_features_pruned:
+          important_contact_features_pruned.append(feature)
+  important_contact_features_indices = []
+  for feature in important_contact_features_pruned:
+      try:
+        index = feature_residues.index(feature)
+      except: 
+        index = feature_residues.index(list(feature))
+      important_contact_features_indices.append(index)
+  return important_contact_features_pruned, important_contact_features_indices
+    
+
+def subsample(filename, indices, names):
+  features = load_file(filename)
+  subsampled_features = pd.DataFrame(features[:, indices], columns=names)
+  return subsampled_features
+    
+from functools import partial
+def subsample_features(features_dir, indices, names, save_file):
+  feature_files = get_trajectory_files(features_dir, ".dataset")
+  names = [str(name) for name in names]
+  subsample_partial = partial(subsample, indices=indices, names=names)
+  pool = mp.Pool(mp.cpu_count())
+  subsampled_features = pool.map(subsample_partial, feature_files)
+  pool.terminate()
+  with open(save_file, "wb") as f:
+    pickle.dump(subsampled_features, f)
 

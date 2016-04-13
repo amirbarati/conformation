@@ -57,6 +57,9 @@ def load_file(filename):
 		return(np.nan_to_num(np.load(filename)))
 	elif filename.split(".")[1] == "npz":
 		return(np.nan_to_num(np.array(load_dataset(filename))))
+	elif filename.split(".")[1] == "pkl":
+		with open(filename, "rb") as f:
+			return(pickle.load(f))
 
 def load_file_list(files, directory = None, ext = None):
 	print(directory)

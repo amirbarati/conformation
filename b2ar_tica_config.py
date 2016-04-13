@@ -58,3 +58,6 @@ if not os.path.exists(pnas_features_dir): os.makedirs(pnas_features_dir)
 inactive_dir = "/home/enf/b2ar_analysis/2RH1_prepped.pdb"
 active_dir = "/home/enf/b2ar_analysis/3P0G_pymol_prepped.pdb"
 
+#contact_residues = find_common_residues([inactive_dir, active_dir, simulation_structure], common_residues_pkl)
+
+
