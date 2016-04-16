@@ -5,7 +5,7 @@ import csv
 exacycle = False
 
 
-n_clusters = 100
+n_clusters = 300
 lag_time = 5
 if exacycle:
   lag_time *= 2
@@ -36,8 +36,8 @@ elif wolf and sparse:
   wolf_string = "_wolf_"
   shrinkage = None
   shrinkage_string = "autoShrinkage"
-  rho = 0.005
-  rho_string = "_rho0pt005"
+  rho = 0.1
+  rho_string = "_rho0pt1"
 else:
   wolf_string = ""
   shrinkage = 0.001
@@ -46,16 +46,16 @@ else:
   rho_string = ""
 
 traj_ext = ".h5"
-base = "/home/enf/md_simulations/MOR/ligand_binding/h5_new"	
-traj_dir = "/home/enf/md_simulations/MOR/ligand_binding/h5_new"
+base = "/home/enf/md_simulations/MOR/h8_reimaged" 
+traj_dir = "/home/enf/md_simulations/MOR/h8_reimaged"
 structure = None
-pnas_features_dir =  "/home/enf/md_simulations/MOR/ligand_binding/h5_new/pnas_features"
+pnas_features_dir = "/home/enf/md_simulations/MOR/h8_reimaged/pnas_features"
 if not os.path.exists(pnas_features_dir): os.makedirs(pnas_features_dir)
 iterative = False
 featurize_parallel = True
 inactive_dir = "/home/enf/md_simulations/MOR/4dkl_R_for_conformation.pdb"
 active_dir = "/home/enf/md_simulations/MOR/5c1m.pdb"
-simulation_structure = "/home/enf/quintin/Post_Process/GPCR/MOR/LIG_path/BU_path/Rep_5-0/ionized.pdb"
+simulation_structure = "/home/enf/md_simulations/MOR/rep_5-0-ionized.pdb"
 
 sampling_method = "random"
 precision = "SP"

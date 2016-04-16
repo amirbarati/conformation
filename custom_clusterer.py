@@ -477,7 +477,6 @@ def reseed_from_clusterer(clusterer_file, main, tica_dir, projected_features_dir
 
 def sample_cluster(traj_index_frame_pairs, trajectories, structure, residue_cutoff, save_dir, cluster):
 	cluster_tuples = traj_index_frame_pairs[cluster]
-	print(cluster_tuples)
 	for sample, cluster_tuple in enumerate(cluster_tuples):
 		traj_index = cluster_tuple[0]
 		frame = cluster_tuple[1]
