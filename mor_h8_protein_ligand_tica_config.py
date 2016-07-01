@@ -47,7 +47,7 @@ else:
 
 traj_ext = ".h5"
 base = "/home/enf/md_simulations/MOR/h8_reimaged" 
-traj_dir = "/home/enf/md_simulations/MOR/h8_reimaged"
+traj_dir = "/home/enf/md_simulations/MOR/h8_reimaged/trajectories"
 structure = None
 pnas_features_dir = "/home/enf/md_simulations/MOR/h8_reimaged/pnas_features"
 if not os.path.exists(pnas_features_dir): os.makedirs(pnas_features_dir)

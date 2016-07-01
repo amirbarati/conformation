@@ -5,8 +5,10 @@ import msmbuilder.msm as msm
 import random 
 import pandas as pd
 
-def resample_by_msm(total_samples, msm_object, clusters_map, num_trajs, save_file):
-  equilibrium_populations = msm_object.populations_
+def resample_by_msm(total_samples, msm_object, clusters_map, num_trajs, save_file, equilibrium_populations=None):
+  if equilibrium_populations is None:
+    equilibrium_populations = msm_object.populations_
+
   num_to_sample_per_cluster = {}
   for cluster_id in msm_object.mapping_.keys():
     state_id = msm_object.mapping_[cluster_id]
@@ -79,7 +81,11 @@ def generate_tpt_traj_index_series(msm_object, sources, sinks, clusters_map, num
     traj_index_pairs_list.append(traj_index_pairs)
 
   verbosedump(traj_index_pairs_list, save_file)
-  return traj_index_pairs_list
+
+  inv_tpt_paths = []
+  for tpt_path in tpt_paths[0]:
+    inv_tpt_paths.append([inv_map[i] for i in tpt_path])
+  return tpt_paths[0], inv_tpt_paths, traj_index_pairs_list
 
 def resample_features_by_msm_trajectory(features, traj_index_pairs):
   msm_featurized_traj = np.zeros((len(traj_index_pairs), features[0].shape[1]))

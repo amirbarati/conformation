@@ -56,6 +56,9 @@ feature_name_residues_dict["rmsd_npxxy_active"] = npxxy_residues
 feature_name_residues_dict["rmsd_npxxy_inactive"] = npxxy_residues
 feature_name_residues_dict["rmsd_connector_active"] = connector_residues
 feature_name_residues_dict["rmsd_connector_inactive"] = connector_residues
+feature_name_residues_dict["Ala59-Leu266_dist"] = convert_list_to_resobject_list([("A", 59), ("C", 266)])
+feature_name_residues_dict["Thr66-Leu266_dist"] = convert_list_to_resobject_list([("A", 66), ("C", 266)])
+feature_name_residues_dict["Asn148-Leu266_dist"] = convert_list_to_resobject_list([("A", 148), ("C", 266)])
 
 #feature_types = "_switches_tm6"
 #feature_types = "_switches_npxx_tm6_bp"

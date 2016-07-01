@@ -76,7 +76,7 @@ def build_msm(clusterer_dir, lag_time, msm_model_dir, prior_counts=0.0):
 	edges.close()
 	'''
 
-def construct_graph(msm_modeler_dir, clusterer_dir, n_clusters, tica_lag_time, msm_lag_time, graph_file, inactive = None, active = None, pnas_clusters_averages = None, tica_clusters_averages = None, docking=None, macrostate = None):
+def construct_graph(msm_modeler_dir, clusterer_dir, n_clusters, tica_lag_time, msm_lag_time, graph_file, inactive = None, active = None, pnas_clusters_averages = None, tica_clusters_averages = None, docking=None, macrostate = None, cluster_attributes=None, msm_attributes=None):
 	clusterer = verboseload(clusterer_dir)
 	n_clusters = np.shape(clusterer.cluster_centers_)[0]
 	labels = clusterer.labels_
@@ -152,6 +152,17 @@ def construct_graph(msm_modeler_dir, clusterer_dir, n_clusters, tica_lag_time, m
 				macrostate_cluster_id = macromodel.microstate_mapping_[microstate_cluster_id]
 				#print(macrostate_cluster_id)
 				graph.node[cluster_id]["macrostate"] = int(macrostate_cluster_id)
+
+	if cluster_attributes is not None:
+		for attribute in cluster_attributes.keys():
+			for cluster_id in mapping.keys():
+				graph.node[cluster_id][attribute] = float(cluster_attributes[attribute][cluster_id])
+
+
+	if msm_attributes is not None:
+		for attribute in msm_attributes.keys():
+			for cluster_id in mapping.keys():
+				graph.node[cluster_id][attribute] = float(msm_attributes[attribute][mapping[cluster_id]])
 
 	nx.write_graphml(graph, graph_file)
 	return(graph)

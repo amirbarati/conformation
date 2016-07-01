@@ -11,14 +11,18 @@ import os
 import copy
 import multiprocessing as mp 
 import pickle 
+from residue import *
 
 from matplotlib.backends.backend_pdf import PdfPages
 from sklearn import preprocessing
+from sklearn.cross_validation import train_test_split
 from sklearn.linear_model import lasso_path
-import matplotlib
-matplotlib.style.use('ggplot')
-from matplotlib import rcParams
-rcParams.update({'figure.autolayout': True})
+#import matplotlib
+plt.style.use('fivethirtyeight')
+#from matplotlib import rcParams
+import seaborn as sns
+#sns.style.use('fivethirtyeight')
+#rcParams.update({'figure.autolayout': True})
 
 '''Pseudocode:
 
@@ -94,16 +98,18 @@ def plot_importance_df(df, column_name, ylabel, title, analysis_type, save_strin
   df = df.reindex(df_copy.importance.abs().order(ascending=False).index)
   df = df[:n_rows]
   print(df)
-  plt.barh(bottom=np.arange(n_rows), width=df['importance'].values, height=bar_width, 
-           alpha=opacity, color='b',label='Feature importance')
-  plt.ylabel(ylabel)
-  plt.xlabel('Overall Importance')
-  plt.title(title)
-  plt.yticks(index + bar_width, df[column_name].tolist(), fontsize=8)
-  pp = PdfPages("%s/%s%d_%s.pdf" %(save_dir, analysis_type, (j+1), save_string))
-  pp.savefig()
-  pp.close()
-  plt.clf()
+  with plt.style.context(('fivethirtyeight')):
+    print("Using dark_background")
+    plt.barh(bottom=np.arange(n_rows), width=df['importance'].values, height=bar_width, 
+             alpha=opacity, color='b',label='Feature importance')
+    plt.ylabel(ylabel)
+    plt.xlabel('Overall Importance')
+    plt.title(title)
+    plt.yticks(index + bar_width, df[column_name].tolist(), fontsize=8)
+    pp = PdfPages("%s/%s%d_%s.pdf" %(save_dir, analysis_type, (j+1), save_string))
+    pp.savefig()
+    pp.close()
+    plt.clf()
 
 def compute_residue_importances(df, percentile=95):
   residue_importances = {}
@@ -131,11 +137,7 @@ def compute_residue_importances(df, percentile=95):
 
 def merge_importances_features(feature_importances_file, feature_residues_map, importances=None):
   with open(feature_residues_map, "rb") as f:
-    feature_tuples = pickle.load(f)
-  feature_names = ["%s-%s" %(f[0].__repr__().title(), f[1].__repr__().title()) 
-                                for f in feature_tuples]
-  feature_name_tuples = [(res_i.__repr__().title(), res_j.__repr__().title())
-                         for res_i, res_j in feature_tuples]
+    feature_objects = pickle.load(f)
 
   if importances is None:
     try:
@@ -145,14 +147,24 @@ def merge_importances_features(feature_importances_file, feature_residues_map, i
       with gzip.open(feature_importances_file) as f:
         importances = pickle.load(f)
 
-  feature_importances = list(zip(feature_names, importances.tolist()))
+  feature_importances = list(zip(feature_objects, importances.tolist()))
   rows = []
   for i, feature_importance in enumerate(feature_importances):
     if np.abs(feature_importance[1]) > 0.0:
-      row = [feature_importance[0], 
-                   feature_tuples[i][0].__repr__().title(), feature_tuples[i][1].__repr__().title(), 
-                   feature_tuples[i][0].resSeq, feature_tuples[i][1].resSeq, 
-                   feature_importance[1], feature_tuples[i]]
+      if hasattr(feature_importance[0], "residue_i"):
+        row = [feature_importance[0].__repr__().title(), 
+                     feature_importance[0].residue_i.__repr__().title(),
+                     feature_importance[0].residue_j.__repr__().title(), 
+                     feature_importance[0].residue_i.resSeq,
+                     feature_importance[0].residue_j.resSeq,
+                     feature_importance[1], feature_importance[0]]
+      else:
+        row = [feature_importance[0].__repr__().title(), 
+                     feature_importance[0].residue.__repr__().title(),
+                     feature_importance[0].residue.__repr__().title(), 
+                     feature_importance[0].residue.resSeq,
+                     feature_importance[0].residue.resSeq,
+                     feature_importance[1], feature_importance[0]]      
       rows.append(row)
     
   df = pd.DataFrame(rows, columns=('feature_name', 'res_i', 'res_j', 'resid_i', 'resid_j', 
@@ -184,16 +196,21 @@ def compute_per_residue_importance(df, percentile):
   return net_df
 
 def interpret_tIC_components(tica_filename, save_dir, feature_residues_pkl, n_tica_components=25, percentile=95):
-  tica_object = verboseload(tica_filename)
+  with open(tica_filename) as f:
+    tica_object = pickle.load(f)
   tica_components = tica_object.components_
   features_with_non_zero_importances = []
+  features_per_tIC = []
 
   for j in range(0, np.shape(tica_components)[0]):
+    if j >= n_tica_components: break
+
     components = tica_components[j,:]
     print(("Interpreting tIC %d" %(j+1)))
     feature_importances_df = merge_importances_features(None, feature_residues_pkl, components)
     residue_importances_df = compute_per_residue_importance(feature_importances_df, percentile)
-    features_with_non_zero_importances += [tuple(feature) for feature in feature_importances_df['feature'].tolist()]
+    features_with_non_zero_importances += [feature for feature in feature_importances_df['feature'].tolist()]
+    features_per_tIC.append([feature for feature in feature_importances_df['feature'].tolist()])
 
     print("feature_importances_df.shape")
     print(feature_importances_df.shape)
@@ -215,8 +232,7 @@ def interpret_tIC_components(tica_filename, save_dir, feature_residues_pkl, n_ti
 
     with open("%s/tIC.%d_residue_importance_df.pkl" %(save_dir, j), "wb") as f:
       pickle.dump(residue_importances_df, f)
-
-  return(list(set(features_with_non_zero_importances)))
+  return list(set(features_with_non_zero_importances)), features_per_tIC
 
 def interpret_tIC_rf(rf_dir, feature_residues_pkl, n_tica_components=25, percentile=95):
   for j in range(0, n_tica_components):
@@ -365,10 +381,12 @@ def rank_tICs_by_docking_rf(docking_csv, tica_coords_csv, analysis_dir, n_trees=
   plot_importance_df(df, "tIC", "Gini Importance of tIC", "Gini Importance of tICs in Predicting Docking Score", "docking_vs_tICA_rf", "", 0, analysis_dir)
 
 
-def rank_tICs_by_docking_logistic(docking_csv, tica_coords_csv, analysis_dir, n_trees=500):
-  docking = pd.read_csv(docking_csv, header=0, index_col=0)
-  tica_coords = pd.read_csv(tica_coords_csv, header=0, index_col=0)
-  tica_coords = tica_coords.loc[docking.index]
+def rank_tICs_by_docking_logistic(docking, tica, analysis_dir, docking_csv=None, tica_coords_csv=None):
+  if docking_csv is not None:
+    docking = pd.read_csv(docking_csv, header=0, index_col=0)
+    drugs = docking.columns.values
+    tica_coords = pd.read_csv(tica_coords_csv, header=0, index_col=0)
+  tica_coords = tica_coords.loc[docking.index][tica_coords.columns.values]
 
   tica_coords = preprocessing.scale(tica_coords)
   docking = preprocessing.MinMaxScaler(feature_range=(0.01, 0.99)).fit_transform(docking)
@@ -376,26 +394,26 @@ def rank_tICs_by_docking_logistic(docking_csv, tica_coords_csv, analysis_dir, n_
   logit = np.log(docking / (1.0-docking))
 
   eps = 5e-3  # the smaller it is the longer is the path
+  for d, drug in enumerate(drugs):
+    print("Computing regularization path using the lasso...")
+    alphas_lasso, coefs_lasso, _ = lasso_path(tica_coords, docking[:,d], eps, fit_intercept=False)
 
-  print("Computing regularization path using the lasso...")
-  alphas_lasso, coefs_lasso, _ = lasso_path(tica_coords, docking, eps, fit_intercept=False)
+    print(np.shape(alphas_lasso))
+    print(np.shape(coefs_lasso))
 
-  print(np.shape(alphas_lasso))
-  print(np.shape(coefs_lasso))
+    df = pd.DataFrame(coefs_lasso.T, index=-np.log10(alphas_lasso), columns=["tIC %d" %(j+1) for j in range(0,np.shape(tica_coords)[1])])
+    plt.figure()
+    df.plot(colormap='gist_rainbow')
 
-  df = pd.DataFrame(coefs_lasso[0].T, index=-np.log10(alphas_lasso), columns=["tIC %d" %(j+1) for j in range(0,np.shape(tica_coords)[1])])
-  plt.figure()
-  df.plot(colormap='gist_rainbow')
-
-  plt.xlabel('-Log(alpha)')
-  plt.ylabel('coefficients')
-  plt.title('Lasso and Elastic-Net Paths')
-  plt.axis('tight')
-  plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-  pp = PdfPages("%s/docking_tica_lasso_coefs_plot.pdf" % analysis_dir)
-  pp.savefig(bbox_inches='tight')
-  pp.close()
-  plt.clf()
+    plt.xlabel('-Log(alpha)')
+    plt.ylabel('coefficients')
+    plt.title('Lasso and Elastic-Net Paths, %s' %drug)
+    plt.axis('tight')
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    pp = PdfPages("%s/%s_docking_tica_lasso_coefs_plot.pdf" % (analysis_dir, drug))
+    pp.savefig(bbox_inches='tight')
+    pp.close()
+    plt.clf()
 
 def rank_tICs_by_docking_mord(docking_csv, tica_coords_csv, analysis_dir, n_trees=500):
   docking = pd.read_csv(docking_csv, header=0, index_col=0)
@@ -509,7 +527,7 @@ def find_non_zero_features(important_contact_features, feature_residues):
         index = feature_residues.index(list(feature))
       important_contact_features_indices.append(index)
   return important_contact_features_pruned, important_contact_features_indices
-    
+  
 
 def subsample(filename, indices, names):
   features = load_file(filename)
@@ -517,13 +535,53 @@ def subsample(filename, indices, names):
   return subsampled_features
     
 from functools import partial
-def subsample_features(features_dir, indices, names, save_file):
+def subsample_features(features_dir, indices, names, save_file, features=None, worker_pool=None):
   feature_files = get_trajectory_files(features_dir, ".dataset")
   names = [str(name) for name in names]
-  subsample_partial = partial(subsample, indices=indices, names=names)
-  pool = mp.Pool(mp.cpu_count())
-  subsampled_features = pool.map(subsample_partial, feature_files)
-  pool.terminate()
+  if features is not None:
+    subsampled_features = [pd.DataFrame(f[:, indices], columns=names) for f in features]
+
+  else:
+    subsample_partial = partial(subsample, indices=indices, names=names)
+    if worker_pool is not None:
+      subsampled_features = worker_pool.map_sync(subsample_partial, feature_files)
+    else:
+      pool = mp.Pool(mp.cpu_count())
+      subsampled_features = pool.map(subsample_partial, feature_files)
+      pool.terminate()
+
   with open(save_file, "wb") as f:
     pickle.dump(subsampled_features, f)
+
+def compute_rf_matrix(data_i, data_j, n_trees=500, n_folds=5):
+  r2_scores = []
+  importances = np.zeros((np.shape(data_i)[1], np.shape(data_j)[1]))
+  for j in range(0, np.shape(data_j)[1]):
+    X = data_i
+    y = data_j[:,j]
+    r2_score = []
+    importance = []
+    for k in range(0, n_folds):
+      rfr = RandomForestRegressor(n_estimators = n_trees, max_depth=2, max_features = 'sqrt', n_jobs=-1)
+      X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8)
+      rfr.fit(X_train, y_train)
+      r2_score.append(rfr.score(X_test, y_test))
+      importance.append(rfr.feature_importances_)
+    r2_score = np.mean(r2_score)
+    importance = np.mean(np.vstack(importance), axis=0)
+    
+    r2_scores.append(r2_score)
+    importances[:,j] = importance 
+  return r2_scores, importances
+
+def calculate_cluster_averages_per_feature(clusterer, features):
+  n_clusters = clusterer.n_clusters 
+  concatenated_clusters = np.concatenate(clusterer.labels_)
+  concatenated_features = np.concatenate(features)
+  cluster_averages = np.zeros((n_clusters, concatenated_features.shape[1]))
+  for i in range(0, n_clusters):
+    rows = np.where(concatenated_clusters == i)[0]
+    means = np.mean(concatenated_features[rows,:], axis=0)
+    cluster_averages[i,:] = means
+  return cluster_averages
 

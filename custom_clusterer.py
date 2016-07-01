@@ -32,7 +32,10 @@ def recompute_cluster_means(means, tICs):
 
 def cluster_minikmeans(tica_dir, data_dir, traj_dir, n_clusters, clusterer_dir=None,tICs=None):
 	if (os.path.exists(clusterer_dir)):
-		print("Already clustered")
+		reduced_data = load_file(data_dir)
+		clusterer = verboseload(clusterer_dir)
+		clusterer.labels_ = clusterer.transform(reduced_data)
+		verbosedump(clusterer, clusterer_dir)
 	else:
 		print("Clustering by KMeans")
 		try:
@@ -203,26 +206,55 @@ def dist_to_means(clusterer_dir, features_dir, n_samples = False, n_components =
 	print(sorted_map[0][0:10]) 
 	return sorted_map
 
-def get_sample(traj_frame_cluster_sample, trajectories, structure=None, residue_cutoff=10000, save_dir=""):
+def get_sample(traj_frame_cluster_sample, trajectories, structure=None, residue_cutoff=10000, save_dir="", lig_name="UNK", reseed_dir=None):
 	traj_id, frame, cluster, sample = traj_frame_cluster_sample
+	print(traj_frame_cluster_sample)
+	print(traj_id)
 	traj = trajectories[traj_id]
 
 	if structure is None:
-		top = md.load_frame(traj, index=frame).topology
+		traj_frame = md.load_frame(traj, index=frame)
 	else:
-		top = md.load_frame(traj, index=frame, top=structure).topology
+		traj_frame = md.load_frame(traj, index=frame, top=structure)
+	top = traj_frame.topology
+	prot_atoms = [a.index for a in top.atoms if a.residue.is_protein or lig_name in str(a.residue).upper()]
+	water_atoms = [a.index for a in top.atoms if a.residue.is_water]
+	import itertools
+	#distances_to_measure = list(itertools.product(prot_atoms,water_atoms))
+
+	#distances = md.compute_distances(frame, distances_to_measure)[0]
+	#waters_to_keep = []
+	#for i, distance in enumerate(distances):
+	#	if distance < 0.5:
+	#		water = distances_to_measure[i][1]
+	#		if water not in waters_to_keep:
+	#			waters_to_keep.append(water)
 
 	atom_indices = [a.index for a in top.atoms if str(a.residue)[0:3] != "SOD" and str(a.residue)[0:3] != "CLA" and a.residue.resSeq < residue_cutoff and str(a.residue)[0:3] != "POP" and not a.residue.is_water]
+	for idx in atom_indices:
+		if idx not in atom_indices:
+			atom_indices.append(idx)
+
+	try: 
 	#print indices
-	if structure is None:
-		conformation = md.load_frame(traj, index=frame, atom_indices=sorted(atom_indices))
-	else:
-		conformation = md.load_frame(traj, index=frame, atom_indices=sorted(atom_indices), top=structure)
+		if structure is None:
+			conformation = md.load_frame(traj, index=frame, atom_indices=sorted(atom_indices))
+			if reseed_dir is not None: 
+				conformation2 = md.load_frame(traj, index=frame)
+		else:
+			conformation = md.load_frame(traj, index=frame, atom_indices=sorted(atom_indices), top=structure)
+			if reseed_dir is not None:
+				conformation2 = md.load_frame(traj, index=frame, top=structure)
 
-	conformation.save_pdb("%s/cluster%d_sample%d.pdb" %(save_dir, cluster, sample))
+		conformation.save_pdb("%s/cluster%d_sample%d.pdb" %(save_dir, cluster, sample))
+		if reseed_dir is not None: 
+			conformation2.save_pdb("%s/cluster%d_sample%d.pdb" %(reseed_dir, cluster, sample))
+			conformation2.save("%s/cluster%d_sample%d.rst7" %(reseed_dir, cluster, sample)) 
+	except:
+		print("can't find sample for cluster")
 
 
-def get_samples(cluster, trajectories, clusters_map, clusterer_dir, features_dir, traj_dir, save_dir, n_samples, method, structure=None, residue_cutoff=10000, save_later=False):
+def get_samples(cluster, trajectories, clusters_map, clusterer_dir, features_dir, traj_dir, save_dir, n_samples, method, structure=None, residue_cutoff=10000, save_later=False, lig_name="UNK", reseed_dir=None):
 	num_configurations = len(clusters_map[cluster])
 	if method == "random":
 		try:
@@ -242,6 +274,7 @@ def get_samples(cluster, trajectories, clusters_map, clusterer_dir, features_dir
 			sample = clusters_map[cluster][k]
 			traj_id = sample[0]
 			frame = sample[1]
+
 			traj = trajectories[traj_id]
 			print(("cluster %d sample %d" %(cluster, k)))
 			#print traj
@@ -279,7 +312,7 @@ def sample_clusters(clusterer_dir, features_dir, traj_dir, traj_ext, save_dir, n
 	
 	trajectories = get_trajectory_files(traj_dir, traj_ext)
 	
-	sampler = partial(get_samples, trajectories = trajectories, clusters_map = clusters_map, clusterer_dir = clusterer_dir, features_dir = features_dir, traj_dir = traj_dir, save_dir = save_dir, n_samples = n_samples, method = method, structure=structure)
+	sampler = partial(get_samples, trajectories = trajectories, clusters_map = clusters_map, clusterer_dir = clusterer_dir, features_dir = features_dir, traj_dir = traj_dir, save_dir = save_dir, n_samples = n_samples, method = method, structure=structure, reseed_dir=reseed_dir)
 	if worker_pool is not None:
 		list_of_indices = worker_pool.map_sync(sampler, clusters)
 	else:
@@ -473,26 +506,37 @@ def reseed_from_clusterer(clusterer_file, main, tica_dir, projected_features_dir
 	        snapshot = md.load_frame(traj_files[traj_index], index=frame)
 	        snapshot.save("%s/%smincount_snapshot_cluster%d.rst7" % (tica_dir, main, i))
 	        snapshot.save("%s/%smincount_snapshot_cluster%d.pdb" % (tica_dir, main, i))
+	        protein_indices = [a.index for a in snapshot.topology.atoms if a.residue.is_protein or "LIG" in str(a.residue)]
+	        snapshot_protein = snapshot.atom_slice(protein_indices)
+	        snapshot_protein.save("%s/%smincount_snapshot_cluster%d_protein.pdb" %(tica_dir, main, i))
+
+	return(min_populated_clusters)
   
 
-def sample_cluster(traj_index_frame_pairs, trajectories, structure, residue_cutoff, save_dir, cluster):
+def sample_cluster(traj_index_frame_pairs, trajectories, structure, residue_cutoff, save_dir, lig_name, reseed_dir, cluster):
 	cluster_tuples = traj_index_frame_pairs[cluster]
+	print(cluster_tuples[0].shape)
+	if len(cluster_tuples[0].shape) < 1:
+		print("Converting to list")
+		cluster_tuples = [cluster_tuples]
+
 	for sample, cluster_tuple in enumerate(cluster_tuples):
 		traj_index = cluster_tuple[0]
 		frame = cluster_tuple[1]
 		traj_frame_cluster_sample = [traj_index, frame, cluster, sample]
-		get_sample(traj_frame_cluster_sample, trajectories, structure=None, residue_cutoff=10000, save_dir=save_dir)
+		get_sample(traj_frame_cluster_sample, trajectories, structure=None, residue_cutoff=10000, save_dir=save_dir, lig_name=lig_name, reseed_dir=reseed_dir)
 
 def sample_from_clusterer(clusterer_file, projected_features_dir, traj_files, 
 						  n_samples, save_dir, samples_indices_file, structure=None,
 						  residue_cutoff=10000, parallel=False,
-						  worker_pool=None): 
+						  worker_pool=None, lig_name="UNK", reseed_dir=None): 
 	clusterer = verboseload(clusterer_file)
 	n_clusters = len(clusterer.cluster_centers_)
 	
 	traj_index_frame_pairs = find_closest_indices_to_cluster_center(projected_features_dir, clusterer_file, k=n_samples)
-
-	sample_cluster_partial = partial(sample_cluster, traj_index_frame_pairs, traj_files, structure, residue_cutoff, save_dir)
+	print(traj_index_frame_pairs)
+	print(len(traj_index_frame_pairs))
+	sample_cluster_partial = partial(sample_cluster, traj_index_frame_pairs, traj_files, structure, residue_cutoff, save_dir, lig_name, reseed_dir)
 	if worker_pool is not None:
 		worker_pool.map_sync(sample_cluster_partial, range(0, n_clusters))
 	elif parallel:

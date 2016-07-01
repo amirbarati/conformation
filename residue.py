@@ -92,3 +92,35 @@ class ContactFeature(object):
   def __init__(self, residue_i, residue_j):
     self.residue_i = residue_i
     self.residue_j = residue_j
+
+  def __eq__(self, other): 
+    return self.__dict__ == other.__dict__
+
+  def __hash__(self):
+    return hash(self.__repr__())
+
+  def __ne__(self, other):
+    return (not self.__eq__(other))
+
+  def __repr__(self):
+    name = "%s to %s" %(str(self.residue_i), str(self.residue_j))
+    return name
+
+class DihedralFeature(object):
+  def __init__(self, residue, dihedral_type, trig=None):
+    self.residue = residue
+    self.dihedral_type = dihedral_type
+    self.trig = trig
+
+  def __eq__(self, other): 
+    return self.__dict__ == other.__dict__
+
+  def __hash__(self):
+    return hash(self.__repr__())
+
+  def __ne__(self, other):
+    return (not self.__eq__(other))
+
+  def __repr__(self):
+    name = "%s: %s" %(str(self.residue), self.dihedral_type)
+    return name

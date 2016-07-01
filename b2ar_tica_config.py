@@ -1,6 +1,7 @@
 import os
 import sys
 import csv
+from get_variable_names import get_common_residues_pkl, find_common_residues
 
 exacycle = False
 parallel_featurize = False
@@ -13,7 +14,7 @@ if exacycle:
   lag_time *= 2
 
 msm_lag_time = 5
-n_components = 25
+n_components = 2
 n_samples = 10
 n_macrostates = 25
 n_trees = 100

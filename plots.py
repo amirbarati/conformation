@@ -1,8 +1,7 @@
 import numpy as np
-import matplotlib
-matplotlib.style.use('ggplot')
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+plt.style.use('ggplot')
 from io_functions import *
 import corner
 import pandas as pd
@@ -10,6 +9,22 @@ import seaborn as sns
 import multiprocessing as mp
 from scipy import stats
 from functools import partial
+
+def plot_importances_barh(importances, titles, main, xlabel, ylabel, save_file, n_features=None):
+  if n_features is None:
+    n_features = len(importances)
+  bar_width = 0.2
+  opacity = 0.8
+  index = np.arange(start=1, stop=n_features+1, step=1)
+  plt.barh(titles[:n_features], importances[:n_features], bar_width, alpha=opacity, color='b',label=main)
+  plt.ylabel(xlabel)
+  plt.xlabel(ylabel)
+  plt.title(title)
+  plt.xticks(index + bar_width, titles[:n_features], rotation='vertical')
+  pp = PdfPages(save_file)
+  pp.savefig()
+  pp.close()
+  plt.clf()
 
 def plot_histogram(j, data, save_dir, main, titles=None):
   column = data[:,j]
@@ -114,3 +129,45 @@ def plot_data_vs_data(data_1, data_2, names_1, names_2, save_dir, custom_tic_ran
   pool.map(plot_data_vs_column_partial, tic_range)
   pool.terminate()
   return
+
+def plot_heatmap(corr_matrix, row_names, col_names, save_file):
+  fig = plt.figure()
+  fig.set_size_inches(10. * len(col_names) / len(row_names), 10.) 
+  ax = fig.add_subplot(111)
+  heatmap = ax.pcolor(corr_matrix, cmap=plt.cm.RdYlBu_r)
+
+  # put the major ticks at the middle of each cell
+  ax.set_xticks(np.arange(corr_matrix.shape[1])+0.5, minor=False)
+  ax.set_yticks(np.arange(corr_matrix.shape[0])+0.5, minor=False)
+
+  # want a more natural, table-like display
+  #ax.invert_yaxis()
+  #ax.xaxis.tick_top()
+
+  ax.set_xticklabels(col_names, minor=False, rotation=270)
+  ax.set_yticklabels(row_names, minor=False)
+  fig.subplots_adjust(bottom=0.2)
+
+  #fig.savefig("%s/bu72_vs_pp_pearson_heatmap.svg" % analysis_dir, format='svg', dpi=1200)
+  #plot_file = "%s/bu72_vs_pp_pearson_heatmap.pdf" % analysis_dir
+  pp = PdfPages(save_file)
+
+  pp.savefig(fig)
+
+  pp.close()  
+  #plt.show()
+
+
+def plot_clustermap(corr_df, save_file, method='single', row_cluster=True, col_cluster=True, xtick_labelsize=8, ytick_labelsize=8, z_score=0):
+  plt.rcParams['xtick.labelsize'] = xtick_labelsize
+  plt.rcParams['ytick.labelsize'] = ytick_labelsize
+  ratio = float(corr_df.shape[0]) / float(corr_df.shape[1])
+  if ratio > 1.:
+    figsize=(8./ratio , 8.)
+  else:
+    figsize = (8., 8./ratio)
+  g = sns.clustermap(corr_df, z_score=z_score, method=method, row_cluster=row_cluster, col_cluster=col_cluster, figsize=figsize)
+  sns.set(font_scale=0.5)
+  
+  g.savefig(save_file)
+  #plt.show()

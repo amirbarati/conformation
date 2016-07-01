@@ -462,19 +462,27 @@ def plot_coef_path(df, filename):
   pp.close()
   plt.clf()
 
-def plot_df_rolling(df, filename, return_fig=True, subplots=True, smoothing=100, include_original=False):
+def plot_df_rolling(df, filename, return_fig=True, subplots=True, smoothing=100, include_original=False, min_periods=1,
+                    ref_df=None):
   plt.clf()
   if subplots:
-    color=iter(cm.rainbow(np.linspace(0,1,len(df.columns.values))))
+    color=iter(cm.ocean(np.linspace(0.2,0.8,len(df.columns.values))))
     fig, axes = plt.subplots(nrows=len(df.columns.values), ncols=1, figsize=(8.0, len(df.columns.values)*3.0))
     for i,var in enumerate(df.columns.values):
       c = next(color)
-      pd.rolling_mean(df, smoothing)[var].plot(ax=axes[i], title=var, c=c)
+      if ref_df is not None:
+        dot_df = pd.DataFrame(ref_df[var])
+        dot_df = pd.concat([dot_df.transpose()]*df.shape[0], axis=0)
+        dot_df.index = range(0, df.shape[0])
+        dot_df[dot_df.columns.values[0]].plot(ax=axes[i], c="blue", linestyle='dashed')
+        dot_df[dot_df.columns.values[1]].plot(ax=axes[i], c="green", linestyle='dashed')
       if include_original:
         df[var].plot(ax=axes[i], title=var, c=c, alpha=0.2)
+      pd.rolling_mean(df, smoothing, center=True, min_periods=None)[var].plot(ax=axes[i], title=var, c=c)
 
       axes[i].legend(loc='center left', bbox_to_anchor=(1.0,0.5)) 
       axes[i].set_title("")
+
     #axes[0].set_ylabel('Distance in Angstroms')
     #pd.rolling_mean(df, 100).plot(colormap='gist_rainbow', subplots=True, ax=f.gca(), layout=(1,5))
   else:
@@ -681,10 +689,9 @@ def plot_tICs_vs_docking(docking_csv, tica_coords_csv, plot_file, chosen_ligand=
   df = pd.DataFrame(df[tica_names].values[:,list(range(0,max_tIC))], index=df[chosen_ligand], columns=list(range(1,max_tIC + 1)))
   plot_df_rolling(df, plot_file)
 
-def sample_tIC_regions(tica_coords_file, save_dir):
+def sample_tIC_regions(tica_coords, save_dir):
   if not os.path.exists(save_dir):
     os.makedirs(save_dir)
-  tica_coords = np.concatenate(load_file(tica_coords_file))
   print(np.shape(tica_coords))
   for j in range(0, np.shape(tica_coords)[1]):
     print("Fitting KDE to tIC %d" % (j+1))
@@ -707,10 +714,9 @@ def sample_tIC_regions(tica_coords_file, save_dir):
     pp.close()
     plt.clf()    
 
-def sample_tIC_regions_silverman(tica_coords_file, save_dir):
+def sample_tIC_regions_silverman(tica_coords, save_dir):
   if not os.path.exists(save_dir):
     os.makedirs(save_dir)
-  tica_coords = np.concatenate(load_file(tica_coords_file))
   print(np.shape(tica_coords))
   for j in range(0, np.shape(tica_coords)[1]):
     print("Fitting KDE to tIC %d" % (j+1))
@@ -733,8 +739,7 @@ def sample_tIC_regions_silverman(tica_coords_file, save_dir):
 
 #thanks to this for code suggestion:
 #http://stackoverflow.com/questions/35094454/how-would-one-use-kernel-density-estimation-as-a-one-1d-clustering-method-in-sci
-def get_kde_mins_and_maxes(tica_coords_file, kde_dir):
-  tica_coords = np.concatenate(load_file(tica_coords_file))
+def get_kde_mins_and_maxes(tica_coords, kde_dir):
   print(np.shape(tica_coords))
 
   j = 0
@@ -761,8 +766,7 @@ def get_kde_mins_and_maxes(tica_coords_file, kde_dir):
 
 
 
-def sample_kde_maxima(tica_coords_file, kde_dir, trajs):
-  tica_coords = load_file(tica_coords_file)
+def sample_kde_maxima(tica_coords, kde_dir, trajs):
   print(np.shape(tica_coords))
 
   j = 0
@@ -804,8 +808,9 @@ def calculate_cluster_averages_per_feature(clusterer, features):
   concatenated_features = np.concatenate(features)
   cluster_averages = np.zeros((n_clusters, concatenated_features.shape[1]))
   for i in range(0, n_clusters):
-    rows = np.where(concatenated_clusters == i)
+    rows = np.where(concatenated_clusters == i)[0]
     means = np.mean(concatenated_features[rows,:], axis=0)
     cluster_averages[i,:] = means
   return cluster_averages
+
 

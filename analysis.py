@@ -15,6 +15,7 @@ from msmbuilder.utils import verbosedump, verboseload
 from sklearn.metrics import mutual_info_score
 from scipy.stats import pearsonr
 from scipy import stats
+import pandas as pd
 
 def calc_mean_and_stdev(rmsd_map):
 	stats_map = {}
@@ -63,8 +64,12 @@ def rmsd_connector(traj, inactive, residues=[], residues_map = None):
 	connector_atoms_target = [a[0] for a in connector_atoms_target]
 	inactive_stripped = inactive.atom_slice(connector_atoms_target)
 
-	traj_stripped_aligned = traj_stripped.superpose(inactive_stripped)
-	rmsds = md.rmsd(traj_stripped, inactive_stripped) * 10.0
+	try:
+		traj_stripped_aligned = traj_stripped.superpose(inactive_stripped)
+		rmsds = md.rmsd(traj_stripped, inactive_stripped) * 10.0
+	except:
+		rmsds = np.empty(traj_stripped.n_frames)
+
 	return rmsds
 
 def rmsd_npxxy(traj, inactive, residues=[], residues_map = None):
@@ -89,8 +94,12 @@ def rmsd_npxxy(traj, inactive, residues=[], residues_map = None):
 	#print npxxy_atoms_target
 	inactive_stripped = inactive.atom_slice(npxxy_atoms_target)
 
-	traj_stripped_aligned = traj_stripped.superpose(inactive_stripped)
-	rmsds = md.rmsd(traj_stripped, inactive_stripped) * 10.0
+	try:
+		traj_stripped_aligned = traj_stripped.superpose(inactive_stripped)
+		rmsds = md.rmsd(traj_stripped, inactive_stripped) * 10.0
+	except:
+		rmsds = np.empty(traj_stripped.n_frames)
+
 	return rmsds
 
 def compute_distance(traj, inactive, residues=[], residues_map = None):
@@ -358,11 +367,11 @@ def plot_all_tics_and_clusters(tica_dir, transformed_data_dir, clusterer_dir, la
 	for i in tic_range:
 		js = [j for j in tic_range if j > i]
 		plot_partial = partial(plot_tica_and_clusters, n_clusters = len(centers), tica_dir = tica_dir, main=main, transformed_data = transformed_data, lag_time = lag_time, label = label, active_cluster_ids = active_cluster_ids, intermediate_cluster_ids = intermediate_cluster_ids, inactive_cluster_ids = inactive_cluster_ids, inactive_subsample=inactive_subsample, intermediate_subsample=intermediate_subsample, component_i = i, centers=centers, concatenate=concatenate, axes=axes)
-		for j in js:
-			plot_partial(j)
-		#pool = mp.Pool(mp.cpu_count())
-		#pool.map(plot_partial, js)
-		#pool.terminate()
+		#for j in js:
+		#	plot_partial(j)
+		pool = mp.Pool(mp.cpu_count())
+		pool.map(plot_partial, js)
+		pool.terminate()
 		#plot_tica_and_clusters(tica_dir = tica_dir, transformed_data = transformed_data, clusterer = clusterer, lag_time = lag_time, label = "dot", active_cluster_ids = active_cluster_ids, intermediate_cluster_ids = intermediate_cluster_ids, inactive_cluster_ids = inactive_cluster_ids, component_i = i, component_j = j)
 	print("Printed all tICA coords and all requested clusters")
 
@@ -666,13 +675,14 @@ def analyze_docking_results_multiple(docking_dir, precision, ligands, summary, r
 	lig_names = []
 	arg_tuples = []
 
+	docking_summaries = []
 	for subdir in subdirs:
 		print(subdir)
 		lig_name = subdir.split("/")[len(subdir.split("/"))-1]
-		if lig_name not in ligands: continue
 		lig_names.append(lig_name)
 		#print lig_name
 		docking_summary = "%s/docking_summary.csv" %subdir
+		docking_summaries.append(docking_summary)
 		arg_tuples.append([subdir, lig_name, precision, docking_summary, redo])
 
 	print(lig_names)
@@ -680,9 +690,26 @@ def analyze_docking_results_multiple(docking_dir, precision, ligands, summary, r
 	for arg_tuple in arg_tuples:
 		results_list.append(analyze_docking_results_wrapper(arg_tuple))
 
-	combined_map = combine_maps(results_list)
-	combined_filename = summary
-	write_map_to_csv(combined_filename, combined_map, ["sample"] + lig_names)
+	all_docking_results = []
+	for f in docking_summaries:
+		result = pd.read_csv(f)
+		keep_columns = [c for c in result.columns.values.tolist() if "sample" not in c]
+		result.index = result['sample'].values
+		result = result[keep_columns]
+		all_docking_results.append(result)
+
+	all_docking_results = pd.concat(all_docking_results, axis=1)
+	all_docking_results.columns = lig_names
+	all_docking_results.to_csv(summary)
+	return all_docking_results
+
+
+
+	#combined_map = combine_maps(results_list)
+	#combined_filename = summary
+	#write_map_to_csv(combined_filename, combined_map, ["sample"] + lig_names)
+
+
 
 def compute_means(docking_csv, joined_csv, means_csv):
 	print("analyzing %s" %docking_csv)

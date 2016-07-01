@@ -244,6 +244,7 @@ def unzip_file(filename_grid_dir):
 def unzip_receptors(grid_dir, receptors, worker_pool=None):
 	print("Unzipping selected grid files")
 	grids = ["%s/%s.zip" %(grid_dir,receptor) for receptor in receptors if not os.path.exists("%s/%s.grd" %(grid_dir, receptor))]
+	print(grids)
 	if worker_pool is not None:
 		worker_pool.map_sync(unzip, grids)
 	else:
@@ -289,7 +290,7 @@ def generate_grids(mae_dir, grid_center, grid_dir, remove_lig = None, indices = 
 		pool.map(grid_partial, grid_files)
 		#for grid_file in grid_files:
 		#	grid_partial(grid_file)
-		pool.terminate()
+		pool.terminate() 
 
 	#zips = get_trajectory_files(grid_dir, ".zip")
 	#pool = mp.Pool(num_workers)
@@ -323,7 +324,9 @@ def dock(dock_job):
 		signal.alarm(0)
 	return
 
-def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP", chosen_jobs = False, parallel = False, grid_ext = ".zip", worker_pool=None):
+def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP", chosen_jobs = False,
+					   parallel = False, grid_ext = ".zip", worker_pool=None,
+					   return_jobs=False):
 	if not os.path.exists(docking_dir): os.makedirs(docking_dir)
 
 	#grid_subdirs = [x[0] for x in os.walk(grid_dir)]
@@ -363,6 +366,9 @@ def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP", chos
 
 	print("Written all docking job input files")
 	#print dock_jobs
+	if return_jobs:
+		return dock_jobs
+
 	if worker_pool is not None:
 		print("MAPPING OVER WORKER POOL")
 		worker_pool.map_sync(dock, dock_jobs)
@@ -373,7 +379,7 @@ def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP", chos
 		pool.terminate()
 	else:
 		print("DOCKING IN SERIES")
-		os.chdir(odcking_dir)
+		os.chdir(docking_dir)
 		for job in dock_jobs:
 			dock(job)
 
@@ -448,7 +454,10 @@ parallel --> if you set it to "both" it will run in parallel over both ligands a
 	if you pass "receptor": it will parallelize over receptors. Recommedned if n_receptors > n_ligands
 '''
 
-def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "SP", ext = "-out.maegz", chosen_ligands = False, chosen_receptors = False, parallel = False, grid_ext = ".zip", worker_pool=None):
+def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "SP",
+							   ext = "-out.maegz", chosen_ligands = False, chosen_receptors = False,
+							   parallel = False, grid_ext = ".zip", worker_pool=None,
+							   ligand_dirs=None):
 	ligands = get_trajectory_files(ligands_dir, ext = ext)
 	print("ligands")
 	print(ligands)
@@ -474,20 +483,20 @@ def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "
 		pool.terminate()
 
 	elif parallel == "ligand":
+		print("parallelize over ligands.")
 		lig_dirs = []
 		docking_dirs = []
 		args = []
 		for ligand in ligands:
 			lig_last_name = ligand.split("/")[len(ligand.split("/"))-1]
 			lig_no_ext = lig_last_name.split("-out.")[0]
-			if chosen_ligands is not False:
-				if lig_no_ext not in chosen_ligands: continue
 			lig_dir = "%s/%s" %(docking_dir, lig_no_ext)
 			if not os.path.exists(lig_dir): os.makedirs(lig_dir)
 			docking_dirs.append(lig_dir)
 			lig_dirs.append(ligand)
 			args.append((grid_dir, lig_dir, ligand, precision, chosen_receptors, False, grid_ext))
 		
+		print(args)
 		num_workers = mp.cpu_count()
 		pool = mp.Pool(num_workers)
 		pool.map(dock_helper, args)
@@ -512,6 +521,7 @@ def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "
 			dock_helper(arg)
 
 	else:
+		dock_jobs = []
 		for ligand in ligands:
 			lig_last_name = ligand.split("/")[len(ligand.split("/"))-1]
 			lig_no_ext = lig_last_name.split("-out.")[0]
@@ -519,7 +529,12 @@ def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "
 				if lig_no_ext not in chosen_ligands: continue
 			lig_dir = "%s/%s" %(docking_dir, lig_no_ext)
 			if not os.path.exists(lig_dir): os.makedirs(lig_dir)
-			dock_conformations(grid_dir, lig_dir, ligand, precision = precision, chosen_jobs = chosen_receptors, grid_ext=grid_ext, worker_pool=worker_pool)
+			dock_jobs += dock_conformations(grid_dir, lig_dir, ligand, precision = precision,
+							   chosen_jobs = chosen_receptors, grid_ext=grid_ext, 
+							   worker_pool=worker_pool, return_jobs=True)
+		print(dock_jobs)
+		worker_pool.map_sync(dock, dock_jobs)
+
 
 '''
 
