@@ -607,19 +607,28 @@ def analyze_log_file(log_file):
 	score = 0.0
 	xp_score = None
 	lines = log.readlines()
+	current_pose = 0
+	best_pose = 0
 	for line in lines:
 		line = line.split()
 		if len(line) >= 3:
 			if (line[0] == "Best" and line[1] == "XP" and line[2] == "pose:"):
+				current_pose += 1
 				xp_score = float(line[6])
 				#print "%f, %f" %(xp_score, score)
-				if xp_score < score: score = xp_score
+				if xp_score < score: 
+					score = xp_score
+					best_pose = current_pose
 			elif  (line[0] == "Best" and line[1] == "Emodel="):
+				current_pose += 1
 				xp_score = float(line[8])
 				#print "%f, %f" %(xp_score, score)
-				if xp_score < score: score = xp_score
-	score = [-1.0*score]
-	return (conformation, score)
+				if xp_score < score:
+					score = xp_score
+					best_pose = current_pose
+
+	score = -1.0*score
+	return (conformation, score, best_pose)
 
 def analyze_docking_results(docking_dir, ligand, precision, docking_summary, redo = False):
 	print(("currently analyzing %s" %ligand))
@@ -637,14 +646,16 @@ def analyze_docking_results(docking_dir, ligand, precision, docking_summary, red
 		scores_list = pool.map(analyze_log_file, logs)
 		pool.terminate()
 
-		scores_map = {score[0] : score[1] for score in scores_list}
+		scores_df = pd.DataFrame(scores_list, columns=["sample", "%s" %("%s_%s_score" %(ligand, precision)), "best_pose_id"])
 
-		titles = ["sample", "%s" %("%s_%s_score" %(ligand, precision))]
+		scores_df.to_csv(results_file)
 
-		write_map_to_csv(results_file, scores_map, titles)
-
-		merged_results = merge_samples(scores_map)
-		return scores_map
+		#scores_map = {score[0] : score[1] for score in scores_list}
+		#titles = ["sample", "%s" %("%s_%s_score" %(ligand, precision))]
+		#write_map_to_csv(results_file, scores_map, titles)
+		#merged_results = merge_samples(scores_map)
+		
+		return scores_df
 
 def analyze_docking_results_wrapper(args):
 	return analyze_docking_results(*args)
@@ -665,7 +676,7 @@ def listdirs(folder):
         if os.path.isdir(d)
     ]
 
-def analyze_docking_results_multiple(docking_dir, precision, ligands, summary, redo = False):
+def analyze_docking_results_multiple(docking_dir, precision, ligands, summary, poses_summary=None, redo = False):
 	print("Analyzing docking results")
 	print(docking_dir)
 	print(ligands)
@@ -691,12 +702,19 @@ def analyze_docking_results_multiple(docking_dir, precision, ligands, summary, r
 		results_list.append(analyze_docking_results_wrapper(arg_tuple))
 
 	all_docking_results = []
+	all_docking_poses = []
 	for f in docking_summaries:
 		result = pd.read_csv(f)
-		keep_columns = [c for c in result.columns.values.tolist() if "sample" not in c]
+		keep_columns = [c for c in result.columns.values.tolist() if "score" in c]
 		result.index = result['sample'].values
+		all_docking_poses.append(result["best_pose_id"])
 		result = result[keep_columns]
 		all_docking_results.append(result)
+
+	all_docking_poses = pd.concat(all_docking_poses, axis=1)
+	all_docking_poses.columns = lig_names
+	if poses_summary is not None:
+		all_docking_poses.to_csv(poses_summary)
 
 	all_docking_results = pd.concat(all_docking_results, axis=1)
 	all_docking_results.columns = lig_names

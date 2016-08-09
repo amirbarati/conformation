@@ -76,12 +76,50 @@ def build_msm(clusterer_dir, lag_time, msm_model_dir, prior_counts=0.0):
 	edges.close()
 	'''
 
-def construct_graph(msm_modeler_dir, clusterer_dir, n_clusters, tica_lag_time, msm_lag_time, graph_file, inactive = None, active = None, pnas_clusters_averages = None, tica_clusters_averages = None, docking=None, macrostate = None, cluster_attributes=None, msm_attributes=None):
-	clusterer = verboseload(clusterer_dir)
+def construct_graph(msm_modeler_dir, clusterer_dir, n_clusters, tica_lag_time=5, msm_lag_time=10, graph_file="~/graph_file.graphml", msm_object=None, clusterer_object=None,
+									  inactive = None, active = None, pnas_clusters_averages = None, 
+									  tica_clusters_averages = None, docking=None, macrostate = None, 
+									  cluster_attributes=None, msm_attributes=None):
+	
+    """
+    Construct a .graphml graph based on an MSM and attributes of clusters and/or MSM states.
+    Saves .graphml graph to disk and returns it as well. 
+
+    *needs networkx python package to use*
+    
+    Parameters
+    ----------
+    msm_modeler_dir: location on disk of verboseload loadable msm object 
+    clusterer_dir: location on disk of verboseload loadable clusterer object 
+    n_clusters: number of clusters
+    tica_lag_time: tica lag time
+    msm_lag_time: msm lag time 
+    graph_file: location on disk for saving graphml file 
+    msm_object: pass msm object directly instead of loading from disk 
+    clusterer_object: pass clusterer object directly instead of loading from disk 
+    cluster_attributes: dictionary that maps names of attributes to lists of size n_clusters
+    	where each entry in the list is the value of that attribute for that cluster. for example,
+    	if n_clusters=3, an example cluster_attributes dict might be: 
+    		cluster_attributes = {'tyr75-his319_dist': [7.0, 6.0, 8.0], 'phe289-chi2': [90.0, 93.0, 123.2]}
+    msm_attributes: dictionary that maps names of attributes to lists of size n_msm_states
+    	where each entry in the list is the value of that attribute for that msm state. for example,
+    	if n_msm_states=3, an example cluster_attributes dict might be: 
+    		msm_attributes = {'tyr75-his319_dist': [7.0, 6.0, 8.0], 'phe289-chi2': [90.0, 93.0, 123.2]}
+    """
+
+	if clusterer_object is None:
+		clusterer = verboseload(clusterer_dir)
+	else:
+		clusterer = clusterer_object
 	n_clusters = np.shape(clusterer.cluster_centers_)[0]
+
 	labels = clusterer.labels_
+
 	if not os.path.exists(msm_modeler_dir):
-		msm_modeler = MarkovStateModel(lag_time=msm_lag_time, n_timescales = 5, sliding_window = True, verbose = True)
+		if msm_object is not None:
+			msm_modeler = msm_object
+		else:
+			msm_modeler = MarkovStateModel(lag_time=msm_lag_time, n_timescales = 5, sliding_window = True, verbose = True)
 		print(("fitting msm to trajectories with %d clusters and lag_time %d" %(n_clusters, msm_lag_time)))
 		msm_modeler.fit_transform(labels)
 		verbosedump(msm_modeler, msm_modeler_dir)
@@ -99,8 +137,9 @@ def construct_graph(msm_modeler_dir, clusterer_dir, n_clusters, tica_lag_time, m
 				if prob < 0.001: prob = 0.001
 				original_i = inv_mapping[i]
 				original_j = inv_mapping[j]
-				graph.add_edge(original_i, original_j, prob = float(prob), inverse_prob = 1.0 / float(prob), weight = float(prob))
+				graph.add_edge(original_i, original_j, prob = float(prob), inverse_prob = 1.0 / float(prob))
 
+	print("Number of nodes in graph:")
 	print((graph.number_of_nodes()))
 
 	if inactive is not None:

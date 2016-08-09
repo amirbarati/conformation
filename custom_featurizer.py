@@ -12,9 +12,11 @@ from numpy import random
 import json
 import pickle
 from residue import ContactFeature
+from residue import AromaticFeature
 from scipy.stats import gamma 
 from sklearn.metrics.pairwise import pairwise_distances
 from residue import *
+from aromatic_featurizer import compute_pi_interactions
 
 def compute_average_min_distance(traj, residues_i, residues_j):
 
@@ -277,82 +279,6 @@ def chi2_indices(top, specified_residues = None):
 
 
 	return chi2_tuples
-
-def convert_residue_pairs_to_mdtraj_indices(top, residue_pairs):
-	resIndices = []
-	for pair in residue_pairs:
-		indices = [r.index for r in top.residues if pair.residue_i.is_mdtraj_res_equivalent(r) and not r.is_water]
-		if len(indices) == 0:
-			print(("FATAL: No residues in trajectory for residue %d chain %s" % (pair.residue_i.resSeq, pair.residue_i.chain_id)))
-			return None
-		else:
-			ind_i = indices[0]
-			for j in indices:
-				if j != ind_i: 
-					#print("Warning: multiple res objects for residue %d " %resSeq0)
-					if "CB" in [str(a) for a in r.atoms for r in top.residues if r.index == ind_i]:
-						ind_i = j
-
-		indices = [r.index for r in top.residues if pair.residue_j.is_mdtraj_res_equivalent(r) and not r.is_water]
-		if len(indices) == 0:
-			print(("FATAL: No residues in trajectory for residue %d chain %s" % (pair.residue_j.resSeq, pair.residue_j.chain_id)))
-			return None
-		else:
-			ind_j = indices[0]
-			for j in indices:
-				if j != ind_j: 
-					#print("Warning: multiple res objects for residue %d " %resSeq0)
-					if "CB" in [str(a) for a in r.atoms for r in top.residues if r.index == ind_j]:
-						ind_j = j
-
-		resIndices.append((ind_i, ind_j))
-	print(("looking at %d pairs for trajectory" %len(resIndices)))
-	return(resIndices)
-
-def convert_atom_to_mdtraj_index(top, atom):
-	matching_atom = [a.index for a in top.atoms if atom.is_mdtraj_atom_equivalent(a)][0]
-	return matching_atom
-
-def convert_residue_to_mdtraj_index(top, residue):
-	indices = [r.index for r in top.residues if residue.is_mdtraj_res_equivalent(r) and not r.is_water]
-	if len(indices) == 0:
-		print(("FATAL: No residues in trajectory for residue %d chain %s" % (residue.resSeq, residue.chain_id)))
-		return None
-	else:
-		ind_i = indices[0]
-		for j in indices:
-			if j != ind_i: 
-				#print("Warning: multiple res objects for residue %d " %resSeq0)
-				if "CB" in [str(a) for a in r.atoms for r in top.residues if r.index == ind_i]:
-					ind_i = j
-	return ind_i 
-
-def convert_residues_to_mdtraj_atom_indices(top, residues):
-	mdtraj_resids = [convert_residue_to_mdtraj_index(top, residue) for residue in residues]
-	mdtraj_atom_indices = []
-	for mdtraj_resid in mdtraj_resids:
-		atom_ids = [a.index for a in top.residue(mdtraj_resid).atoms]
-		mdtraj_atom_indices += atom_ids
-	return mdtraj_atom_indices
-
-def convert_atom_residue_pairs_to_mdtraj_indices(top, atom_residue_pairs):
-	atom_residue_index_pairs = []
-	for pair in atom_residue_pairs:
-		atom_mdtraj_index = convert_atom_to_mdtraj_index(top, pair.residue_i)
-		indices = [r.index for r in top.residues if pair.residue_j.is_mdtraj_res_equivalent(r) and not r.is_water]
-		if len(indices) == 0:
-			print(("FATAL: No residues in trajectory for residue %d chain %s" % (pair.residue_j.resSeq, pair.residue_j.chain_id)))
-			return None
-		else:
-			ind_i = indices[0]
-			for j in indices:
-				if j != ind_i: 
-					#print("Warning: multiple res objects for residue %d " %resSeq0)
-					if "CB" in [str(a) for a in r.atoms for r in top.residues if r.index == ind_i]:
-						ind_i = j
-		atom_residue_mdtraj_indices = (atom_mdtraj_index, ind_i)
-		atom_residue_index_pairs.append(atom_residue_mdtraj_indices)
-	return atom_residue_index_pairs
 
 def find_binding_pocket_residues(ligand_resobj, protein_resobj_list, protein_file, cutoff=0.66):
 	protein = md.load(protein_file)
@@ -853,7 +779,6 @@ def featurize_contacts_custom(traj_dir, features_dir, traj_ext, structures,
 				if sorted(pair) not in contact_residue_pairs: contact_residue_pairs.append(sorted(pair))
 
 		contact_residue_pairs = [ContactFeature(pair[0], pair[1]) for pair in contact_residue_pairs]
-		print(len(structure_contact_residue_pairs))
 		dihedral_residues = []
 		#for pair in contact_residue_pairs:
 	#		if pair.residue_i not in dihedral_residues:
@@ -1082,6 +1007,8 @@ def compute_user_defined_features(traj_file, inactive, active, structure=None,
 				features.append(helix6_helix3_dist(traj, residues=residues))
 			elif "packing" in name:
 				features.append(compute_average_min_distance(traj, residues[0], residues[1]))
+			elif "stacking" in name:
+				features.append(compute_pi_interactions(traj, ))
 			elif "rmsd" in name:
 				if "inactive" in name:
 					features.append(compute_distance(traj, inactive, residues=residues))
@@ -1095,7 +1022,7 @@ def compute_user_defined_features(traj_file, inactive, active, structure=None,
 
 def compute_user_defined_features_wrapper(traj_dir, traj_ext, inactive_file, active_file, structure,
 										  feature_name_residues_dict, save_file, save_dir, worker_pool=None, 
-										  parallel=True):
+										  parallel=True, trajs=None):
 	inactive = md.load(inactive_file)
 	active = md.load(active_file)
 	compute_user_defined_features_partial = partial(compute_user_defined_features, 
@@ -1103,7 +1030,8 @@ def compute_user_defined_features_wrapper(traj_dir, traj_ext, inactive_file, act
 													structure=structure, 
 													feature_name_residues_dict=feature_name_residues_dict,
 													save_dir=save_dir)
-	trajs = get_trajectory_files(traj_dir, traj_ext)
+	if trajs is None:
+		trajs = get_trajectory_files(traj_dir, traj_ext)
 
 	if worker_pool is not None:
 		features = worker_pool.map_sync(compute_user_defined_features_partial, trajs)
@@ -1114,12 +1042,76 @@ def compute_user_defined_features_wrapper(traj_dir, traj_ext, inactive_file, act
 	else:
 		features = []
 		for traj in trajs:
-			print(traj)
 			traj_features = compute_user_defined_features_partial(traj)
-			print(np.shape(traj_features))
-			print(traj_features[0,:])
 			features.append(traj_features)	
 	verbosedump(features, save_file)
+
+def get_aromatic_feature_names(pi_pi_ring_pairs, cation_pi_pairs):
+	features = []
+	for ring_pair in pi_pi_ring_pairs:
+		features.append(AromaticFeature(ring_pair[0][0], ring_pair[1][0], "Pi Parallel"))
+	for ring_pair in pi_pi_ring_pairs:
+		features.append(AromaticFeature(ring_pair[0][0], ring_pair[1][0], "Pi T"))
+	for ring_pair in cation_pi_pairs:
+		features.append(AromaticFeature(ring_pair[0], ring_pair[1][0], "Cation-Pi"))
+	return features
+
+def compute_pi_interactions_traj(traj_file, pi_pi_ring_pairs, cation_pi_pairs,
+																 save_dir, structure=None):
+	traj_basename = os.path.basename(traj_file)
+	traj_basename = os.path.splitext(traj_basename)[0]
+	save_file = "%s/%s.dataset" %(save_dir, traj_basename)
+	print("save_file = %s" %save_file)
+	if os.path.exists(save_file):
+		features = load_file(save_file)
+		return features
+	else:
+		print("featurizing %s" %traj_file)
+		if structure is not None:
+			traj = md.load(traj_file, top=structure)
+		else:
+			traj = md.load(traj_file)
+
+		top = traj.topology 
+
+		chains = [c for c in  top.chains]
+		if chains[0].id == 'A' and chains[0].n_residues < 2:
+			chains[0].id = 'B'
+			chains[1].id = 'A'
+			chains[2].id = 'D'
+			chains[3].id = 'C'
+
+	features = compute_pi_interactions(traj, pi_pi_ring_pairs, cation_pi_pairs)
+	save_dataset(features, save_file)
+
+	return features
+
+def compute_aromatic_features_wrapper(traj_dir, traj_ext, structure, pi_pi_ring_pairs,
+																		  cation_pi_pairs, save_file, save_dir, 
+																		  worker_pool=None, parallel=True, traj_files=None):
+
+	compute_pi_interactions_partial = partial(compute_pi_interactions_traj,
+																						pi_pi_ring_pairs=pi_pi_ring_pairs,
+																						cation_pi_pairs=cation_pi_pairs,
+																						save_dir=save_dir,
+																						structure=structure)
+	if traj_files is None:
+		traj_files = get_trajectory_files(traj_dir, traj_ext)
+
+	if worker_pool is not None:
+		features = worker_pool.map_sync(compute_pi_interactions_partial, traj_files)
+	elif parallel:
+		pool = mp.Pool(mp.cpu_count())
+		features = pool.map(compute_pi_interactions_partial, traj_files)
+		pool.terminate()
+	else:
+		features = []
+		for traj_file in traj_files:
+			traj_features = compute_pi_interactions_partial(traj_file)
+			features.append(traj_features)
+	save_dataset(features, save_file)
+
+
 
 def retain_features_within_range(features_dir, features_pkl, cutoff,
 								 frame_proportion, new_features_file,

@@ -32,7 +32,7 @@ def jointplots(data, save_dir, titles = None, main = "", refcoords = None, refco
 			   axes=None, reshape=True, data_j=None, titles_j=None, max_tIC=100, min_density=None, 
 			   custom_lims=None, custom_lims_j=None, max_diff=2.5, tpt_paths=None, tpt_paths_j=None,
 			   n_levels=15, worker_pool=None, parallel=True, n_pts=200j, all_apo_data=None, remake=False,
-			   max_i=10000):
+			   max_i=10000., min_i=None):
 	 
 	plt.clf()
 	print("Making delta G plots.")
@@ -42,7 +42,7 @@ def jointplots(data, save_dir, titles = None, main = "", refcoords = None, refco
 								all_data = data, axes=axes, data_j=data_j, titles_j=titles_j, 
 								refcoords=refcoords, refcoords_j=refcoords_j, max_tIC=min(num_columns, max_tIC),
 								min_density=min_density, custom_lims=custom_lims, custom_lims_j=custom_lims_j, max_diff=max_diff, tpt_paths=tpt_paths,
-								tpt_paths_j=tpt_paths_j, n_levels=n_levels, n_pts=n_pts, all_apo_data=all_apo_data, remake=remake)
+								tpt_paths_j=tpt_paths_j, n_levels=n_levels, n_pts=n_pts, all_apo_data=all_apo_data, remake=remake, min_i=min_i)
 
 	if parallel and worker_pool is None:
 		pool = mp.Pool(mp.cpu_count()/2)
@@ -61,14 +61,18 @@ def jointplots(data, save_dir, titles = None, main = "", refcoords = None, refco
 def jointplot(i, all_data, save_dir, make_animation=False, trajectory=None, video_file=None, titles=None,
 			  main=None, include_1d_kde=False, custom_lims=None, custom_lims_j=None, axes=None, data_j=None, titles_j=None, refcoords=None, 
 			  refcoords_j=None, max_tIC=5, min_density=None, max_diff=2.5, tpt_paths=None, tpt_paths_j=None, n_levels=15, n_pts=200j,
-			  all_apo_data=None, remake=False):
+			  all_apo_data=None, remake=False, min_i=None):
 	try:
 	#if 1==1:
 		if data_j is None:
-			j_range = range(i+1, max_tIC)
+			if min_i is not None: 
+				j_range = range(min_i, max_tIC)
+			else:
+				j_range = range(i+1, max_tIC)
 		else:
-			j_range = range(0, data_j.shape[1])
+			j_range = range(0, min(max_tIC, data_j.shape[1]))
 		for j in j_range:
+			print(j)
 			if data_j is not None: 
 				print("i=%d" %i)
 				print("j=%d" %j)

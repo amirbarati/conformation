@@ -25,11 +25,12 @@ import seaborn as sns
 from sklearn.neighbors.kde import KernelDensity
 from sklearn.grid_search import GridSearchCV
 from scipy.signal import argrelextrema
+from scipy import stats
 from scipy import spatial
+
 from msmbuilder.utils import KDTree
 from matplotlib.pyplot import cm 
 
-from pandas import *
 #from rpy2.robjects.packages import importr
 #import rpy2.robjects as ro
 #import pandas.rpy.common as com
@@ -473,7 +474,7 @@ def plot_df_rolling(df, filename, return_fig=True, subplots=True, smoothing=100,
       if ref_df is not None:
         dot_df = pd.DataFrame(ref_df[var])
         dot_df = pd.concat([dot_df.transpose()]*df.shape[0], axis=0)
-        dot_df.index = range(0, df.shape[0])
+        dot_df.index = df.index
         dot_df[dot_df.columns.values[0]].plot(ax=axes[i], c="blue", linestyle='dashed')
         dot_df[dot_df.columns.values[1]].plot(ax=axes[i], c="green", linestyle='dashed')
       if include_original:
@@ -689,6 +690,27 @@ def plot_tICs_vs_docking(docking_csv, tica_coords_csv, plot_file, chosen_ligand=
   df = pd.DataFrame(df[tica_names].values[:,list(range(0,max_tIC))], index=df[chosen_ligand], columns=list(range(1,max_tIC + 1)))
   plot_df_rolling(df, plot_file)
 
+def compute_and_plot_single_kde(data, title, xlabel, fig_file, custom_bounds=None, custom_y_bounds=None):
+  kde = stats.gaussian_kde(data)
+  if custom_bounds is not None:
+    x = np.linspace(custom_bounds[0], custom_bounds[1], 200)
+  else:
+    x = np.linspace(0.8*data.min(), 1.2*data.max(),200)
+  dx = kde(x)
+  plt.clf()
+  pp = PdfPages(fig_file)
+  plt.plot(x,dx,color='black')
+  plt.xlim(x.min(), x.max())
+  if custom_y_bounds is not None: 
+    plt.ylim(custom_y_bounds[0], custom_y_bounds[1])
+  plt.fill(x,dx, alpha=.75,color='#5673E0')
+  plt.xlabel(xlabel)
+  plt.ylabel("Estimated Equilibrium Population")
+  plt.title(title)
+  pp.savefig()
+  plt.show()
+  pp.close()
+
 def sample_tIC_regions(tica_coords, save_dir):
   if not os.path.exists(save_dir):
     os.makedirs(save_dir)
@@ -764,7 +786,31 @@ def get_kde_mins_and_maxes(tica_coords, kde_dir):
     j += 1
     kde_file = os.path.join(kde_dir, "kde_model_tIC_%d.h5" % (j+1))
 
+def multi_binarizer(data, boundaries):
+  new_data = np.zeros(data.shape)
+  new_data[np.where(data < boundaries[0])[0]] = 0.
+  new_data[np.where(data > boundaries[len(boundaries)-1])[0]] = len(boundaries)
+  for i, minimum in enumerate(boundaries):
+    if i == (len(boundaries)-1): continue
+    new_data[np.where((data > boundaries[i]) & (data < boundaries[i+1]))[0]] = i + 1
+  return new_data
 
+def multi_onehot(data, boundaries):
+  new_data = np.zeros((data.shape[0], len(boundaries)+1))
+  new_data[np.where(data < boundaries[0])[0], 0] = 1.
+  new_data[np.where(data > boundaries[len(boundaries)-1])[0], len(boundaries)] = 1.
+  for i, minimum in enumerate(boundaries):
+    if i == (len(boundaries)-1): continue
+    new_data[np.where((data > boundaries[i]) & (data < boundaries[i+1]))[0], i+1] = 1.
+  return new_data
+
+def get_kde_mins(data):
+  kde = stats.gaussian_kde(data)
+  x = np.linspace(data.min(), data.max(),200)
+  dx = kde(x)
+  mi, ma = argrelextrema(dx, np.less)[0], argrelextrema(dx, np.greater)[0]
+  minima = x[mi]
+  return minima
 
 def sample_kde_maxima(tica_coords, kde_dir, trajs):
   print(np.shape(tica_coords))
@@ -812,5 +858,14 @@ def calculate_cluster_averages_per_feature(clusterer, features):
     means = np.mean(concatenated_features[rows,:], axis=0)
     cluster_averages[i,:] = means
   return cluster_averages
+
+def find_most_populated_intermediates(msm_object, intermediates):
+  msm_intermediates = np.concatenate(msm_object.partial_transform(intermediates))
+  order = np.argsort(msm_object.populations_[msm_intermediates])
+  print(np.sum(msm_object.populations_[msm_intermediates][order]))
+  print(intermediates[order])
+  return(intermediates[order])
+
+
 
 

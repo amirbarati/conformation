@@ -108,7 +108,7 @@ in the function definition.
 '''
 
 
-def prepare_ligand(lig, lig_dir):
+def prepare_ligand(lig, lig_dir, n_ring_conf, n_stereoisomers, force_field):
 	os.chdir(lig_dir)
 	lig_last_name = lig.split("/")[len(lig.split("/"))-1]
 	lig_no_ext = lig_last_name.split(".")[0]
@@ -123,30 +123,34 @@ def prepare_ligand(lig, lig_dir):
 	ligfile = open(lig_input, "wb")
 	ligfile.write("INPUT_FILE_NAME   %s \n" %lig_last_name)
 	ligfile.write("OUT_MAE   %s \n" %lig_output)
-	ligfile.write("FORCE_FIELD   14 \n")
+	ligfile.write("FORCE_FIELD   %d \n" %force_field)
+	ligfile.write("PH   7.4 \n")
 	ligfile.write("EPIK   yes \n")
 	ligfile.write("DETERMINE_CHIRALITIES   no \n")
 	ligfile.write("IGNORE_CHIRALITIES   no \n")
-	ligfile.write("NUM_STEREOISOMERS   32 \n")
-	ligfile.write("NUM_RING_CONF   1 \n")
+	ligfile.write("NUM_STEREOISOMERS   %d \n" %n_stereoisomers)
+	ligfile.write("NUM_RING_CONF   %d \n" %n_ring_conf)
 	ligfile.close()
 
-	cmd = "$SCHRODINGER/ligprep -WAIT -inp %s" %lig_input
+	cmd = "unset PYTHONPATH; $SCHRODINGER/ligprep -WAIT -inp %s" %lig_input
 	print(cmd)
 	subprocess.call(cmd, shell=True)
 
 
-def prepare_ligands(lig_dir, exts = [".mae"]):
+def prepare_ligands(lig_dir, exts = [".mae"], n_ring_conf=1, n_stereoisomers=1, force_field=16, worker_pool=None):
 	ligs = []
 	for ext in exts:
 		ligs += get_trajectory_files(lig_dir, ext)
 	print(ligs)
-	lig_partial = partial(prepare_ligand, lig_dir = lig_dir)
+	lig_partial = partial(prepare_ligand, lig_dir = lig_dir, n_ring_conf=n_ring_conf, n_stereoisomers=n_stereoisomers, force_field=force_field)
 
-	num_workers = mp.cpu_count()
-	pool = mp.Pool(num_workers)
-	pool.map(lig_partial, ligs)
-	pool.terminate()
+	if worker_pool is not None:
+		worker_pool.map_sync(lig_partial, ligs)
+	else:
+		num_workers = mp.cpu_count()
+		pool = mp.Pool(num_workers)
+		pool.map(lig_partial, ligs)
+		pool.terminate()
 	print("finished preparing ligands")
 
 '''
@@ -162,7 +166,7 @@ do this, set remove_lig to the 3-letter upper case string residue name denoting 
 "
 '''
 
-def generate_grid_input(mae, grid_center, grid_dir, remove_lig = None):
+def generate_grid_input(mae, grid_center, grid_dir, remove_lig = None, outer_box=25.):
 	mae_name = mae.rsplit( ".", 1)[0]
 	mae_last_name = mae_name.split("/")[len(mae_name.split("/"))-1]
 
@@ -183,7 +187,7 @@ def generate_grid_input(mae, grid_center, grid_dir, remove_lig = None):
 			print(cmd)
 			subprocess.call(cmd, shell=True)
 	else:
-		cmd = "$SCHRODINGER/run $SCHRODINGER/mmshare-v29013/python/common/delete_atoms.py -asl \"res.pt %s \" %s %s" %(remove_lig, mae, new_mae)
+		cmd = "$SCHRODINGER/run $SCHRODINGER/mmshare-v3.3/python/common/delete_atoms.py -asl \"res.pt %s \" %s %s" %(remove_lig, mae, new_mae)
 		print(cmd)
 		subprocess.call(cmd, shell=True)
 
@@ -192,7 +196,7 @@ def generate_grid_input(mae, grid_center, grid_dir, remove_lig = None):
 	gridfile.write("OUTPUTDIR   %s \n" %output_dir)
 	gridfile.write("GRID_CENTER   %s \n" %grid_center)
 	gridfile.write("INNERBOX   10, \n")
-	gridfile.write("OUTERBOX   25.0, \n")
+	gridfile.write("OUTERBOX   %d, \n" %outer_box)
 	gridfile.write("RECEP_FILE   %s \n" %new_mae)
 	#gridfile.write("RECEP_VSCALE   1.0 \n")
 	#gridfile.write("LIGAND_MOLECULE  1 \n")
@@ -261,7 +265,7 @@ def unzip_receptors(grid_dir, receptors, worker_pool=None):
 	return
 
 
-def generate_grids(mae_dir, grid_center, grid_dir, remove_lig = None, indices = None, chosen_receptors = None, worker_pool=None):
+def generate_grids(mae_dir, grid_center, grid_dir, remove_lig = None, indices = None, chosen_receptors = None, outer_box=10., worker_pool=None):
 	print(grid_dir)
 	if not os.path.exists(grid_dir): os.makedirs(grid_dir)
 
@@ -269,7 +273,7 @@ def generate_grids(mae_dir, grid_center, grid_dir, remove_lig = None, indices = 
 	if chosen_receptors is not None:
 		maes = [mae for mae in maes if remove_path_and_extension(mae) in chosen_receptors]
 
-	generate_grid_input_partial = partial(generate_grid_input, grid_dir = grid_dir, grid_center = grid_center, remove_lig = remove_lig)
+	generate_grid_input_partial = partial(generate_grid_input, grid_dir = grid_dir, grid_center = grid_center, remove_lig = remove_lig, outer_box=outer_box)
 	num_workers = mp.cpu_count()
 	pool = mp.Pool(num_workers)
 	pool.map(generate_grid_input_partial, maes)
@@ -533,7 +537,12 @@ def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "
 							   chosen_jobs = chosen_receptors, grid_ext=grid_ext, 
 							   worker_pool=worker_pool, return_jobs=True)
 		print(dock_jobs)
-		worker_pool.map_sync(dock, dock_jobs)
+		if worker_pool is not None:
+			worker_pool.map_sync(dock, dock_jobs)
+		else:
+			pool = mp.Pool(4)
+			pool.map(dock, dock_jobs)
+			pool.terminate()
 
 
 '''

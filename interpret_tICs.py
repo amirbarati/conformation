@@ -155,39 +155,33 @@ def merge_importances_features(feature_importances_file, feature_residues_map, i
         row = [feature_importance[0].__repr__().title(), 
                      feature_importance[0].residue_i.__repr__().title(),
                      feature_importance[0].residue_j.__repr__().title(), 
-                     feature_importance[0].residue_i.resSeq,
-                     feature_importance[0].residue_j.resSeq,
                      feature_importance[1], feature_importance[0]]
       else:
         row = [feature_importance[0].__repr__().title(), 
                      feature_importance[0].residue.__repr__().title(),
                      feature_importance[0].residue.__repr__().title(), 
-                     feature_importance[0].residue.resSeq,
-                     feature_importance[0].residue.resSeq,
                      feature_importance[1], feature_importance[0]]      
       rows.append(row)
     
-  df = pd.DataFrame(rows, columns=('feature_name', 'res_i', 'res_j', 'resid_i', 'resid_j', 
+  df = pd.DataFrame(rows, columns=('feature_name', 'res_i', 'res_j', 
                                    'importance', 'feature'))
 
   return df
 
 def compute_per_residue_importance(df, percentile):
-  net_df = pd.DataFrame(columns=['residue', 'importance', 'resid'])
+  net_df = pd.DataFrame(columns=['residue', 'importance'])
   for _, row in df.iterrows():
     res_i = row['res_i']
     res_j = row['res_j']
-    resid_i = row['resid_i']
-    resid_j = row['resid_j']
 
     importance = row["importance"]
     if res_i not in net_df.index:
-      net_df.loc[res_i] = [res_i, [importance], resid_i]
+      net_df.loc[res_i] = [res_i, [importance]]
     else:
       net_df.loc[res_i]["importance"].append(importance)
 
     if res_j not in net_df.index:
-      net_df.loc[res_j] = [res_j, [importance], resid_j]
+      net_df.loc[res_j] = [res_j, [importance]]
     else:
       net_df.loc[res_j]["importance"].append(importance)
 
@@ -553,26 +547,37 @@ def subsample_features(features_dir, indices, names, save_file, features=None, w
   with open(save_file, "wb") as f:
     pickle.dump(subsampled_features, f)
 
-def compute_rf_matrix(data_i, data_j, n_trees=500, n_folds=5):
-  r2_scores = []
+def compute_rf_matrix(data_i, data_j, n_trees=500, n_folds=5, max_depth=3, task="regression"):
+  scores = []
   importances = np.zeros((np.shape(data_i)[1], np.shape(data_j)[1]))
   for j in range(0, np.shape(data_j)[1]):
     X = data_i
     y = data_j[:,j]
-    r2_score = []
+    score = []
     importance = []
     for k in range(0, n_folds):
-      rfr = RandomForestRegressor(n_estimators = n_trees, max_depth=2, max_features = 'sqrt', n_jobs=-1)
-      X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8)
-      rfr.fit(X_train, y_train)
-      r2_score.append(rfr.score(X_test, y_test))
-      importance.append(rfr.feature_importances_)
-    r2_score = np.mean(r2_score)
+      if task == "regression":
+        rfm = RandomForestRegressor(n_estimators = n_trees, max_depth=max_depth, max_features = 'sqrt', n_jobs=-1)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8)
+        rfm.fit(X_train, y_train)
+        score.append(rfm.score(X_test, y_test))
+        importance.append(rfm.feature_importances_)
+      else:
+        rfm = RandomForestClassifier(n_estimators = n_trees, max_depth=max_depth, max_features = 'sqrt', n_jobs=-1)
+        try:
+          X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8, stratify=y)
+          rfm.fit(X_train, y_train)
+          score.append(rfm.score(X_test, y_test))
+          importance.append(rfm.feature_importances_)
+        except:
+          score.append(0.)
+          importance.append(np.zeros(np.shape(X)[1]))
+    score = np.mean(score)
     importance = np.mean(np.vstack(importance), axis=0)
     
-    r2_scores.append(r2_score)
+    scores.append(score)
     importances[:,j] = importance 
-  return r2_scores, importances
+  return scores, importances
 
 def calculate_cluster_averages_per_feature(clusterer, features):
   n_clusters = clusterer.n_clusters 
