@@ -43,6 +43,10 @@ feature_name_residues_dict["rmsd_triad_active"] = triad_residues
 feature_name_residues_dict["tm6_tm3_packing"] = [tm3_packing_residues, tm6_packing_residues]
 feature_name_residues_dict["tm6_tm7_packing"] = [tm7_packing_residues, tm6_packing_residues]
 feature_name_residues_dict["tm6_tm5_packing"] = [tm5_packing_residues, tm6_packing_residues]
+feature_name_residues_dict["Gln124_Trp133_closest_dist"] = convert_list_to_resobject_list([("R", 124), ("R", 133)])
+feature_name_residues_dict["Asp147_Tyr326_closest_dist"] = convert_list_to_resobject_list([("R", 147), ("R", 326)])
+feature_name_residues_dict["Asp147_Tyr326_ca_dist"] = convert_list_to_resobject_list([("R", 147), ("R", 326)])
+feature_name_residues_dict["Arg280_Glu341_closest_dist"] = convert_list_to_resobject_list([("R", 280), ("R", 341)])
 
 
 common_residues_pkl = get_common_residues_pkl(base)

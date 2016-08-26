@@ -36,18 +36,33 @@ def resample_by_msm(total_samples, msm_object, clusters_map, num_trajs, save_fil
 
   print("Rearranged equilibrium sampled frames based on trajectories")
 
-  verbosedump(traj_to_frames, save_file)
+  if save_file is not None:
+    verbosedump(traj_to_frames, save_file)
   return traj_to_frames
 
-def resample_features_by_msm_equilibirum_pop(features, traj_to_frames, save_file):
+def traj_index_series_from_dict(traj_index_dict):
+  resampled_traj_index_pairs = []
+  for traj in traj_index_dict.keys():
+      [resampled_traj_index_pairs.append((traj, frame)) for frame in traj_index_dict[traj]]
+  return resampled_traj_index_pairs
+
+def resample_features_by_msm_equilibirum_pop(features, traj_to_frames, save_file=None):
   resampled_features = []
-
   for traj_index, frames in traj_to_frames.iteritems():
-    resampled_features.append(features[traj_index][frames, :])
+    if isinstance(features[0], pd.DataFrame):
+      resampled_features.append(features[traj_index].iloc[frames])
+    else:
+      resampled_features.append(features[traj_index][frames, :])
+  
+  if isinstance(features[0], pd.DataFrame):
+    resampled_features = pd.concat(resampled_features, axis=0)
+  else:
+    resampled_features = np.concatenate(resampled_features)
 
-  resampled_features = np.concatenate(resampled_features)
-
-  verbosedump(resampled_features, save_file)
+  if save_file is not None:
+    verbosedump(resampled_features, save_file)
+  else:
+    return resampled_features
 
 def generate_msm_traj_index_series(msm_object, start_cluster, n_steps, clusters_map, save_file):
   inv_map = {v: k for k, v in msm_object.mapping_.items()}

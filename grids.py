@@ -107,21 +107,28 @@ You can change the settings listed in "ligfile.write" lines. Perhaps we should a
 in the function definition. 
 '''
 
-
-def prepare_ligand(lig, lig_dir, n_ring_conf, n_stereoisomers, force_field):
+def prepare_ligand(lig, lig_dir, n_ring_conf, n_stereoisomers, force_field, verbose=True):
 	os.chdir(lig_dir)
 	lig_last_name = lig.split("/")[len(lig.split("/"))-1]
 	lig_no_ext = lig_last_name.split(".")[0]
+	lig_ext = lig_last_name.split(".")[1]
 
 	lig_input = "%s/%s.inp" %(lig_dir, lig_no_ext)
 	lig_output = "%s-out.maegz" %lig_no_ext
+	#if os.path.exists("%s/%s_bmout-bad.maegz" %(lig_dir, lig_no_ext)):
+	#	print("Already failed preparing ligand.")
 
 	if os.path.exists("%s/%s" %(lig_dir,lig_output)):
-		print("already prepared ligand")
 		return
 
+	if "mae" not in lig_ext:
+		lig_mae = "%s.mae" %(lig_no_ext)
+		intermediate_file = "%s/%s" %(lig_dir, lig_mae)
+		cmd = "unset PYTHONPATH; $SCHRODINGER/utilities/sdconvert -isd %s -omae %s" %(lig, intermediate_file)
+		subprocess.call(cmd, shell=True)
+
 	ligfile = open(lig_input, "wb")
-	ligfile.write("INPUT_FILE_NAME   %s \n" %lig_last_name)
+	ligfile.write("INPUT_FILE_NAME   %s \n" %lig_mae)
 	ligfile.write("OUT_MAE   %s \n" %lig_output)
 	ligfile.write("FORCE_FIELD   %d \n" %force_field)
 	ligfile.write("PH   7.4 \n")
@@ -133,24 +140,40 @@ def prepare_ligand(lig, lig_dir, n_ring_conf, n_stereoisomers, force_field):
 	ligfile.close()
 
 	cmd = "unset PYTHONPATH; $SCHRODINGER/ligprep -WAIT -inp %s" %lig_input
-	print(cmd)
 	subprocess.call(cmd, shell=True)
 
 
-def prepare_ligands(lig_dir, exts = [".mae"], n_ring_conf=1, n_stereoisomers=1, force_field=16, worker_pool=None):
+def prepare_ligands(lig_dir, exts = [".mae"], n_ring_conf=1, n_stereoisomers=1, force_field=16, worker_pool=None, parallel=True, redo=False):
 	ligs = []
 	for ext in exts:
 		ligs += get_trajectory_files(lig_dir, ext)
-	print(ligs)
-	lig_partial = partial(prepare_ligand, lig_dir = lig_dir, n_ring_conf=n_ring_conf, n_stereoisomers=n_stereoisomers, force_field=force_field)
 
+	print("Examining %d ligands" %len(ligs))
+
+	"""
+	if not redo: 
+		unfinished_ligs = []
+		for lig in ligs: 
+			lig_no_ext = lig.split(".")[0]
+			lig_mae = "%s-out.maegz" %lig_no_ext
+			if not os.path.exists(lig_mae):
+				unfinished_ligs.append(lig)
+		ligs = unfinished_ligs
+
+	print("Preparing %d ligands" %(len(ligs)))
+	"""
+
+	lig_partial = partial(prepare_ligand, lig_dir = lig_dir, n_ring_conf=n_ring_conf, n_stereoisomers=n_stereoisomers, force_field=force_field)
 	if worker_pool is not None:
 		worker_pool.map_sync(lig_partial, ligs)
-	else:
+	elif parallel:
 		num_workers = mp.cpu_count()
 		pool = mp.Pool(num_workers)
 		pool.map(lig_partial, ligs)
 		pool.terminate()
+	else:
+		for lig in ligs:
+			lig_partial(lig)
 	print("finished preparing ligands")
 
 '''
@@ -316,6 +339,7 @@ def dock(dock_job):
 	docking_dir = os.path.dirname(dock_job)
 	os.chdir(docking_dir)
 	cmd = "$SCHRODINGER/glide %s -OVERWRITE -WAIT -strict" %dock_job
+	print(cmd)
 	try:
 		run_command(cmd)
 		os.chdir("/home/enf/b2ar_analysis/conformation")
@@ -352,7 +376,7 @@ def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP", chos
 		log_size = 0
 		if os.path.exists(log_name): log_size = os.stat(log_name).st_size
 		if os.path.exists(maegz_name):# and log_size > 3000:
-			print("already docked %s" %grid_file_no_ext)
+			#print("already docked %s" %grid_file_no_ext)
 			continue
 		dock_job_name = "%s/%s.in" %(docking_dir, grid_file_no_ext)
 		dock_jobs.append(dock_job_name)
@@ -463,8 +487,6 @@ def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "
 							   parallel = False, grid_ext = ".zip", worker_pool=None,
 							   ligand_dirs=None):
 	ligands = get_trajectory_files(ligands_dir, ext = ext)
-	print("ligands")
-	print(ligands)
 
 	if parallel == "both":
 		lig_dirs = []
@@ -536,13 +558,15 @@ def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "
 			dock_jobs += dock_conformations(grid_dir, lig_dir, ligand, precision = precision,
 							   chosen_jobs = chosen_receptors, grid_ext=grid_ext, 
 							   worker_pool=worker_pool, return_jobs=True)
-		print(dock_jobs)
 		if worker_pool is not None:
 			worker_pool.map_sync(dock, dock_jobs)
-		else:
+		elif parallel:
 			pool = mp.Pool(4)
 			pool.map(dock, dock_jobs)
 			pool.terminate()
+		else:
+			for dock_job in dock_jobs:
+				dock(dock_job)
 
 
 '''
@@ -620,6 +644,26 @@ def mmgbsa_ligands_and_receptors(docking_dir, mmgbsa_dir, ligands, chosen_recept
 		lig_dir = "%s/%s" %(docking_dir, ligand)
 		lig_mmgbsa_dir = "%s/%s" %(mmgbsa_dir, ligand)
 		mmgbsa(lig_dir, lig_mmgbsa_dir, chosen_jobs = chosen_receptors)
+
+import pybel
+def save_sdf(mol, save_dir):
+	mol.write("sdf", "%s/%s.sdf" % (save_dir, mol.title))
+
+def fast_split_sdf(sdf_file, save_dir):
+	#mols = []
+	i = 0
+	for i, mol in enumerate(pybel.readfile("sdf", sdf_file)):
+		print(i)
+		print(mol.title)
+		mol.write("sdf", "%s/%s_%d.sdf" % (save_dir, mol.title, i))
+
+
+	#print("converting %d sdfs" %i)
+	
+	#save_sdf_partial = partial(save_sdf, save_dir=save_dir)
+	#pool = mp.Pool(mp.cpu_count())
+	#pool.map(save_sdf, mols)
+	#pool.terminate()
 
 
 

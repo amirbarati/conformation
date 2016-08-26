@@ -12,15 +12,15 @@ import copy
 import multiprocessing as mp 
 import pickle 
 from residue import *
-
 from matplotlib.backends.backend_pdf import PdfPages
 from sklearn import preprocessing
 from sklearn.cross_validation import train_test_split
-from sklearn.linear_model import lasso_path
+from sklearn.linear_model import lasso_path, LogisticRegressionCV
 #import matplotlib
 plt.style.use('fivethirtyeight')
 #from matplotlib import rcParams
 import seaborn as sns
+from sklearn.metrics import roc_auc_score
 #sns.style.use('fivethirtyeight')
 #rcParams.update({'figure.autolayout': True})
 
@@ -110,6 +110,9 @@ def plot_importance_df(df, column_name, ylabel, title, analysis_type, save_strin
     pp.savefig()
     pp.close()
     plt.clf()
+
+def plot_df_bar(df, ylabel, xlabel, title, save_dir):
+  pass
 
 def compute_residue_importances(df, percentile=95):
   residue_importances = {}
@@ -547,10 +550,11 @@ def subsample_features(features_dir, indices, names, save_file, features=None, w
   with open(save_file, "wb") as f:
     pickle.dump(subsampled_features, f)
 
-def compute_rf_matrix(data_i, data_j, n_trees=500, n_folds=5, max_depth=3, task="regression"):
+def compute_sl_matrix(data_i, data_j, task="regression", model_type="rfr", n_trees=500, n_folds=5, max_depth=3):
   scores = []
   importances = np.zeros((np.shape(data_i)[1], np.shape(data_j)[1]))
   for j in range(0, np.shape(data_j)[1]):
+    print("Examining response variable %d out of %d" %(j, np.shape(data_j)[1]))
     X = data_i
     y = data_j[:,j]
     score = []
@@ -563,18 +567,31 @@ def compute_rf_matrix(data_i, data_j, n_trees=500, n_folds=5, max_depth=3, task=
         score.append(rfm.score(X_test, y_test))
         importance.append(rfm.feature_importances_)
       else:
-        rfm = RandomForestClassifier(n_estimators = n_trees, max_depth=max_depth, max_features = 'sqrt', n_jobs=-1)
-        try:
-          X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8, stratify=y)
-          rfm.fit(X_train, y_train)
-          score.append(rfm.score(X_test, y_test))
-          importance.append(rfm.feature_importances_)
-        except:
-          score.append(0.)
-          importance.append(np.zeros(np.shape(X)[1]))
+        if "rf" in model_type:
+          rfm = RandomForestClassifier(n_estimators = n_trees, max_depth=max_depth, max_features = 'sqrt', n_jobs=-1)
+          try:
+            X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8, stratify=y)
+            rfm.fit(X_train, y_train)
+            y_test_matrix = np.eye(len(set(y_test.tolist())))[y_test.tolist()]
+            score.append(roc_auc_score(y_test_matrix,rfm.predict_proba(X_test)))
+            importance.append(rfm.feature_importances_)
+          except:
+            score.append(0.)
+            importance.append(np.zeros(np.shape(X)[1]))
+        else:
+          rfm = LogisticRegressionCV()
+          try:
+            X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8, stratify=y)
+            rfm.fit(X_train, y_train)
+            y_test_matrix = np.eye(len(set(y_test.tolist())))[y_test.tolist()]
+            score.append(roc_auc_score(y_test_matrix,rfm.predict_proba(X_test)))
+            importance.append(rfm.coef_)
+          except:
+            score.append(0.)
+            importance.append(np.zeros(np.shape(X)[1]))
     score = np.mean(score)
     importance = np.mean(np.vstack(importance), axis=0)
-    
+
     scores.append(score)
     importances[:,j] = importance 
   return scores, importances

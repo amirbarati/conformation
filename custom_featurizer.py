@@ -1,3 +1,7 @@
+__author__ = "Evan Feinberg"
+__copyright__ = "Copyright 2016, Stanford University"
+__license__ = "GPL"
+
 import mdtraj as md
 import numpy as np
 from analysis import *
@@ -964,13 +968,14 @@ def compute_pnas_coords_and_distance(traj_file, inactive, active, scale = 7.14, 
 	return [traj_coords, distances]
 
 def compute_user_defined_features(traj_file, inactive, active, structure=None,
-									feature_name_residues_dict = {}, save_dir=None):
+									feature_name_residues_dict = {}, save_dir=None, overwrite=True):
+	import shutil
 	
 	traj_basename = os.path.basename(traj_file)
 	traj_basename = os.path.splitext(traj_basename)[0]
 	save_file = "%s/%s.dataset" %(save_dir, traj_basename)
 	print("save_file = %s" %save_file)
-	if os.path.exists(save_file):
+	if os.path.exists(save_file) and overwrite is False:
 		features = load_file(save_file)
 		return features
 	else:
@@ -1003,8 +1008,10 @@ def compute_user_defined_features(traj_file, inactive, active, structure=None,
 				features.append(rmsd_connector(traj, active, residues=residues))
 			elif name == "rmsd_connector_inactive":
 				features.append(rmsd_connector(traj, inactive, residues=residues))
-			elif "dist" in name:
+			elif "ca_dist" in name:
 				features.append(helix6_helix3_dist(traj, residues=residues))
+			elif "closest_dist" in name:
+				features.append(compute_closest_heavy(traj, residues=residues))
 			elif "packing" in name:
 				features.append(compute_average_min_distance(traj, residues[0], residues[1]))
 			elif "stacking" in name:
@@ -1017,19 +1024,23 @@ def compute_user_defined_features(traj_file, inactive, active, structure=None,
 
 		features = np.transpose(np.array(features))
 
-		save_dataset(features, save_file)
+		try:
+			save_dataset(features, save_file)
+		except:
+			shutil.rmtree(save_file)
+			save_dataset(features, save_file)
 		return features
 
 def compute_user_defined_features_wrapper(traj_dir, traj_ext, inactive_file, active_file, structure,
 										  feature_name_residues_dict, save_file, save_dir, worker_pool=None, 
-										  parallel=True, trajs=None):
+										  parallel=True, trajs=None, overwrite=True):
 	inactive = md.load(inactive_file)
 	active = md.load(active_file)
 	compute_user_defined_features_partial = partial(compute_user_defined_features, 
 													inactive=inactive, active=active,
 													structure=structure, 
 													feature_name_residues_dict=feature_name_residues_dict,
-													save_dir=save_dir)
+													save_dir=save_dir, overwrite=overwrite)
 	if trajs is None:
 		trajs = get_trajectory_files(traj_dir, traj_ext)
 

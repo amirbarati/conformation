@@ -159,6 +159,7 @@ def plot_heatmap(corr_matrix, row_names, col_names, save_file):
 
 
 def plot_clustermap(corr_df, save_file, method='single', row_cluster=True, col_cluster=True, xtick_labelsize=8, ytick_labelsize=8, z_score=0):
+  sns.set_style("darkgrid", {"figure.facecolor": "white"})
   plt.rcParams['xtick.labelsize'] = xtick_labelsize
   plt.rcParams['ytick.labelsize'] = ytick_labelsize
   ratio = float(corr_df.shape[0]) / float(corr_df.shape[1])
@@ -166,8 +167,12 @@ def plot_clustermap(corr_df, save_file, method='single', row_cluster=True, col_c
     figsize=(8./ratio , 8.)
   else:
     figsize = (8., 8./ratio)
-  g = sns.clustermap(corr_df, z_score=z_score, method=method, row_cluster=row_cluster, col_cluster=col_cluster, figsize=figsize)
+
+  #fig = plt.figure(figsize)
+  #fig.patch.set_alpha(0.)
+  #ax = fig.add_subplot(111)
+  g = sns.clustermap(corr_df, z_score=z_score, method=method, row_cluster=row_cluster, col_cluster=col_cluster)
   sns.set(font_scale=0.5)
   
-  g.savefig(save_file)
+  g.savefig(save_file, facecolor='w', edgecolor='w')
   #plt.show()

@@ -1,6 +1,6 @@
 from sklearn import mixture
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-import numpy as np 
+import numpy as np
 import matplotlib
 reload(matplotlib)
 from matplotlib import pyplot as plt
@@ -29,7 +29,7 @@ from scipy import stats
 from scipy import spatial
 
 from msmbuilder.utils import KDTree
-from matplotlib.pyplot import cm 
+from matplotlib.pyplot import cm
 
 #from rpy2.robjects.packages import importr
 #import rpy2.robjects as ro
@@ -52,7 +52,7 @@ def select_model(X, tic_j, max_components, save_dir):
     test_indices = list(set(range(0,len(X))) - set(train_indices))
     X_train = X[train_indices,:]
     X_test = X[test_indices,:]
-    
+
     bics = []
     aics = []
     test_likelihoods = []
@@ -75,7 +75,7 @@ def select_model(X, tic_j, max_components, save_dir):
     possible_components.append(max_likelihood)
 
   #num_components = min(possible_components)
-  #g = mixture.GMM(n_components = num_components, n_init=5, tol =1e-5, min_covar = 1e-1, params='mc') 	 	
+  #g = mixture.GMM(n_components = num_components, n_init=5, tol =1e-5, min_covar = 1e-1, params='mc')
   g = mixture.DPGMM(n_components=5, alpha=10.0)
   g.fit(X)
 
@@ -161,7 +161,7 @@ def plot_importances(feature_importances, save_dir, i, percentile=True):
   bar_width = 0.4
   opacity = 0.8
   index = np.arange(50)
-  
+
   feature_importance_dict = {}
 
   if percentile:
@@ -182,7 +182,7 @@ def plot_importances(feature_importances, save_dir, i, percentile=True):
     feature_importances = [(key, value) for key, value in feature_importance_dict.items()]
     feature_importances.sort(key=operator.itemgetter(1),reverse=True)
 
-  
+
   plt.barh(np.arange(50), [f[1] for f in feature_importances[0:50]], bar_width, alpha=opacity, color='b',label='Feature importance')
   plt.ylabel('Feature')
   plt.xlabel('Overall Importance')
@@ -198,7 +198,7 @@ def plot_overall_rf_importances(rf_dir, feature_residues_map):
   j = 0
   feature_names = generate_features(feature_residues_map)
   feature_names = ["%d_%d" %(f[0], f[1]) for f in feature_names]
-  
+
   while(os.path.exists(filename)):
     print(("Examining tIC %d" %(j+1)))
     with gzip.open(filename, "rb") as f:
@@ -262,7 +262,7 @@ def plot_column_pair(i, num_columns, save_dir, titles, data, gmm_means, refcoord
     if refcoords is not None:
       plt.scatter([refcoords[0,i]], [refcoords[0,j]], marker = 's', c='w',s=15)
       plt.scatter([refcoords[1,i]], [refcoords[1,j]], marker = 'v', c='k',s=15)
-    if titles is not None: 
+    if titles is not None:
       pp = PdfPages("%s/%s_%s.pdf" %(save_dir, titles[i], titles[j]))
       plt.xlabel(titles[i])
       plt.ylabel(titles[j])
@@ -297,10 +297,10 @@ def plot_tics_gmm(save_dir, data_file, gmm_dir, R=True, titles = None, tICA = Fa
     for j in range(0,np.shape(data)[1]):
       with open("%s/tIC.%d_means.pkl" %(gmm_dir, j)) as f:
         means = pickle.load(f)
-      gmm_means.append(means)    
+      gmm_means.append(means)
 
   num_columns = np.shape(data)[1]
-  plot_column_pair_partial = partial(plot_column_pair, num_columns = num_columns, save_dir = save_dir, titles = titles, 
+  plot_column_pair_partial = partial(plot_column_pair, num_columns = num_columns, save_dir = save_dir, titles = titles,
     data = data, gmm_means = gmm_means, refcoords = refcoords)
   #for i in range(0,num_columns):
   #  plot_column_pair_partial(i)
@@ -330,7 +330,7 @@ def plot_tics_gmm_R(save_dir, data_file, gmm_dir, titles = None, tICA = False, s
     gmm_means.append(gmm.means_)
 
   num_columns = np.shape(data)[1]
-  plot_column_pair_partial = partial(plot_column_pair, num_columns = num_columns, save_dir = save_dir, titles = titles, 
+  plot_column_pair_partial = partial(plot_column_pair, num_columns = num_columns, save_dir = save_dir, titles = titles,
     data = data, gmm_means = gmm_means, refcoords = refcoords)
   #for i in range(0,num_columns):
   #  plot_column_pair_partial(i)
@@ -350,7 +350,7 @@ def compute_one_vs_all_rf_models(features_dir, projected_tica_coords, gmm_dir, s
 
   for i in range(0, n_tica_components):
     print(("Computing random forest model for tIC.%d" %(i+1)))
-    
+
     if R:
       with gzip.open("%s/tIC.%d_classes.pkl.gz" %(gmm_dir, i), "rb") as f:
         Y = pickle.load(f)
@@ -457,17 +457,22 @@ def compute_overall_rf_models(features_dir, projected_tica_coords, gmm_dir, save
 def plot_coef_path(df, filename):
   plt.figure()
   df[list(df.keys())[list(range(0,11))]].plot(colormap='gist_rainbow')
-  plt.legend(loc='center left', bbox_to_anchor=(1.0,0.5))  
+  plt.legend(loc='center left', bbox_to_anchor=(1.0,0.5))
   pp = PdfPages(filename)
   pp.savefig(bbox_inches='tight')
   pp.close()
   plt.clf()
 
 def plot_df_rolling(df, filename, return_fig=True, subplots=True, smoothing=100, include_original=False, min_periods=1,
-                    ref_df=None):
+                    ref_df=None, color="rainbow"):
   plt.clf()
   if subplots:
-    color=iter(cm.ocean(np.linspace(0.2,0.8,len(df.columns.values))))
+    if color == "rainbow":
+      n_colors_i = np.floor(len(df.columns.values) / 2.)
+      n_colors_j = np.ceil(len(df.columns.values)/2.)
+      color = iter(cm.gist_rainbow(np.concatenate([np.linspace(0., 0.4, n_colors_i), np.linspace(.6, 1.0, n_colors_j)])))
+    else:
+      color=iter(cm.ocean(np.linspace(0.2,0.8,len(df.columns.values))))
     fig, axes = plt.subplots(nrows=len(df.columns.values), ncols=1, figsize=(8.0, len(df.columns.values)*3.0))
     for i,var in enumerate(df.columns.values):
       c = next(color)
@@ -475,13 +480,13 @@ def plot_df_rolling(df, filename, return_fig=True, subplots=True, smoothing=100,
         dot_df = pd.DataFrame(ref_df[var])
         dot_df = pd.concat([dot_df.transpose()]*df.shape[0], axis=0)
         dot_df.index = df.index
-        dot_df[dot_df.columns.values[0]].plot(ax=axes[i], c="blue", linestyle='dashed')
-        dot_df[dot_df.columns.values[1]].plot(ax=axes[i], c="green", linestyle='dashed')
+        dot_df[dot_df.columns.values[0]].plot(ax=axes[i], c="blue", linestyle='dashed', label="Inactive Crystal")
+        dot_df[dot_df.columns.values[1]].plot(ax=axes[i], c="green", linestyle='dashed', label="Active Crystal")
       if include_original:
         df[var].plot(ax=axes[i], title=var, c=c, alpha=0.2)
-      pd.rolling_mean(df, smoothing, center=True, min_periods=None)[var].plot(ax=axes[i], title=var, c=c)
+      pd.rolling_mean(df, smoothing, center=True, min_periods=None)[var].plot(ax=axes[i], linewidth=2.5, title=var, c=c)
 
-      axes[i].legend(loc='center left', bbox_to_anchor=(1.0,0.5)) 
+      axes[i].legend(loc='center left', bbox_to_anchor=(1.0,0.5))
       axes[i].set_title("")
 
     #axes[0].set_ylabel('Distance in Angstroms')
@@ -531,7 +536,7 @@ def rank_tICs_by_logistic_lasso(docking_csv, tica_coords_csv, plot_file, cutoff)
   #print(docking_values)
   #print(np.max(docking_values))
   tica_values = preprocessing.normalize(tica.values)
-  
+
   X = diabetes.data
 
   y = diabetes.target
@@ -573,7 +578,7 @@ def rank_tICs_by_logistic_lasso(docking_csv, tica_coords_csv, plot_file, cutoff)
 
 def compute_one_vs_all_rf_models_MSM(features_dir, projected_tica_coords, clusterer_dir, msm_rf_dir, feature_residues_map, n_trees=10, states_to_analyze=None):
   feature_names = generate_features(feature_residues_map)
-  feature_names = ["%s_%s" %(f[0].res_name.title(), f[1].res_name.title()) 
+  feature_names = ["%s_%s" %(f[0].res_name.title(), f[1].res_name.title())
                                 for f in feature_names]
   feature_files = get_trajectory_files(features_dir, ext=".dataset")
   #features = load_file(feature_files[0])
@@ -584,7 +589,7 @@ def compute_one_vs_all_rf_models_MSM(features_dir, projected_tica_coords, cluste
 
   print("Y has shape:")
   print((np.shape(Y)))
-  
+
   if states_to_analyze is None:
     states_to_analyze = list(range(0, cluster.n_clusters))
   for state in states_to_analyze:
@@ -609,7 +614,7 @@ def compute_one_vs_all_rf_models_MSM(features_dir, projected_tica_coords, cluste
 
     feature_importances = list(zip(feature_names, rf.feature_importances_.astype(float).tolist()))
     pickle.dump(feature_importances, open("%s/msm_state%d_importances_list.pkl" %(msm_rf_dir, state), "wb"))
-    
+
     df = pd.DataFrame(columns=('feature_name', 'feature_importance', 'component_mean', 'non_component_mean'))
 
     for i, feature_importance in enumerate(feature_importances):
@@ -634,13 +639,13 @@ def interpret_msm_rf(msm_dir, feature_residues_pkl, n_msm_states=25, percentile=
       feature_importances_df = merge_importances_features(importances_file, feature_residues_pkl)
       residue_importances_df = compute_per_residue_importance(feature_importances_df, percentile)
 
-      plot_importance_df(feature_importances_df, "feature_name", "Contact", 
-                         "MSM %d Contact Importances" % (j+1), 
+      plot_importance_df(feature_importances_df, "feature_name", "Contact",
+                         "MSM %d Contact Importances" % (j+1),
                          "msm_state",
                          "per_contact_importances", j, msm_dir)
 
-      plot_importance_df(residue_importances_df, "residue", "Residue", 
-                         "MSM %d Residue Importances" % (j+1), 
+      plot_importance_df(residue_importances_df, "residue", "Residue",
+                         "MSM %d Residue Importances" % (j+1),
                          "msm_state",
                          "per_residue_importances", j, msm_dir)
 
@@ -691,25 +696,145 @@ def plot_tICs_vs_docking(docking_csv, tica_coords_csv, plot_file, chosen_ligand=
   plot_df_rolling(df, plot_file)
 
 def compute_and_plot_single_kde(data, title, xlabel, fig_file, custom_bounds=None, custom_y_bounds=None):
-  kde = stats.gaussian_kde(data)
+  try:
+    kde = stats.gaussian_kde(data)
+    if custom_bounds is not None:
+      x = np.linspace(custom_bounds[0], custom_bounds[1], 200)
+    else:
+      x = np.linspace(0.8*data.min(), 1.2*data.max(),200)
+    dx = kde(x)
+    plt.clf()
+    pp = PdfPages(fig_file)
+    plt.plot(x,dx,color='black')
+    plt.xlim(x.min(), x.max())
+    if custom_y_bounds is not None:
+      plt.ylim(custom_y_bounds[0], custom_y_bounds[1])
+    plt.fill(x,dx, alpha=.75,color='#5673E0')
+    plt.xlabel(xlabel)
+    plt.ylabel("Estimated Equilibrium Population")
+    plt.title(title)
+    pp.savefig()
+    plt.show()
+    pp.close()
+  except:
+    print("Couldn't plot, likely due to singular matrix.")
+
+def compute_kde_difference(data_i, data_j, custom_bounds=None, n_points=200):
+  kde_i = stats.gaussian_kde(data_i)
+  kde_j = stats.gaussian_kde(data_j)
   if custom_bounds is not None:
-    x = np.linspace(custom_bounds[0], custom_bounds[1], 200)
+    x = np.linspace(custom_bounds[0], custom_bounds[1], n_points)
   else:
-    x = np.linspace(0.8*data.min(), 1.2*data.max(),200)
-  dx = kde(x)
-  plt.clf()
-  pp = PdfPages(fig_file)
-  plt.plot(x,dx,color='black')
-  plt.xlim(x.min(), x.max())
-  if custom_y_bounds is not None: 
-    plt.ylim(custom_y_bounds[0], custom_y_bounds[1])
-  plt.fill(x,dx, alpha=.75,color='#5673E0')
-  plt.xlabel(xlabel)
-  plt.ylabel("Estimated Equilibrium Population")
-  plt.title(title)
-  pp.savefig()
-  plt.show()
-  pp.close()
+    x = np.linspace(0.8*min(data_i.min(), data_j.min()), 1.2*(max(data_j.max(), data_i.max())),200)
+  dx_i = kde_i(x)
+  dx_j = kde_j(x)
+  dx = dx_i - dx_j
+  return x, dx
+
+def compute_and_plot_kde_difference(data_i, data_j, title, xlabel,
+                                    fig_file, custom_bounds=None,
+                                    custom_y_bounds=None,
+                                    crystal_values=None):
+  try:
+    kde_i = stats.gaussian_kde(data_i)
+    kde_j = stats.gaussian_kde(data_j)
+    if custom_bounds is not None:
+      x = np.linspace(custom_bounds[0], custom_bounds[1], 200)
+    else:
+      x = np.linspace(0.8*data_i.min(), 1.2*data_j.max(),200)
+    dx_i = kde_i(x)
+    dx_j = kde_j(x)
+    dx = dx_i - dx_j
+
+    plt.clf()
+    pp = PdfPages(fig_file)
+    plt.plot(x,dx,color='black')
+    plt.xlim(x.min(), x.max())
+    if custom_y_bounds is not None:
+      plt.ylim(custom_y_bounds[0], custom_y_bounds[1])
+    plt.fill_between(x,0,dx, alpha=.75,color='#5673E0')
+    plt.xlabel(xlabel)
+    plt.ylabel("Estimated Equilibrium Population")
+    plt.title(title)
+
+    if crystal_values is not None:
+      plt.axvline(x=crystal_values[0], color='b', ls='dashed')
+      plt.axvline(x=crystal_values[1], color='g', ls='dashed')
+
+    pp.savefig()
+    plt.show()
+    pp.close()
+  except:
+    print("Couldn't plot, likely due to singular matrix.")
+
+def plot_lp_pp_model_outcomes(importances_df, scores, save_dir, traj_features_df, n_pp_features=25,
+                              cutoff=5.,
+                              n_lp_features=25, protein_features=None, ref_features_df=None):
+  if protein_features is None:
+    order = np.argsort(np.abs(scores))
+    pp_features = importances_df.columns.values[order]
+    pp_features = pp_features[:min(25, len(pp_features))]
+  else:
+    pp_features = []
+    for protein_feature in protein_features:
+      pp_features += [n for n in importances_df.columns.values.tolist() if protein_feature in n]
+    print(pp_features)
+
+
+  for j, pp_feature in enumerate(pp_features):
+    print(pp_feature)
+    ori_pp_feature = copy.deepcopy(pp_feature)
+    if ori_pp_feature.count("<") == 2:
+      ori_pp_feature = ori_pp_feature.split(" < ")[1]
+    elif ori_pp_feature.count("<") == 1:
+      ori_pp_feature = ori_pp_feature.split(" < ")[0]
+    elif ">" in ori_pp_feature:
+      ori_pp_feature = ori_pp_feature.split(" > ")[0]
+    print(ori_pp_feature)
+
+    custom_bounds = [0.8*traj_features_df[ori_pp_feature].min(),
+                     1.2*traj_features_df[ori_pp_feature].max()]
+
+    pp_feature_dir = "%s/%s" %(save_dir, pp_feature)
+    if not os.path.exists(pp_feature_dir):
+      os.makedirs(pp_feature_dir)
+
+    df = importances_df[pp_feature].abs().sort(inplace=False, ascending=False)
+    df = importances_df[pp_feature].loc[[n for n in 
+                                        df.index.values.tolist() if "<" in n]].iloc[:n_lp_features]
+    df = df.loc[df > 0.]
+    print(df)
+
+    if ref_features_df is not None:
+      crystal_values = ref_features_df[ori_pp_feature].values.flatten()
+
+    for i in range(0, df.shape[0]):
+      lig_feature = df.index.values.tolist()[i]
+      if "<" in lig_feature:
+          lig_feature = lig_feature.split(" <")[0]
+      else:
+          continue
+      save_pdf = "%s/%s_difference.pdf" %(pp_feature_dir, lig_feature)
+      save_png = "%s/%s_difference.png" %(pp_feature_dir, lig_feature)
+
+      if os.path.exists(save_pdf):
+        continue
+      data_i = traj_features_df.loc[traj_features_df[lig_feature] < cutoff][ori_pp_feature].values
+      data_j = traj_features_df.loc[traj_features_df[lig_feature] > cutoff][ori_pp_feature].values
+
+      title = lig_feature.replace("Lig900", "BU72")
+      title_j = "Not %s" %df.index.values[i].replace("Lig900", "BU72")
+          #compute_and_plot_single_kde(data_i, title_i,
+          #                            "Phe289 to Asn150 Distance, Angstroms", "%s/%s.pdf" %(analysis_dir,title_i), custom_bounds=[5,16], custom_y_bounds=[0,.6])
+          #compute_and_plot_single_kde(data_j, title_j,
+          #                            "Phe289 to Asn150 Distance, Angstroms", "%s/%s.pdf" %(analysis_dir,title_j), custom_bounds=[5,16], custom_y_bounds=[0,.6])
+  
+      compute_and_plot_kde_difference(data_i, data_j, title, 
+                                      "%s Distance, Angstroms" %ori_pp_feature, 
+                                      save_file,
+                                      custom_bounds=custom_bounds, custom_y_bounds=[-.5,.5],
+                                      crystal_values=crystal_values, save_files=[save_png, save_df])
+
 
 def sample_tIC_regions(tica_coords, save_dir):
   if not os.path.exists(save_dir):
@@ -725,16 +850,16 @@ def sample_tIC_regions(tica_coords, save_dir):
     print grid.best_params_
     kde = KernelDensity(kernel='gaussian', bandwidth=grid.best_params_["bandwidth"]).fit(tic_coords)
     verbosedump(kde, os.path.join(save_dir, "kde_model_tIC_%d.h5" % (j+1)))
-    
+
     s = np.linspace(np.min(tic_coords), np.max(tic_coords), 100)
     e = kde.score_samples(s.reshape(-1,1))
-    
+
     plt.plot(s, e)
     pp = PdfPages(os.path.join(save_dir, "tIC_%d_kde.pdf" %(j+1)))
     plt.title("Kernel Density Estimator for tIC %d" % (j+1))
     pp.savefig()
     pp.close()
-    plt.clf()    
+    plt.clf()
 
 def sample_tIC_regions_silverman(tica_coords, save_dir):
   if not os.path.exists(save_dir):
@@ -748,16 +873,16 @@ def sample_tIC_regions_silverman(tica_coords, save_dir):
     print("bandwidth = %f" % bandwidth)
     kde = KernelDensity(kernel='gaussian', bandwidth=bandwidth).fit(tic_coords)
     verbosedump(kde, os.path.join(save_dir, "kde_model_tIC_%d.h5" % (j+1)))
-    
+
     s = np.linspace(np.min(tic_coords), np.max(tic_coords), 100)
     e = kde.score_samples(s.reshape(-1,1))
-    
+
     plt.plot(s, e)
     pp = PdfPages(os.path.join(save_dir, "tIC_%d_kde.pdf" %(j+1)))
     plt.title("Kernel Density Estimator for tIC %d" % (j+1))
     pp.savefig()
     pp.close()
-    plt.clf()    
+    plt.clf()
 
 #thanks to this for code suggestion:
 #http://stackoverflow.com/questions/35094454/how-would-one-use-kernel-density-estimation-as-a-one-1d-clustering-method-in-sci
@@ -795,6 +920,14 @@ def multi_binarizer(data, boundaries):
     new_data[np.where((data > boundaries[i]) & (data < boundaries[i+1]))[0]] = i + 1
   return new_data
 
+def name_bin(old_name, boundaries):
+  names = []
+  names.append("%s < %f" %(old_name, boundaries[0]))
+  for i in range(0, len(boundaries)-1):
+    names.append("%f < %s < %f" %(boundaries[i], old_name, boundaries[i+1]))
+  names.append("%s > %f" %(old_name, boundaries[len(boundaries)-1]))
+  return names
+
 def multi_onehot(data, boundaries):
   new_data = np.zeros((data.shape[0], len(boundaries)+1))
   new_data[np.where(data < boundaries[0])[0], 0] = 1.
@@ -803,6 +936,44 @@ def multi_onehot(data, boundaries):
     if i == (len(boundaries)-1): continue
     new_data[np.where((data > boundaries[i]) & (data < boundaries[i+1]))[0], i+1] = 1.
   return new_data
+
+def get_kde_and_multi_onehot(data, names=None):
+  new_data = []
+  new_names = []
+  for j in range(0, data.shape[1]):
+    print(j)
+    column = data[:,j]
+    kde_mins = get_kde_mins(column)
+    new_data.append(column, kde_mins)
+    if names is not None:
+      new_names.append(name_bin(names[j], kde_mins))
+  return new_data, new_names
+
+def multi_onehot_trajectories(data, names, custom_bounds=None, subsample=1):
+  data_conc = np.concatenate(data)[::subsample]
+  new_data = []
+  new_names = []
+  all_bounds = []
+  for j in range(0, data_conc.shape[1]):
+    if custom_bounds is not None:
+      bounds = custom_bounds
+      all_bounds.append(bounds)
+    else:
+      print(j)
+      column = data_conc[:,j]
+      bounds = get_kde_mins(column)
+      if len(bounds) == 0:
+        bounds = [np.average(column)]
+      all_bounds.append(bounds)
+    if names is not None:
+      new_names += name_bin(names[j], bounds)
+
+  for traj in data:
+    new_traj = [multi_onehot(traj[:,j], all_bounds[j]) for j in range(0, data_conc.shape[1])]
+    new_traj = np.concatenate(new_traj, axis=1)
+    new_data.append(new_traj)
+
+  return new_data, new_names
 
 def get_kde_mins(data):
   kde = stats.gaussian_kde(data)
@@ -834,7 +1005,7 @@ def sample_kde_maxima(tica_coords, kde_dir, trajs):
         print(index)
         sample = md.load_frame(trajs[index[0]], index=index[1])
         sample.save(os.path.join(kde_dir, "tIC_%d_%s_%d.pdb" %((j+1), str(maximum), ind)))
-      
+
 
     j += 1
     kde_maxima_file = os.path.join(kde_dir, "kde_model_tIC_%d_maxima.h5" % (j+1))
@@ -844,12 +1015,12 @@ def calculate_cluster_averages_per_feature(clusterer, features):
   Concatenate clusters into one long list
   Concatenate features
   for each cluster:
-    np.where 
-    then get those features 
+    np.where
+    then get those features
     np.mean over axis=0
-    store in new matrix 
+    store in new matrix
   """
-  n_clusters = clusterer.n_clusters 
+  n_clusters = clusterer.n_clusters
   concatenated_clusters = np.concatenate(clusterer.labels_)
   concatenated_features = np.concatenate(features)
   cluster_averages = np.zeros((n_clusters, concatenated_features.shape[1]))

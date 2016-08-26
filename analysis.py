@@ -139,7 +139,20 @@ def helix6_helix3_dist(traj, residues=[], residues_map = None):
 	dist = md.compute_distances(traj, indices) * 10.0
 	return np.concatenate(dist)
 
+def compute_closest_heavy(traj, residues=[], residues_map = None):
+	if residues_map is not None:
+		residues = map_residues(residues_map, residues)
 
+	atoms_i = [a.index for a in traj.topology.atoms if residues[0].is_mdtraj_res_equivalent(a.residue) and "H" not in a.name]
+	atoms_j = [a.index for a in traj.topology.atoms if residues[1].is_mdtraj_res_equivalent(a.residue) and "H" not in a.name]
+	pairs = []
+	for i in range(0, len(atoms_i)):
+		for j in range(i, len(atoms_j)):
+			pairs.append([atoms_i[i], atoms_j[j]])
+	pairs = np.array(pairs)
+	dist = md.compute_distances(traj, pairs) * 10.0
+	dist = np.amin(dist, axis=1)
+	return dist
 
 def plot_pnas_vs_docking(docking_dir, pnas_dir, save_dir, selected = False):
 	dock_scores = convert_csv_to_map_nocombine(docking_dir)
@@ -690,6 +703,8 @@ def analyze_docking_results_multiple(docking_dir, precision, ligands, summary, p
 	for subdir in subdirs:
 		print(subdir)
 		lig_name = subdir.split("/")[len(subdir.split("/"))-1]
+		if lig_name not in ligands:
+			continue
 		lig_names.append(lig_name)
 		#print lig_name
 		docking_summary = "%s/docking_summary.csv" %subdir

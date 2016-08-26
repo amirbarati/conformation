@@ -206,6 +206,50 @@ def dist_to_means(clusterer_dir, features_dir, n_samples = False, n_components =
 	print(sorted_map[0][0:10]) 
 	return sorted_map
 
+
+def save_md_snapshot(traj, frame, save_dir, lig_name="", save_string="", structure=None, residue_cutoff=10000):
+	if structure is None:
+		traj_frame = md.load_frame(traj, index=frame)
+	else:
+		traj_frame = md.load_frame(traj, index=frame, top=structure)
+	top = traj_frame.topology
+	prot_atoms = [a.index for a in top.atoms if a.residue.is_protein or lig_name in str(a.residue).upper()]
+	water_atoms = [a.index for a in top.atoms if a.residue.is_water]
+
+	atom_indices = [a.index for a in top.atoms if str(a.residue)[0:3] != "SOD" and str(a.residue)[0:3] != "CLA" and a.residue.resSeq < residue_cutoff and str(a.residue)[0:3] != "POP" and not a.residue.is_water]
+	for idx in atom_indices:
+		if idx not in atom_indices:
+			atom_indices.append(idx)
+	#try: 
+	if 1==1:
+	#print indices
+		if structure is None:
+			conformation = md.load_frame(traj, index=frame, atom_indices=sorted(atom_indices))
+		else:
+			conformation = md.load_frame(traj, index=frame, atom_indices=sorted(atom_indices), top=structure)		
+		conformation.save_pdb("%s/%s.pdb" %(save_dir, save_string))
+	#except:
+	#	print("can't find sample for cluster")
+
+def find_snapshots_within_feature_range(feature_dfs, feature, bounds, 
+																				trajectory_filenames, save_dir,
+																				save_string, n_save, lig_name="NON", 
+																				structure=None):
+	traj_frame_pairs = []
+	for traj_id, feature_df in enumerate(feature_dfs):
+		traj_frames = feature_df.loc[(feature_df[feature] > bounds[0]) & (feature_df[feature] < bounds[1])].index.values.tolist()
+		traj_frame_pairs += [(traj_id, traj_frame) for traj_frame in traj_frames]
+
+	for i, traj_frame_pair in enumerate(traj_frame_pairs):
+		print(traj_frame_pair)
+		if i == n_save: break
+		traj = traj_frame_pair[0]
+		traj_filename = trajectory_filenames[traj]
+		frame = traj_frame_pair[1]
+		print(traj_filename)
+		print(frame)
+		save_md_snapshot(traj_filename, frame, save_dir, lig_name, "%s_%d" %(save_string, i), structure)
+
 def get_sample(traj_frame_cluster_sample, trajectories, structure=None, residue_cutoff=10000, save_dir="", lig_name="UNK", reseed_dir=None):
 	traj_id, frame, cluster, sample = traj_frame_cluster_sample
 	print(traj_frame_cluster_sample)
