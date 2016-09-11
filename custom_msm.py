@@ -22,7 +22,7 @@ def plot_timescales(clusterer_dir, n_clusters, tica_dir, main="", lag_times=list
   #lag_times = list(np.arange(1,150,5))
   n_timescales = 5
 
-  msm_timescales = implied_timescales(sequences, lag_times, n_timescales=n_timescales, msm=MarkovStateModel(verbose=True))
+  msm_timescales = implied_timescales(sequences, lag_times, n_timescales=n_timescales, msm=MarkovStateModel(verbose=True, prior_counts=1e-5, ergodic_cutoff='off'))
   print(msm_timescales)
 
   for i in range(n_timescales):
@@ -36,11 +36,11 @@ def plot_timescales(clusterer_dir, n_clusters, tica_dir, main="", lag_times=list
   pp.close()
   plt.clf()
 
-def build_msm(clusterer_dir, lag_time, msm_model_dir, prior_counts=0.0):
+def build_msm(clusterer_dir, lag_time, msm_model_dir, prior_counts=0.0, ergodic_cutoff='on'):
   clusterer = verboseload(clusterer_dir)
   n_clusters = np.shape(clusterer.cluster_centers_)[0]
   labels = clusterer.labels_
-  msm_modeler = MarkovStateModel(lag_time=lag_time, prior_counts=prior_counts)
+  msm_modeler = MarkovStateModel(lag_time=lag_time, prior_counts=prior_counts, ergodic_cutoff=ergodic_cutoff)
   print(("fitting msm to trajectories with %d clusters and lag_time %d" %(n_clusters, lag_time)))
   msm_modeler.fit_transform(labels)
   print(msm_modeler)

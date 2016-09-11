@@ -2,7 +2,6 @@ from sklearn import mixture
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 import numpy as np
 import matplotlib
-reload(matplotlib)
 from matplotlib import pyplot as plt
 matplotlib.style.use('ggplot')
 from msmbuilder.dataset import dataset, _keynat, NumpyDirDataset
@@ -734,7 +733,8 @@ def compute_kde_difference(data_i, data_j, custom_bounds=None, n_points=200):
 def compute_and_plot_kde_difference(data_i, data_j, title, xlabel,
                                     fig_file, custom_bounds=None,
                                     custom_y_bounds=None,
-                                    crystal_values=None):
+                                    crystal_values=None,
+                                    show_plot=True):
   try:
     kde_i = stats.gaussian_kde(data_i)
     kde_j = stats.gaussian_kde(data_j)
@@ -761,15 +761,26 @@ def compute_and_plot_kde_difference(data_i, data_j, title, xlabel,
       plt.axvline(x=crystal_values[0], color='b', ls='dashed')
       plt.axvline(x=crystal_values[1], color='g', ls='dashed')
 
-    pp.savefig()
-    plt.show()
-    pp.close()
+    plt.savefig(fig_file)
+    if show_plot:
+      plt.show()
   except:
     print("Couldn't plot, likely due to singular matrix.")
 
-def plot_lp_pp_model_outcomes(importances_df, scores, save_dir, traj_features_df, n_pp_features=25,
+def get_ori_feature_name(feature_name):
+  ori_feature = copy.deepcopy(feature_name)
+  if ori_feature.count("<") == 2:
+    ori_feature = ori_feature.split(" < ")[1]
+  elif ori_feature.count("<") == 1:
+    ori_feature = ori_feature.split(" < ")[0]
+  elif ">" in ori_feature:
+    ori_feature = ori_feature.split(" > ")[0]
+  return ori_feature
+
+def plot_lp_pp_model_outcomes(importances_df, scores, save_dir, traj_features_df, onehot_features_df, n_pp_features=25,
                               cutoff=5.,
-                              n_lp_features=25, protein_features=None, ref_features_df=None):
+                              n_lp_features=25, protein_features=None, ref_features_df=None,
+                              show_plot=False, redo=True):
   if protein_features is None:
     order = np.argsort(np.abs(scores))
     pp_features = importances_df.columns.values[order]
@@ -783,13 +794,7 @@ def plot_lp_pp_model_outcomes(importances_df, scores, save_dir, traj_features_df
 
   for j, pp_feature in enumerate(pp_features):
     print(pp_feature)
-    ori_pp_feature = copy.deepcopy(pp_feature)
-    if ori_pp_feature.count("<") == 2:
-      ori_pp_feature = ori_pp_feature.split(" < ")[1]
-    elif ori_pp_feature.count("<") == 1:
-      ori_pp_feature = ori_pp_feature.split(" < ")[0]
-    elif ">" in ori_pp_feature:
-      ori_pp_feature = ori_pp_feature.split(" > ")[0]
+    ori_pp_feature = get_ori_feature_name(pp_feature)
     print(ori_pp_feature)
 
     custom_bounds = [0.8*traj_features_df[ori_pp_feature].min(),
@@ -809,21 +814,29 @@ def plot_lp_pp_model_outcomes(importances_df, scores, save_dir, traj_features_df
       crystal_values = ref_features_df[ori_pp_feature].values.flatten()
 
     for i in range(0, df.shape[0]):
-      lig_feature = df.index.values.tolist()[i]
-      if "<" in lig_feature:
-          lig_feature = lig_feature.split(" <")[0]
-      else:
-          continue
+      lig_feature = df.index.values.tolist()[i].replace("[", "").replace("]", "")
+      print(lig_feature)
+      print(type(lig_feature))
+      #lig_feature = get_ori_feature_name(lig_feature)
+
       save_pdf = "%s/%s_difference.pdf" %(pp_feature_dir, lig_feature)
       save_png = "%s/%s_difference.png" %(pp_feature_dir, lig_feature)
 
-      if os.path.exists(save_pdf):
+      if os.path.exists(save_pdf) and not redo:
         continue
-      data_i = traj_features_df.loc[traj_features_df[lig_feature] < cutoff][ori_pp_feature].values
-      data_j = traj_features_df.loc[traj_features_df[lig_feature] > cutoff][ori_pp_feature].values
+
+
+      data_i = traj_features_df.loc[onehot_features_df[lig_feature] == 1][ori_pp_feature].values
+      data_j = traj_features_df.loc[onehot_features_df[lig_feature] == 0][ori_pp_feature].values
+
+      print(lig_feature)
+      print(data_i.shape)
+      print(data_j.shape)
 
       title = lig_feature.replace("Lig900", "BU72")
-      title_j = "Not %s" %df.index.values[i].replace("Lig900", "BU72")
+      title = lig_feature.replace("Lig1", "SUF")
+
+      title_j = "Not %s" %df.index.values[i].replace("Lig900", "BU72").replace("Lig1", "SUF")
           #compute_and_plot_single_kde(data_i, title_i,
           #                            "Phe289 to Asn150 Distance, Angstroms", "%s/%s.pdf" %(analysis_dir,title_i), custom_bounds=[5,16], custom_y_bounds=[0,.6])
           #compute_and_plot_single_kde(data_j, title_j,
@@ -831,10 +844,10 @@ def plot_lp_pp_model_outcomes(importances_df, scores, save_dir, traj_features_df
   
       compute_and_plot_kde_difference(data_i, data_j, title, 
                                       "%s Distance, Angstroms" %ori_pp_feature, 
-                                      save_file,
-                                      custom_bounds=custom_bounds, custom_y_bounds=[-.5,.5],
-                                      crystal_values=crystal_values, save_files=[save_png, save_df])
-
+                                      save_pdf,
+                                      custom_bounds=custom_bounds, custom_y_bounds=[-0.7,0.7],
+                                      crystal_values=crystal_values,
+                                      show_plot=show_plot)
 
 def sample_tIC_regions(tica_coords, save_dir):
   if not os.path.exists(save_dir):
@@ -847,7 +860,7 @@ def sample_tIC_regions(tica_coords, save_dir):
                     cv=5, n_jobs=-1) # 20-fold cross-validation
     tic_coords = tica_coords[:,j].reshape(-1, 1)
     grid.fit(tic_coords)
-    print grid.best_params_
+    print(grid.best_params_)
     kde = KernelDensity(kernel='gaussian', bandwidth=grid.best_params_["bandwidth"]).fit(tic_coords)
     verbosedump(kde, os.path.join(save_dir, "kde_model_tIC_%d.h5" % (j+1)))
 
@@ -920,24 +933,30 @@ def multi_binarizer(data, boundaries):
     new_data[np.where((data > boundaries[i]) & (data < boundaries[i+1]))[0]] = i + 1
   return new_data
 
-def name_bin(old_name, boundaries):
+def name_bin(old_name, boundaries, binary_keep_one=True):
   names = []
   names.append("%s < %f" %(old_name, boundaries[0]))
+  if len(boundaries) == 1 and binary_keep_one:
+    return names 
+
   for i in range(0, len(boundaries)-1):
     names.append("%f < %s < %f" %(boundaries[i], old_name, boundaries[i+1]))
   names.append("%s > %f" %(old_name, boundaries[len(boundaries)-1]))
   return names
 
-def multi_onehot(data, boundaries):
+def multi_onehot(data, boundaries, binary_keep_one=True):
   new_data = np.zeros((data.shape[0], len(boundaries)+1))
   new_data[np.where(data < boundaries[0])[0], 0] = 1.
+  if len(boundaries) == 1 and binary_keep_one:
+    return new_data[:,0].reshape((-1,1))
+
   new_data[np.where(data > boundaries[len(boundaries)-1])[0], len(boundaries)] = 1.
   for i, minimum in enumerate(boundaries):
     if i == (len(boundaries)-1): continue
     new_data[np.where((data > boundaries[i]) & (data < boundaries[i+1]))[0], i+1] = 1.
   return new_data
 
-def get_kde_and_multi_onehot(data, names=None):
+def get_kde_and_multi_onehot(data, names=None, binary_keep_one=True):
   new_data = []
   new_names = []
   for j in range(0, data.shape[1]):
@@ -946,10 +965,11 @@ def get_kde_and_multi_onehot(data, names=None):
     kde_mins = get_kde_mins(column)
     new_data.append(column, kde_mins)
     if names is not None:
-      new_names.append(name_bin(names[j], kde_mins))
+      new_names.append(name_bin(names[j], kde_mins, binary_keep_one))
   return new_data, new_names
 
-def multi_onehot_trajectories(data, names, custom_bounds=None, subsample=1):
+def multi_onehot_trajectories(data, names, custom_bounds=None,
+                              subsample=1, binary_keep_one=True):
   data_conc = np.concatenate(data)[::subsample]
   new_data = []
   new_names = []
@@ -966,14 +986,30 @@ def multi_onehot_trajectories(data, names, custom_bounds=None, subsample=1):
         bounds = [np.average(column)]
       all_bounds.append(bounds)
     if names is not None:
-      new_names += name_bin(names[j], bounds)
+      new_names += name_bin(names[j], bounds, binary_keep_one)
 
   for traj in data:
-    new_traj = [multi_onehot(traj[:,j], all_bounds[j]) for j in range(0, data_conc.shape[1])]
+    new_traj = [multi_onehot(traj[:,j], all_bounds[j], binary_keep_one) for j in range(0, data_conc.shape[1])]
     new_traj = np.concatenate(new_traj, axis=1)
     new_data.append(new_traj)
 
   return new_data, new_names
+
+def make_edge_list(scores, importances_df, cutoff_score=0.8, cutoff_importance=0.):
+    importances_arr = importances_df.values
+    edge_tuples = []
+    x_names = importances_df.index.values
+    y_names = importances_df.columns.values
+    for j, score in enumerate(scores):
+        print(score)
+        if score > cutoff_score:
+            print(j)
+            importances = importances_arr[:,j]
+            for i, importance in enumerate(importances):
+                if importance > cutoff_importance:
+                    edge_tuples.append((x_names[i], y_names[j], importances[i]*score))
+    edge_df = pd.DataFrame(edge_tuples, columns=["feature_i", "feature_j", "importance"])
+    return edge_df
 
 def get_kde_mins(data):
   kde = stats.gaussian_kde(data)

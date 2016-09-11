@@ -12,7 +12,12 @@ def convert_residue_pairs_to_mdtraj_indices(top, residue_pairs):
       for j in indices:
         if j != ind_i: 
           #print("Warning: multiple res objects for residue %d " %resSeq0)
-          if "CB" in [str(a) for a in r.atoms for r in top.residues if r.index == ind_i]:
+          test_atoms = []
+          for r in top.residues:
+            if r.index != ind_i:
+              continue
+            test_atoms.append([str(a) for a in r.atoms])
+          if "CB" in test_atoms:
             ind_i = j
 
     indices = [r.index for r in top.residues if pair.residue_j.is_mdtraj_res_equivalent(r) and not r.is_water]
@@ -23,8 +28,12 @@ def convert_residue_pairs_to_mdtraj_indices(top, residue_pairs):
       ind_j = indices[0]
       for j in indices:
         if j != ind_j: 
-          #print("Warning: multiple res objects for residue %d " %resSeq0)
-          if "CB" in [str(a) for a in r.atoms for r in top.residues if r.index == ind_j]:
+          test_atoms = []
+          for r in top.residues:
+            if r.index != ind_j:
+              continue
+            test_atoms.append([str(a) for a in r.atoms])
+          if "CB" in test_atoms:
             ind_j = j
 
     resIndices.append((ind_i, ind_j))
@@ -45,7 +54,12 @@ def convert_residue_to_mdtraj_index(top, residue):
     for j in indices:
       if j != ind_i: 
         #print("Warning: multiple res objects for residue %d " %resSeq0)
-        if "CB" in [str(a) for a in r.atoms for r in top.residues if r.index == ind_i]:
+        test_atoms = []
+        for r in top.residues:
+          if r.index != ind_i:
+            continue
+          test_atoms.append([str(a) for a in r.atoms])
+        if "CB" in test_atoms:
           ind_i = j
   return ind_i 
 
@@ -69,8 +83,12 @@ def convert_atom_residue_pairs_to_mdtraj_indices(top, atom_residue_pairs):
       ind_i = indices[0]
       for j in indices:
         if j != ind_i: 
-          #print("Warning: multiple res objects for residue %d " %resSeq0)
-          if "CB" in [str(a) for a in r.atoms for r in top.residues if r.index == ind_i]:
+          test_atoms = []
+          for r in top.residues:
+            if r.index != ind_i:
+              continue
+            test_atoms.append([str(a) for a in r.atoms])
+          if "CB" in test_atoms:
             ind_i = j
     atom_residue_mdtraj_indices = (atom_mdtraj_index, ind_i)
     atom_residue_index_pairs.append(atom_residue_mdtraj_indices)
@@ -114,6 +132,9 @@ class Residue(object):
   def __ne__(self, other):
     return (not self.__eq__(other))
 
+  def __lt__(self, other):
+    return str(self) < str(other)
+
   def is_mdtraj_res_equivalent(self, mdtraj_res):
     if self.resSeq != mdtraj_res.resSeq:
       return False
@@ -153,6 +174,9 @@ class Atom(object):
   def __ne__(self, other):
     return (not self.__eq__(other))
 
+  def __lt__(self, other):
+    return str(self) < str(other)
+
   def is_mdtraj_atom_equivalent(self, mdtraj_atom):
     if self.resSeq is not None and self.resSeq != mdtraj_atom.residue.resSeq:
       return False
@@ -182,6 +206,9 @@ class ContactFeature(object):
   def __ne__(self, other):
     return (not self.__eq__(other))
 
+  def __lt__(self, other):
+    return str(self) < str(other)
+
   def __repr__(self):
     name = "%s to %s" %(str(self.residue_i), str(self.residue_j))
     return name
@@ -201,6 +228,9 @@ class DihedralFeature(object):
   def __ne__(self, other):
     return (not self.__eq__(other))
 
+  def __lt__(self, other):
+    return str(self) < str(other)
+
   def __repr__(self):
     name = "%s: %s" %(str(self.residue), self.dihedral_type)
     return name
@@ -216,6 +246,9 @@ class AromaticFeature(object):
 
   def __hash__(self):
     return hash(self.__repr__())
+
+  def __lt__(self, other):
+    return str(self) < str(other)
 
   def __ne__(self, other):
     return (not self.__eq__(other))

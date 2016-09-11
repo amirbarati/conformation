@@ -11,7 +11,12 @@ from functools import partial
 import scipy.io as sio
 import pickle
 import sys
+import subprocess
 
+def compat_verboseload(filename):
+	with open(filename, 'rb') as f:
+	    d = pickle.load(f, encoding='latin1') 
+	return d
 
 def get_base():
 	sherlock_base = "/scratch/users/enf/b2ar_analysis"
@@ -29,6 +34,9 @@ def get_base():
 	return(base)
 
 def save_dataset(data, path): 
+	if os.path.exists(path):
+		cmd = "rm -rf %s" %path
+		subprocess.call(cmd, shell=True)
 	ds = dataset(path, 'w', 'dir-npy')
 	for i in range(0,len(data)):
 		ds[i] = data[i]
@@ -47,7 +55,7 @@ def load_npz(filename):
 def load_file(filename):
 	print(("loading %s" %filename))
 	if filename.split(".")[1] == "h5":
-		return np.nan_to_num(np.transpose(verboseload(filename)))
+		return np.nan_to_num(np.transpose(compat_verboseload(filename)))
 	elif filename.split(".")[1] == "dataset":
 		return np.nan_to_num(np.array(load_dataset(filename)))
 	elif filename.split(".")[1] == "csv":
@@ -58,8 +66,7 @@ def load_file(filename):
 	elif filename.split(".")[1] == "npz":
 		return(np.nan_to_num(np.array(load_dataset(filename))))
 	elif filename.split(".")[1] == "pkl":
-		with open(filename, "rb") as f:
-			return(pickle.load(f))
+		return compat_verboseload(filename)
 
 def load_file_list(files, directory = None, ext = None):
 	print(directory)
@@ -76,7 +83,7 @@ def load_file_list(files, directory = None, ext = None):
 def load_features(filename):
 	print(("loading %s" %filename))
 	if filename.split(".")[1] == ".h5":
-		return np.nan_to_num(np.transpose(verboseload(filename)))
+		return np.nan_to_num(np.transpose(compat_verboseload(filename)))
 	else:
 		return np.nan_to_num(np.transpose(np.array(load_dataset(filename))))
 
@@ -158,7 +165,7 @@ def write_map_to_csv(filename, data_map, titles):
 def generateData(files):
 	for data in files:
 		print(data)
-		yield verboseload(data)
+		yield compat_verboseload(data)
 
 def generateTraj(files, top=None):
 	for traj in files:
@@ -349,7 +356,7 @@ def reverse_sign_csv(csv_file):
 
 def convert_matrix_to_map(matrix_file, traj_dir, ext, header, csv_file):
 	trajs = get_trajectory_files(traj_dir, ext = ext)
-	matrix = np.vstack(verboseload(matrix_file))
+	matrix = np.vstack(compat_verboseload(matrix_file))
 	values_map = {}
 	for i in range(0, np.shape(matrix)[0]):
 		traj = trajs[i]
@@ -362,7 +369,7 @@ def convert_matrix_to_map(matrix_file, traj_dir, ext, header, csv_file):
 
 
 def convert_matrix_list_to_list(np_file, csv_file):
-	matrix_list = verboseload(np_file)
+	matrix_list = compat_verboseload(np_file)
 	all_values = np.concatenate(matrix_list)
 	np.savetxt(csv_file, all_values, delimiter=",")
 	return all_values	 

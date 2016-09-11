@@ -370,7 +370,7 @@ def plot_all_tics_and_clusters(tica_dir, transformed_data_dir, clusterer_dir, la
 	if custom_cluster_centers is None:
 		clusterer = verboseload(clusterer_dir)
 		centers = clusterer.cluster_centers_
-	print centers
+	#print centers
 	if not concatenate:
 		num_tics = np.shape(transformed_data)[1]
 	else:
@@ -549,7 +549,7 @@ def rmsd_pymol(pdb_dir, ref_dir, script_dir, rmsd_dir):
 
 	for line in lines:
 		if line[0:7] == "pdb_dir": 
-			print ("found pdb line")
+			#print ("found pdb line")
 			line = "pdb_dir = '%s'\n" %pdb_dir
 		elif line[0:7] == "ref_dir": line = "ref_dir = '%s'\n" %ref_dir
 		elif line[0:8] == "rmsd_dir": line = "rmsd_dir = '%s'\n" %rmsd_dir
@@ -623,7 +623,7 @@ def analyze_log_file(log_file):
 	current_pose = 0
 	best_pose = 0
 	for line in lines:
-		line = line.split()
+		line = [w.decode("utf-8") for w in line.split()]
 		if len(line) >= 3:
 			if (line[0] == "Best" and line[1] == "XP" and line[2] == "pose:"):
 				current_pose += 1
@@ -635,7 +635,7 @@ def analyze_log_file(log_file):
 			elif  (line[0] == "Best" and line[1] == "Emodel="):
 				current_pose += 1
 				xp_score = float(line[8])
-				#print "%f, %f" %(xp_score, score)
+				#print("%f, %f" %(xp_score, score))
 				if xp_score < score:
 					score = xp_score
 					best_pose = current_pose
@@ -643,32 +643,29 @@ def analyze_log_file(log_file):
 	score = -1.0*score
 	return (conformation, score, best_pose)
 
-def analyze_docking_results(docking_dir, ligand, precision, docking_summary, redo = False):
-	print(("currently analyzing %s" %ligand))
-	if redo is False and os.path.exists(docking_summary):
-		print("Already collected dockking scores for this ligand.")
-		scores_map = convert_csv_to_map_nocombine(docking_summary)
-		return scores_map
-	else:
-		results_file = docking_summary
-		results = open(results_file, "wb")
-		logs = get_trajectory_files(docking_dir, ext = ".log")
-		scores_map = {}
+def analyze_docking_results(docking_dir, ligand, precision, docking_summary, redo = False, write_to_disk=False):
+	results_file = docking_summary
 
-		pool = mp.Pool(mp.cpu_count())
-		scores_list = pool.map(analyze_log_file, logs)
-		pool.terminate()
+	if os.path.exists(results_file):
+		if not redo:
+			return pd.read_csv(scores_df)
 
-		scores_df = pd.DataFrame(scores_list, columns=["sample", "%s" %("%s_%s_score" %(ligand, precision)), "best_pose_id"])
+	logs = get_trajectory_files(docking_dir, ext = ".log")
+	scores_list = []
 
+	for log in logs:
+		scores_list.append(analyze_log_file(log))
+
+	scores_df = pd.DataFrame(scores_list, columns=["sample", "%s" %("%s_%s_score" %(ligand, precision)), "best_pose_id"])
+	if write_to_disk:
 		scores_df.to_csv(results_file)
 
-		#scores_map = {score[0] : score[1] for score in scores_list}
-		#titles = ["sample", "%s" %("%s_%s_score" %(ligand, precision))]
-		#write_map_to_csv(results_file, scores_map, titles)
-		#merged_results = merge_samples(scores_map)
+	#scores_map = {score[0] : score[1] for score in scores_list}
+	#titles = ["sample", "%s" %("%s_%s_score" %(ligand, precision))]
+	#write_map_to_csv(results_file, scores_map, titles)
+	#merged_results = merge_samples(scores_map)
 		
-		return scores_df
+	return scores_df
 
 def analyze_docking_results_wrapper(args):
 	return analyze_docking_results(*args)
@@ -689,42 +686,63 @@ def listdirs(folder):
         if os.path.isdir(d)
     ]
 
-def analyze_docking_results_multiple(docking_dir, precision, ligands, summary, poses_summary=None, redo = False):
+def parse_log_file(result):
+	keep_columns = [c for c in result.columns.values.tolist() if "score" in c]
+	result.index = result['sample'].values
+
+	docking_pose = result["best_pose_id"]
+	result = result[keep_columns]
+
+	return (docking_pose, result)
+
+def get_arg_tuple(subdir, ligands=None, precision="SP", redo=False, write_to_disk=False):
+	lig_name = subdir.split("/")[len(subdir.split("/"))-1]
+	if ligands is not None:
+		if lig_name not in ligands:
+			return None
+	docking_summary = "%s/docking_summary.csv" %subdir
+	return([subdir, lig_name, precision, docking_summary, redo, write_to_disk])
+
+def analyze_docking_results_multiple(docking_dir, precision, summary, 
+																		 ligands=None, poses_summary=None, redo = False, 
+																		 write_to_disk=False):
+	if os.path.exists(summary) and not redo:
+		df = pd.read_csv(summary, index_col=0).transpose()
+		return df, None
+
 	print("Analyzing docking results")
 	print(docking_dir)
-	print(ligands)
 	subdirs = listdirs(docking_dir)
 	#print subdirs
 	results_list = []
 	lig_names = []
 	arg_tuples = []
 
-	docking_summaries = []
-	for subdir in subdirs:
-		print(subdir)
-		lig_name = subdir.split("/")[len(subdir.split("/"))-1]
-		if lig_name not in ligands:
-			continue
-		lig_names.append(lig_name)
-		#print lig_name
-		docking_summary = "%s/docking_summary.csv" %subdir
-		docking_summaries.append(docking_summary)
-		arg_tuples.append([subdir, lig_name, precision, docking_summary, redo])
+	print("Obtaining docking scores now...")
 
-	print(lig_names)
-	results_list = []
-	for arg_tuple in arg_tuples:
-		results_list.append(analyze_docking_results_wrapper(arg_tuple))
+	print(mp.cpu_count())
 
-	all_docking_results = []
-	all_docking_poses = []
-	for f in docking_summaries:
-		result = pd.read_csv(f)
-		keep_columns = [c for c in result.columns.values.tolist() if "score" in c]
-		result.index = result['sample'].values
-		all_docking_poses.append(result["best_pose_id"])
-		result = result[keep_columns]
-		all_docking_results.append(result)
+	pool = mp.Pool(mp.cpu_count())
+
+	get_arg_tuple_partial = partial(get_arg_tuple, ligands=ligands, precision=precision, redo=redo, write_to_disk=write_to_disk)
+	arg_tuples = pool.map(get_arg_tuple_partial, subdirs)
+	arg_tuples = [t for t in arg_tuples if t is not None]
+	lig_names = [t[1] for t in arg_tuples]
+
+	print("Obtained ligand arguments.")
+
+	results_list = pool.map(analyze_docking_results_wrapper, arg_tuples)
+	print("Examined all ligands.")
+
+	results = pool.map(parse_log_file, results_list)
+	print("Parsed all log files.")
+
+	pool.terminate()
+
+	print("Finished writing log files.")
+
+	all_docking_results = [t[1] for t in results]
+	all_docking_poses = [t[0] for t in results]
 
 	all_docking_poses = pd.concat(all_docking_poses, axis=1)
 	all_docking_poses.columns = lig_names
@@ -734,9 +752,7 @@ def analyze_docking_results_multiple(docking_dir, precision, ligands, summary, p
 	all_docking_results = pd.concat(all_docking_results, axis=1)
 	all_docking_results.columns = lig_names
 	all_docking_results.to_csv(summary)
-	return all_docking_results
-
-
+	return all_docking_results, all_docking_poses
 
 	#combined_map = combine_maps(results_list)
 	#combined_filename = summary
@@ -779,7 +795,6 @@ def compute_aggregate_scores(docking_csv, inverse_agonists = [], summary = "", z
 	scores_map = convert_csv_to_map_nocombine(docking_csv)
 	docking_titles = get_titles(docking_csv)
 	lig_names = docking_titles[1:len(docking_titles)]
-	print(lig_names)
 	scores_per_ligand = {}
 	for lig_name in lig_names:
 		scores_per_ligand[lig_name] = []

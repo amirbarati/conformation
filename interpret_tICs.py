@@ -139,8 +139,7 @@ def compute_residue_importances(df, percentile=95):
   return(residue_importances)
 
 def merge_importances_features(feature_importances_file, feature_residues_map, importances=None):
-  with open(feature_residues_map, "rb") as f:
-    feature_objects = pickle.load(f)
+  feature_objects = compat_verboseload(feature_residues_map)
 
   if importances is None:
     try:
@@ -193,8 +192,7 @@ def compute_per_residue_importance(df, percentile):
   return net_df
 
 def interpret_tIC_components(tica_filename, save_dir, feature_residues_pkl, n_tica_components=25, percentile=95):
-  with open(tica_filename) as f:
-    tica_object = pickle.load(f)
+  tica_object = compat_verboseload(tica_filename)
   tica_components = tica_object.components_
   features_with_non_zero_importances = []
   features_per_tIC = []
@@ -294,8 +292,7 @@ def plot_top_features_per_tIC(projected_tica_coords_file, features_dir, features
 
   for j in range(0, n_tica_components):
     print(("Examining tIC %d" %(j+1)))
-    with open("%s/tIC.%d_rfr_feature_importance_df.pkl" %(rf_dir, j), "rb") as f:
-      df = pickle.load(f)
+    df = compat_verboseload("%s/tIC.%d_rfr_feature_importance_df.pkl" %(rf_dir, j))
     df.sort(columns='importance', inplace=True, ascending=0)
     indices = df[:n_features]['index'].tolist()
     top_features_normalized = features[:,indices]
@@ -485,7 +482,7 @@ def compute_ks_matrix(data_i, data_j):
   for i in range(0, np.shape(data_i)[1]):
     for j in range(0, np.shape(data_j)[1]):
       ks_matrix[i][j] = ks_2samp(data_i[:,i], data_j[:,j])[0]
-      print ks_matrix[i][j]
+      print(ks_matrix[i][j])
   return ks_matrix
 
 
@@ -496,7 +493,7 @@ def compute_sr_matrix(data_i, data_j):
   for i in range(0, np.shape(data_i)[1]):
     for j in range(0, np.shape(data_j)[1]):
       sr_matrix[i][j] = spearmanr(data_i[:,i], data_j[:,j])[0]
-      print sr_matrix[i][j]
+      print(sr_matrix[i][j])
   return sr_matrix
 
 from scipy.stats import ranksums
@@ -506,7 +503,7 @@ def compute_rs_matrix(data_i, data_j):
   for i in range(0, np.shape(data_i)[1]):
     for j in range(0, np.shape(data_j)[1]):
       rs_matrix[i][j] = ranksums(data_i[:,i], data_j[:,j])[0]
-      print rs_matrix[i][j]
+      print(rs_matrix[i][j])
   return rs_matrix
 
 
@@ -550,51 +547,84 @@ def subsample_features(features_dir, indices, names, save_file, features=None, w
   with open(save_file, "wb") as f:
     pickle.dump(subsampled_features, f)
 
-def compute_sl_matrix(data_i, data_j, task="regression", model_type="rfr", n_trees=500, n_folds=5, max_depth=3):
-  scores = []
-  importances = np.zeros((np.shape(data_i)[1], np.shape(data_j)[1]))
-  for j in range(0, np.shape(data_j)[1]):
-    print("Examining response variable %d out of %d" %(j, np.shape(data_j)[1]))
+def compute_single_model(j, data_i, data_j, task, model_type, n_trees, n_folds, max_depth, symmetric):
+  print("Examining response variable %d out of %d" %(j, np.shape(data_j)[1]))
+  if symmetric:
+    X = data_i[:,list(range(0,j)) + list(range(j+1,data_i.shape[1]))]
+  else:
     X = data_i
-    y = data_j[:,j]
-    score = []
-    importance = []
-    for k in range(0, n_folds):
-      if task == "regression":
-        rfm = RandomForestRegressor(n_estimators = n_trees, max_depth=max_depth, max_features = 'sqrt', n_jobs=-1)
-        X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8)
-        rfm.fit(X_train, y_train)
-        score.append(rfm.score(X_test, y_test))
-        importance.append(rfm.feature_importances_)
+  y = data_j[:,j]
+  score = []
+  importance = []
+  for k in range(0, n_folds):
+    if task == "regression":
+      rfm = RandomForestRegressor(n_estimators = n_trees, max_depth=max_depth, max_features = 'sqrt', n_jobs=-1)
+      X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8)
+      rfm.fit(X_train, y_train)
+      score.append(rfm.score(X_test, y_test))
+      importance.append(rfm.feature_importances_)
+    else:
+      if "rf" in model_type:
+        rfm = RandomForestClassifier(n_estimators = n_trees, max_depth=max_depth, max_features = 'sqrt', n_jobs=-1)
+        try:
+          X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8, stratify=y)
+          rfm.fit(X_train, y_train)
+          y_test_matrix = np.eye(len(set(y_test.tolist())))[y_test.tolist()]
+          score.append(roc_auc_score(y_test_matrix,rfm.predict_proba(X_test)))
+          importance.append(rfm.feature_importances_)
+        except:
+          score.append(0.)
+          importance.append(np.zeros(np.shape(X)[1]))
       else:
-        if "rf" in model_type:
-          rfm = RandomForestClassifier(n_estimators = n_trees, max_depth=max_depth, max_features = 'sqrt', n_jobs=-1)
-          try:
-            X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8, stratify=y)
-            rfm.fit(X_train, y_train)
-            y_test_matrix = np.eye(len(set(y_test.tolist())))[y_test.tolist()]
-            score.append(roc_auc_score(y_test_matrix,rfm.predict_proba(X_test)))
-            importance.append(rfm.feature_importances_)
-          except:
-            score.append(0.)
-            importance.append(np.zeros(np.shape(X)[1]))
-        else:
-          rfm = LogisticRegressionCV()
-          try:
-            X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8, stratify=y)
-            rfm.fit(X_train, y_train)
-            y_test_matrix = np.eye(len(set(y_test.tolist())))[y_test.tolist()]
-            score.append(roc_auc_score(y_test_matrix,rfm.predict_proba(X_test)))
-            importance.append(rfm.coef_)
-          except:
-            score.append(0.)
-            importance.append(np.zeros(np.shape(X)[1]))
-    score = np.mean(score)
-    importance = np.mean(np.vstack(importance), axis=0)
+        rfm = LogisticRegressionCV()
+        try:
+          X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8, stratify=y)
+          rfm.fit(X_train, y_train)
+          y_test_matrix = np.eye(len(set(y_test.tolist())))[y_test.tolist()]
+          score.append(roc_auc_score(y_test_matrix,rfm.predict_proba(X_test)))
+          importance.append(rfm.coef_)
+        except:
+          score.append(0.)
+          importance.append(np.zeros(np.shape(X)[1]))
 
-    scores.append(score)
-    importances[:,j] = importance 
-  return scores, importances
+  score = np.mean(score)
+  importance = np.mean(np.vstack(importance), axis=0)
+  if symmetric:
+    arr = np.zeros(data_i.shape[1])
+    arr[:j] = importance[:j]
+    arr[(j+1):] = importance[j:]
+    importance = arr
+
+  return (score, importance)
+
+def compute_sl_matrix(data_i, data_j, task="regression", model_type="rfr",
+                      n_trees=500, n_folds=5, max_depth=3, symmetric=False, worker_pool=None, 
+                      parallel=False):
+  scores = []
+  importances_matrix = np.zeros((np.shape(data_i)[1], np.shape(data_j)[1]))
+  
+  compute_single_model_partial = partial(compute_single_model, data_i=data_i, data_j=data_j,
+                                         task=task, model_type=model_type, n_trees=n_trees,
+                                         n_folds=n_folds, max_depth=max_depth, symmetric=symmetric)
+
+  if worker_pool is not None:
+    score_importance_tuples = worker_pool.map_sync(compute_single_model_partial, range(0, np.shape(data_j)[1]))
+  elif parallel:
+    pool = mp.Pool(mp.cpu_count())
+    score_importance_tuples = pool.map(compute_single_model_partial, range(0, np.shape(data_j)[1]))
+    pool.terminate()
+  else:
+    score_importance_tuples = []
+    for j in range(0, np.shape(data_j)[1]):
+      score_importance_tuples.append(compute_single_model_partial(j))
+
+  scores = [t[0] for t in score_importance_tuples]
+  importances = [t[1] for t in score_importance_tuples]
+
+  for j, importance in enumerate(importances):
+    importances_matrix[:,j] = importance
+
+  return scores, importances_matrix
 
 def calculate_cluster_averages_per_feature(clusterer, features):
   n_clusters = clusterer.n_clusters 

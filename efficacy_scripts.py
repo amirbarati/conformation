@@ -74,11 +74,20 @@ def get_sample_coords(sample_indices, coords):
         sample_coords.append(cluster_coords)
     return sample_coords
 
+def analyze_docking_results_in_dir(docking_dir, ligands_dir, precision="SP", redo=False, write_to_disk=False):
+  ligands = get_ligands(ligands_dir)
+  summary = "%s/all_docking_summary.csv" %docking_dir
+  df = analyze_docking_results_multiple(docking_dir, precision=precision, 
+                                        summary=summary, ligands=ligands,
+                                        redo=redo, write_to_disk=write_to_disk)
+  return df
+
+
 def initialize_analysis(clusterer_dir, user_defined_coords, user_defined_names, biased_agonist_dir, agonist_dir, inverse_agonist_dir, docking_dir,
                         precision, docking_multiple_ligands, aggregate_docking, feature_residues_pkl, n_components, top_features,
                         lag_time, n_clusters, projected_features_dir, traj_dir, traj_ext, tica_dir,
                         prior_counts, msm_object, analysis_dir, n_samples):
-  clusterer = verboseload(clusterer_dir)
+  clusterer = compat_verboseload(clusterer_dir)
   cluster_averages = calculate_cluster_averages_per_feature(clusterer, user_defined_coords)
   cluster_averages = pd.DataFrame(cluster_averages, columns=user_defined_names)
   active_clusters = cluster_averages.loc[(cluster_averages["rmsd_npxxy_active"] < 0.5) & (cluster_averages["tm6_tm3_dist"] > 12.) & (cluster_averages["tm6_tm3_dist"] < 15.)]
@@ -97,7 +106,7 @@ def initialize_analysis(clusterer_dir, user_defined_coords, user_defined_names, 
   with open(feature_residues_pkl, "rb") as f:
       feature_residues = pickle.load(f)
 
-  tica_coords = verboseload(projected_features_dir)
+  tica_coords = compat_verboseload(projected_features_dir)
 
   pp_n_components = n_components
   apriori_dfs = []
@@ -116,7 +125,7 @@ def initialize_analysis(clusterer_dir, user_defined_coords, user_defined_names, 
 
   clusters_map = make_clusters_map(clusterer)
   tica_resampled_file = os.path.join(tica_dir, "tica_msm_lag-time%d_clusters%d_resampled.h5" %(lag_time, n_clusters))
-  projected_features = verboseload(projected_features_dir)
+  projected_features = compat_verboseload(projected_features_dir)
 
   num_trajs = len(get_trajectory_files(traj_dir, traj_ext))
 
@@ -126,10 +135,10 @@ def initialize_analysis(clusterer_dir, user_defined_coords, user_defined_names, 
       resampled_traj_to_frames = resample_by_msm(total_samples, msm_object, clusters_map, num_trajs, resampled_traj_to_frames_file)
 
       resample_features_by_msm_equilibirum_pop(projected_features, resampled_traj_to_frames, tica_resampled_file)
-      tica_resampled = verboseload(tica_resampled_file)
+      tica_resampled = compat_verboseload(tica_resampled_file)
       pnas_resampled_file = os.path.join(tica_dir, "pnas_resampled.h5")
       resample_features_by_msm_equilibirum_pop(user_defined_coords, resampled_traj_to_frames, pnas_resampled_file)
-      pnas_resampled = verboseload(pnas_resampled_file)
+      pnas_resampled = compat_verboseload(pnas_resampled_file)
 
       resampled_traj_index_pairs = []
       for traj in resampled_traj_to_frames.keys():
@@ -153,7 +162,7 @@ def initialize_analysis(clusterer_dir, user_defined_coords, user_defined_names, 
   n_steps = 10000
   save_file = "%s/msm_traj_index_pairs.h5" % (tica_dir)
   #msm_traj_index_pairs = generate_msm_traj_index_series(msm_object, random.choice(active_clusters.index.values.tolist()), n_steps, bu72_pp_clusters_map, save_file)
-  #msm_traj_index_pairs = verboseload(save_file)
+  #msm_traj_index_pairs = compat_verboseload(save_file)
   features_eq, all_traj_features = reweight_features_by_msm(msm_object)
 
 
@@ -165,13 +174,13 @@ def initialize_analysis(clusterer_dir, user_defined_coords, user_defined_names, 
                             n_samples, samples_dir, samples_indices_file, structure=None,
                             residue_cutoff=10000, parallel=True,
                             worker_pool=None)
-      clusters_map = make_clusters_map(verboseload(clusterer_dir))
+      clusters_map = make_clusters_map(compat_verboseload(clusterer_dir))
   
   with open(feature_residues_pkl, "rb") as f:
     feature_names = pickle.load(f)
 
-  samples_indices = verboseload(samples_indices_file)
-  tica_coords = verboseload(projected_features_dir)
+  samples_indices = compat_verboseload(samples_indices_file)
+  tica_coords = compat_verboseload(projected_features_dir)
   
   samples_tica = []
   samples_pnas = []
@@ -182,7 +191,7 @@ def initialize_analysis(clusterer_dir, user_defined_coords, user_defined_names, 
     samples_tica = get_sample_coords(samples_indices, tica_coords)
     verbosedump(samples_tica, samples_tica_file)
   else:
-    samples_tica = verboseload(samples_tica_file)
+    samples_tica = compat_verboseload(samples_tica_file)
   samples_tica_avg_df = pd.DataFrame([np.mean(t, axis=0) for t in samples_tica], index=["cluster%d" %i for i in range(0,n_clusters)], columns=["tIC.%d" %i for i in range(1, n_components+1)])
 
   samples_pnas_file = "%s/clusterer_%dclusters_%dsamples_samples_kdtree_pnas.h5" %(tica_dir, n_clusters, n_samples)
@@ -190,7 +199,7 @@ def initialize_analysis(clusterer_dir, user_defined_coords, user_defined_names, 
   samples_pnas = get_sample_coords(samples_indices, user_defined_coords)
   verbosedump(samples_pnas, samples_pnas_file)
   #else:
-  #  samples_pnas = verboseload(samples_pnas_file)
+  #  samples_pnas = compat_verboseload(samples_pnas_file)
   samples_pnas_avg_df = pd.DataFrame([np.mean(t, axis=0) for t in samples_pnas], index=["cluster%d" %i for i in range(0,n_clusters)], columns=user_defined_names)
 
   samples_features_file = "%s/clusterer_%dclusters_%dsamples_samples_kdtree_features.h5" %(tica_dir, n_clusters, n_samples)
@@ -198,7 +207,7 @@ def initialize_analysis(clusterer_dir, user_defined_coords, user_defined_names, 
   samples_features = get_sample_coords(samples_indices, [x.values for x in top_features])
     #verbosedump(samples_features, samples_features_file)
   #else:
-  #  samples_features = verboseload(samples_features_file)
+  #  samples_features = compat_verboseload(samples_features_file)
   samples_features_avg_df = pd.DataFrame([np.mean(t, axis=0) for t in samples_features], index=["cluster%d" %i for i in range(0,n_clusters)], columns=[str(f) for f in top_features[0].columns.values.tolist()])
 
   """
@@ -211,7 +220,7 @@ def initialize_analysis(clusterer_dir, user_defined_coords, user_defined_names, 
     samples_normalized_features = get_sample_coords(samples_indices, normalized_features)
     verbosedump(samples_normalized_features, samples_normalized_features_file)
   else:
-    samples_normalized_features = verboseload(samples_normalized_features_file)
+    samples_normalized_features = compat_verboseload(samples_normalized_features_file)
     samples_normalized_features_avg_df = pd.DataFrame([np.mean(t, axis=0) for t in samples_normalized_features], index=["cluster%d" %i for i in range(0,n_clusters)], columns=[str(f) for f in feature_names])
   """
 
@@ -771,7 +780,48 @@ def do_regression_experiment(features, y, feature_names, n_trials, train_size=0.
     
     return results_dict
 
-def do_classification_experiment(features, y, feature_names, n_trials, train_size=0.8, regularize=False, model="rfr"):
+class RegularizedModel(object):
+
+  def __init__(self, sklearn_model, retained_features=None):
+    self.sklearn_model = sklearn_model
+    self.retained_features = retained_features
+
+  def predict(self, X):
+    X = self.pre_regularize(X)
+    y_pred = self.sklearn_model.predict(X)
+    return(y_pred)
+
+  def predict_proba(self, X):
+    X = self.pre_regularize(X)
+    proba = self.sklearn_model.predict_proba(X)
+    return(proba)
+
+  def pre_regularize(self, X):
+    if self.retained_features is not None:
+      X = X[:, self.retained_features]
+    return X
+
+def generate_or_load_model(features, y, featurizer_names, 
+                           n_trials, train_test_split_p,
+                           manual_regularize, model_name, filename,
+                           redo=True):
+    
+    if os.path.exists(filename) and not redo:
+        with open(filename, "rb") as f:
+            model = pickle.load(f)
+        return(model)
+    else:
+        model = do_classification_experiment(features, y, featurizer_names,
+                                             n_trials, train_test_split_p, 
+                                             regularize=manual_regularize,
+                                             model=model_name)
+        with open(filename, "wb") as f:
+            pickle.dump(model, f, protocol=2)
+        return(model)
+
+def do_classification_experiment(features, y, feature_names,
+                                 n_trials, train_size=0.8,
+                                 regularize=False, model="rfr"):
     test_accuracies = []
     test_aucs = []
     test_log_aucs = []
@@ -780,6 +830,47 @@ def do_classification_experiment(features, y, feature_names, n_trials, train_siz
 
     features_y = copy.deepcopy(features)
     features_y.append(y)
+
+    results_dict = {} 
+
+    print("Fitting models over all data...")
+    for feature_ind, X_train in enumerate(features):
+      sc = StandardScaler()
+      sc.fit(X_train)
+      X_train = sc.transform(X_train)
+      y_train = copy.deepcopy(y)
+      if model == "rfr":
+        rfr = RandomForestClassifier(n_estimators=1000, max_depth=3, max_features='sqrt', n_jobs=-1, oob_score=False)
+        rfr.fit(X_train, y_train)
+        if not regularize:
+            results_dict[feature_names[feature_ind]] = (rfr, rfr.feature_importances_)
+        else:
+            f = np.zeros(X_train.shape[1])
+            top_indices = np.argsort(rfr.feature_importances_*-1.)[:(X_train.shape[0]/2)]
+            rfr = RandomForestClassifier(n_estimators=500, max_depth=3, max_features='sqrt', n_jobs=-1, oob_score=False)
+            X_train = X_train[:, top_indices]
+            rfr.fit(X_train, y_train)
+            final_rfr = RegularizedModel(sklearn_model=rfr, retained_features=top_indices)
+            f[top_indices] = rfr.feature_importances_
+            results_dict[feature_names[feature_ind]] = (final_rfr, f)
+
+      elif model=="logistic_cv":
+        rfr = linear_model.LogisticRegressionCV()
+        rfr.fit(X_train, y_train)
+        if not regularize:
+            results_dict[feature_names[feature_ind]] = (rfr, rfr.coef_)
+        else:
+            f = np.zeros(X_train.shape[1])
+            top_indices = np.argsort(np.abs(rfr.coef_)*-1.)[:(X_train.shape[0]/2)].flatten()
+            rfr = linear_model.LogisticRegressionCV()
+            X_train = X_train[:, top_indices]
+            rfr.fit(X_train, y_train)
+            final_rfr = RegularizedModel(sklearn_model=rfr, retained_features=top_indices)
+            f[top_indices] = rfr.coef_
+            results_dict[feature_names[feature_ind]] = (final_rfr, f)
+
+
+    print("Fitting models over split train data...")
     
     for j in range(0,n_trials):
         print(j)
@@ -807,7 +898,7 @@ def do_classification_experiment(features, y, feature_names, n_trials, train_siz
                   feature_importance.append(rfr.feature_importances_)
               else:
                   f = np.zeros(X_train.shape[1])
-                  top_indices = np.argsort(rfr.feature_importances_*-1.)[:min(10, X_train.shape[1])]
+                  top_indices = np.argsort(rfr.feature_importances_*-1.)[:(X_train.shape[0]/2)]
                   rfr = RandomForestClassifier(n_estimators=500, max_depth=3, max_features='sqrt', n_jobs=-1, oob_score=False)
                   X_train = X_train[:, top_indices]
                   X_test = X_test[:, top_indices]
@@ -815,9 +906,9 @@ def do_classification_experiment(features, y, feature_names, n_trials, train_siz
                   f[top_indices] = rfr.feature_importances_
                   feature_importance.append(f)
             elif model=="logistic_cv":
-
               rfr = linear_model.LogisticRegressionCV()
               rfr.fit(X_train, y_train)
+              #print(rfr.coef_)
               if not regularize:
                   feature_importance.append(rfr.coef_)
               else:
@@ -853,11 +944,13 @@ def do_classification_experiment(features, y, feature_names, n_trials, train_siz
         test_log_aucs.append(log_aucs)
         test_roc_aucs.append(roc_aucs)
     
-    results_dict = {"test_accuracies": test_accuracies,
+    results_dict.update({"test_accuracies": test_accuracies,
                     "test_aucs": test_aucs,
                     "test_log_aucs": test_log_aucs,
                     "test_roc_aucs": test_roc_aucs,
-                    "feature_importances": feature_importances}
+                    "feature_importances": feature_importances})
+
+
     #return test_accuracies, test_aucs, test_log_aucs, C_test_aucs, C_test_log_aucs, feature_importances
     return results_dict
 
@@ -1005,7 +1098,10 @@ def test_auc_significance(test_aucs, featurizer_names, exp_title, save_dir):
   plt.savefig("%s/%s_%s_auc_significance.pdf" %(save_dir, exp_title, str(featurizer_names)))#, transparent=True)
   plt.show()
 
-def analyze_multiclass_experiment(results_dict, featurizer_names, feature_names, drug_names, save_dir, class_names, X, coef_name="Importance", exp_title=""):
+def analyze_multiclass_experiment(results_dict, featurizer_names, 
+                                  all_feature_names, drug_names, save_dir, 
+                                  class_names, X, coef_name="Importance", 
+                                  exp_title=""):
   """
   Takes a dictionary mapping model result type (feature importances, AUC's, etc.)
     to the results across many trials.
@@ -1014,37 +1110,54 @@ def analyze_multiclass_experiment(results_dict, featurizer_names, feature_names,
      with one array per trial. The function then finds average feature_importance
      for each feature for each class among all the trials
   """
-  X_df = pd.DataFrame(X, columns=feature_names, index=drug_names)
-  test_auc_significance(results_dict["test_roc_aucs"], featurizer_names, exp_title, save_dir)
+  X_df = pd.DataFrame(X, columns=all_feature_names[1], index=drug_names)
+  test_auc_significance(results_dict["test_roc_aucs"],
+                        featurizer_names, exp_title, save_dir)
+  make_auc_df(results_dict["test_roc_aucs"], 
+              featurizer_names, exp_title, save_dir)
 
-  feature_importances = results_dict["feature_importances"]
-  avg = np.zeros(feature_importances[0][1].shape)
-  for feature_importance in feature_importances:
-    avg += feature_importance[1]
-  avg /= len(feature_importances)
-  if len(avg.shape) == 1:
-    avg = avg.reshape((1,-1))
-  for class_id in range(0, avg.shape[0]):
-    importance_df = pd.DataFrame(avg[class_id,:], index=feature_names, columns=["Importance"]).sort(["Importance"],inplace=False)
-    if importance_df.shape[0] > 30:
-      importance_df = pd.concat([importance_df.iloc[:20], importance_df.iloc[range(importance_df.shape[0]-20, importance_df.shape[0])]], axis=0)
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    importance_df.plot(kind='barh', ax=ax)
-    fig.patch.set_alpha(0.)
-    plt.xlabel("Feature Importance")
-    plt.ylabel("Feature")
-    if avg.shape[0] < 2:
-      class_id=1
-    title = "Feature Importances: %s" %str(class_names[class_id])
-    plt.title(title)
-    plt.tight_layout()
-    plt.savefig("%s/%s_%s.pdf" %(save_dir, exp_title, title))#, transparent=True)
-    plt.show()
+  for k, featurizer_name in enumerate(featurizer_names):
+    feature_names = all_feature_names[k]
 
-  make_auc_df(results_dict["test_roc_aucs"], featurizer_names, exp_title, save_dir)
+    feature_importances = results_dict["feature_importances"]
+    avg = np.zeros(feature_importances[0][k].shape)
+    print(feature_importances[0][k].shape)
+    for feature_importance in feature_importances:
+      avg += feature_importance[k]
+    avg /= len(feature_importances)
+    if len(avg.shape) == 1:
+      avg = avg.reshape((1,-1))
+    print(avg.shape)
+    for class_id in range(0, avg.shape[0]):
+      importance_df = pd.DataFrame(avg[class_id,:], 
+                                   index=feature_names,
+                                   columns=["Importance"]).sort(["Importance"],
+                                   inplace=False)
+
+      if importance_df.shape[0] > 30:
+        importance_df = pd.concat([importance_df.iloc[:20], 
+                                   importance_df.iloc[range(importance_df.shape[0]-20,
+                                   importance_df.shape[0])]], axis=0)
+      fig = plt.figure()
+      ax = fig.add_subplot(111)
+      importance_df.plot(kind='barh', ax=ax)
+      fig.patch.set_alpha(0.)
+      plt.xlabel("Feature Importance")
+      plt.ylabel("Feature")
+      if avg.shape[0] < 2:
+        class_id=1
+      title = "Feature Importances: %s" %str(class_names[class_id])
+      plt.title(title)
+      plt.tight_layout()
+      plt.savefig("%s/%s_%s_%s.pdf" %(save_dir, exp_title, featurizer_name, title))#, transparent=True)
+      plt.show()
+
+
+
   if not os.path.exists("%s/ligands_vs_msm_states_ddg.pdf" %(save_dir)):
-    plot_clustermap(standardize_df(X_df), save_file="%s/ligands_vs_msm_states_ddg.pdf" %(save_dir), method='average', z_score=None)
+    plot_clustermap(standardize_df(X_df), 
+                    save_file="%s/ligands_vs_msm_states_ddg.pdf" %(save_dir), 
+                    method='average', z_score=None)
 
 
   return
@@ -1127,7 +1240,7 @@ def analyze_classification_experiment(test_aucs, feature_importances, feature_na
     
     return importances_df, results_df
 
-def compare_feature_to_apo(lig_features_eq, ligands, reference_ligand, feature):
+def compare_feature_to_apo(lig_features_eq, ligands, reference_ligand, feature, save_file=None):
   #kde_array = np.zeros((len(ligands), lig_features_eq[lig_features_eq.keys()[0]].shape[0]))
   ref_data = lig_features_eq[reference_ligand][feature].values
   custom_bounds = [0.8*ref_data.min(), 1.2*ref_data.max()]
@@ -1141,12 +1254,13 @@ def compare_feature_to_apo(lig_features_eq, ligands, reference_ligand, feature):
   kde_array = np.array(dx_rows).T
   print(kde_array.shape)
   df = pd.DataFrame(kde_array, columns=ligands, index=x)
-  df.plot(colormap='rainbow')
+  df.plot(colormap='rainbow', linewidth=3.)
   plt.legend(loc='center left', bbox_to_anchor=(1.0, 0.5))
   plt.xlabel("%s Distance, Angstroms" %feature)
   plt.ylabel("Change compared to %s" %reference_ligand)
-
-def plot_overall_kde(lig_features_eq, ligands, feature):
+  if save_file is not None:
+    plt.savefig(save_file)
+def plot_overall_kde(lig_features_eq, ligands, feature, save_file=None):
   #kde_array = np.zeros((len(ligands), lig_features_eq[lig_features_eq.keys()[0]].shape[0]))
   custom_bounds = [0.8*lig_features_eq["apo"][feature].values.min(), 1.2*lig_features_eq["apo"][feature].values.max()]
   dx_rows = []
@@ -1158,8 +1272,10 @@ def plot_overall_kde(lig_features_eq, ligands, feature):
   kde_array = np.array(dx_rows).T
   print(kde_array.shape)
   df = pd.DataFrame(kde_array, columns=ligands, index=x)
-  df.plot(colormap='rainbow')
+  df.plot(colormap='rainbow', linewidth=3.)
   plt.xlabel("%s Distance, Angstroms" %feature)
   plt.legend(loc='center left', bbox_to_anchor=(1.0, 0.5))
+  if save_file is not None:
+    plt.savefig(save_file)
 
 

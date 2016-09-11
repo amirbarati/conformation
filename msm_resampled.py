@@ -48,7 +48,7 @@ def traj_index_series_from_dict(traj_index_dict):
 
 def resample_features_by_msm_equilibirum_pop(features, traj_to_frames, save_file=None):
   resampled_features = []
-  for traj_index, frames in traj_to_frames.iteritems():
+  for traj_index, frames in traj_to_frames.items():
     if isinstance(features[0], pd.DataFrame):
       resampled_features.append(features[traj_index].iloc[frames])
     else:
@@ -64,18 +64,21 @@ def resample_features_by_msm_equilibirum_pop(features, traj_to_frames, save_file
   else:
     return resampled_features
 
-def generate_msm_traj_index_series(msm_object, start_cluster, n_steps, clusters_map, save_file):
+def generate_msm_traj_index_series(msm_object, start_cluster, n_steps, clusters_map, save_file=None):
   inv_map = {v: k for k, v in msm_object.mapping_.items()}
   msm_trajectory = msm_object.sample_discrete(state=start_cluster, n_steps=n_steps)
 
   traj_index_pairs = []
+  clusters = []
   for state in msm_trajectory:
     cluster = state #inv_map[state]
+    clusters.append(cluster)
     traj_index_pair = random.choice(list(clusters_map[cluster]))
     traj_index_pairs.append(traj_index_pair)
 
-  verbosedump(traj_index_pairs, save_file)
-  return traj_index_pairs
+  if save_file is not None:
+    verbosedump(traj_index_pairs, save_file)
+  return traj_index_pairs, clusters
 
 def generate_tpt_traj_index_series(msm_object, sources, sinks, clusters_map, num_paths, remove_path, save_file):
   net_flux = tpt.net_fluxes(sources, sinks, msm_object)

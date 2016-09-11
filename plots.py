@@ -3,7 +3,6 @@ from matplotlib import pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 plt.style.use('ggplot')
 from io_functions import *
-import corner
 import pandas as pd
 import seaborn as sns
 import multiprocessing as mp
@@ -57,6 +56,9 @@ def plot_histograms(data_file, save_dir, main, titles=None):
   pool.map(plot_histogram_partial, range(0, np.shape(data)[1]))
   pool.terminate()
 
+"""
+#Not included yet in Python 3 version of this code.
+
 def plot_corner(data_file, plot_file, title, x_prefix, chosen_columns=None):
   data = np.concatenate(load_file(data_file))
   if chosen_columns is not None:
@@ -73,6 +75,7 @@ def plot_corner(data_file, plot_file, title, x_prefix, chosen_columns=None):
   pp = PdfPages(plot_file)
   pp.savefig(figure)
   pp.close()
+"""
 
 def plot_seaborn(data_file, plot_file, title, x_prefix, chosen_columns=None):
   data = np.concatenate(load_file(data_file))

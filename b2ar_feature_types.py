@@ -59,10 +59,20 @@ feature_name_residues_dict["rmsd_connector_inactive"] = connector_residues
 feature_name_residues_dict["Ala59-Leu266_ca_dist"] = convert_list_to_resobject_list([("A", 59), ("C", 266)])
 feature_name_residues_dict["Thr66-Leu266_ca_dist"] = convert_list_to_resobject_list([("A", 66), ("C", 266)])
 feature_name_residues_dict["Asn148-Leu266_ca_dist"] = convert_list_to_resobject_list([("A", 148), ("C", 266)])
+
+feature_name_residues_dict["Ala59-Leu266_closest_dist"] = convert_list_to_resobject_list([("A", 59), ("C", 266)])
+feature_name_residues_dict["Thr66-Leu266_closest_dist"] = convert_list_to_resobject_list([("A", 66), ("C", 266)])
+feature_name_residues_dict["Asn148-Leu266_closest_dist"] = convert_list_to_resobject_list([("A", 148), ("C", 266)])
+
 feature_name_residues_dict["Glu268-Arg328_closest_dist"] = convert_list_to_resobject_list([("C", 268), ("C", 328)])
 feature_name_residues_dict["Phe282-Ile325_closest_dist"] = convert_list_to_resobject_list([("C", 282), ("C", 325)])
 feature_name_residues_dict["Leu266_Arg333_closest_dist"] = convert_list_to_resobject_list([("C", 266), ("C", 333)])
 feature_name_residues_dict["Asn148_Arg333_closest_dist"] = convert_list_to_resobject_list([("A", 148), ("C", 333)])
+
+feature_name_residues_dict["Glu268-Arg328_ca_dist"] = convert_list_to_resobject_list([("C", 268), ("C", 328)])
+feature_name_residues_dict["Phe282-Ile325_ca_dist"] = convert_list_to_resobject_list([("C", 282), ("C", 325)])
+feature_name_residues_dict["Leu266_Arg333_ca_dist"] = convert_list_to_resobject_list([("C", 266), ("C", 333)])
+feature_name_residues_dict["Asn148_Arg333_ca_dist"] = convert_list_to_resobject_list([("A", 148), ("C", 333)])
 
 
 #feature_types = "_switches_tm6"

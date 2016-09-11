@@ -14,7 +14,7 @@ import subprocess
 from subprocess import Popen
 import sys
 from io_functions import *
-
+import random
 import signal
 import zipfile
 
@@ -127,7 +127,7 @@ def prepare_ligand(lig, lig_dir, n_ring_conf, n_stereoisomers, force_field, verb
 		cmd = "unset PYTHONPATH; $SCHRODINGER/utilities/sdconvert -isd %s -omae %s" %(lig, intermediate_file)
 		subprocess.call(cmd, shell=True)
 
-	ligfile = open(lig_input, "wb")
+	ligfile = open(lig_input, "w")
 	ligfile.write("INPUT_FILE_NAME   %s \n" %lig_mae)
 	ligfile.write("OUT_MAE   %s \n" %lig_output)
 	ligfile.write("FORCE_FIELD   %d \n" %force_field)
@@ -214,7 +214,7 @@ def generate_grid_input(mae, grid_center, grid_dir, remove_lig = None, outer_box
 		print(cmd)
 		subprocess.call(cmd, shell=True)
 
-	gridfile = open(grid_job, "wb")
+	gridfile = open(grid_job, "w")
 	gridfile.write("GRIDFILE   %s.zip \n" %mae_last_name)
 	gridfile.write("OUTPUTDIR   %s \n" %output_dir)
 	gridfile.write("GRID_CENTER   %s \n" %grid_center)
@@ -335,21 +335,21 @@ def run_command(cmd):
 	subprocess.call(cmd, shell = True)
 
 def dock(dock_job):
-	signal.alarm(300)
+	#signal.alarm(1000000)
 	docking_dir = os.path.dirname(dock_job)
 	os.chdir(docking_dir)
 	cmd = "$SCHRODINGER/glide %s -OVERWRITE -WAIT -strict" %dock_job
 	print(cmd)
-	try:
-		run_command(cmd)
-		os.chdir("/home/enf/b2ar_analysis/conformation")
-	except TimeoutException:
-		print("Docking job timed out")
-		os.chdir("/home/enf/b2ar_analysis/conformation")
-		return
-	else:
-		os.chdir("/home/enf/b2ar_analysis/conformation")
-		signal.alarm(0)
+	#try:
+	run_command(cmd)
+	os.chdir("/home/enf/b2ar_analysis/conformation")
+	#except TimeoutException:
+	#	print("Docking job timed out")
+	#	os.chdir("/home/enf/b2ar_analysis/conformation")
+	#	return
+	#else:
+	#	os.chdir("/home/enf/b2ar_analysis/conformation")
+	#	signal.alarm(0)
 	return
 
 def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP", chosen_jobs = False,
@@ -381,7 +381,7 @@ def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP", chos
 		dock_job_name = "%s/%s.in" %(docking_dir, grid_file_no_ext)
 		dock_jobs.append(dock_job_name)
 
-		dock_job_input = open(dock_job_name, "wb")
+		dock_job_input = open(dock_job_name, "w")
 		dock_job_input.write("GRIDFILE  %s \n" %grid_file)
 		dock_job_input.write("LIGANDFILE   %s \n" %ligand_dir)
 		if precision == "XP":
@@ -392,7 +392,7 @@ def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP", chos
 		dock_job_input.write("OUTPUTDIR   %s \n" %docking_dir)
 		dock_job_input.close()
 
-	print("Written all docking job input files")
+	#print("Written all docking job input files")
 	#print dock_jobs
 	if return_jobs:
 		return dock_jobs
@@ -414,7 +414,7 @@ def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP", chos
 	print("Done docking.")
 
 def failed(log_file):
-	log = open(log_file, "rb")
+	log = open(log_file, "r")
 	conformation = log_file.rsplit(".", 1)[0]
 	conformation = conformation.split("/")[len(conformation.split("/"))-1 ]
 	score = 0.0
@@ -559,6 +559,7 @@ def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "
 							   chosen_jobs = chosen_receptors, grid_ext=grid_ext, 
 							   worker_pool=worker_pool, return_jobs=True)
 		if worker_pool is not None:
+			random.shuffle(dock_jobs)
 			worker_pool.map_sync(dock, dock_jobs)
 		elif parallel:
 			pool = mp.Pool(4)
@@ -605,7 +606,7 @@ def mmgbsa(docking_dir, mmgbsa_dir, chosen_jobs = False):
 		os.system(cmd)
 		job_name = "%s/%s.inp" %(mmgbsa_dir, dock_file_no_ext)
 		mmgbsa_jobs.append(job_name)
-		job_input = open(job_name, "wb")
+		job_input = open(job_name, "w")
 		job_input.write("STRUCT_FILE %s \n" %dock_filename)
 		job_input.write("OUT_TYPE COMPLEX \n")
 		job_input.write("FLEXDIST 5.0 \n")
