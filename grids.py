@@ -17,12 +17,17 @@ from io_functions import *
 import random
 import signal
 import zipfile
+from analysis import analyze_log_file, function_mapper
+from pubchempy import get_compounds, Compound, Substance
+from chembl_webresource_client import CompoundResource
+import pubchempy as pcp
 
-class TimeoutException(Exception):   # Custom exception class
-    pass
 
-def timeout_handler(signum, frame):   # Custom signal handler
-    raise TimeoutException
+class TimeoutException(Exception):	 # Custom exception class
+		pass
+
+def timeout_handler(signum, frame):	 # Custom signal handler
+		raise TimeoutException
 
 # Change the behavior of SIGALRM
 signal.signal(signal.SIGALRM, timeout_handler)
@@ -41,7 +46,6 @@ Sherlock but not on Biox3.
 '''
 
 
-
 '''
 The following two functions take as input a directory containing PDB files containing structures to which you would like to dock.
 It will prepare the protein with Schrodinger's tools (add hydrogens, SS bonds (no, not that SS!), bond orders, etc.) and then save
@@ -50,7 +54,7 @@ an .mae file, which is required for docking.
 
 def pprep_prot(pdb, ref, extension = ".mae"):
 	pdb_noext = os.path.splitext(pdb)[0]
-	mae_filename =  "%s.mae" % pdb_noext
+	mae_filename =	"%s.mae" % pdb_noext
 	if os.path.exists(mae_filename): 
 		print("already prepped and mae'd protein")
 		return
@@ -121,50 +125,188 @@ def prepare_ligand(lig, lig_dir, n_ring_conf, n_stereoisomers, force_field, verb
 	if os.path.exists("%s/%s" %(lig_dir,lig_output)):
 		return
 
-	if "mae" not in lig_ext:
+	if "sdi" in lig_ext or "sdf" in lig_ext or ("mol" in lig_ext and "mol2" not in lig_ext):
 		lig_mae = "%s.mae" %(lig_no_ext)
 		intermediate_file = "%s/%s" %(lig_dir, lig_mae)
 		cmd = "unset PYTHONPATH; $SCHRODINGER/utilities/sdconvert -isd %s -omae %s" %(lig, intermediate_file)
 		subprocess.call(cmd, shell=True)
+	elif "smi" in lig_ext:
+		lig_mae = "%s.mae" %(lig_no_ext)
+		intermediate_file = "%s/%s" %(lig_dir, lig_mae)
+		cmd = "unset PYTHONPATH; $SCHRODINGER/utilities/smiles_to_mae %s %s" %(lig, intermediate_file)
+		subprocess.call(cmd, shell=True)
+	else:
+		lig_mae = lig_last_name	
 
 	ligfile = open(lig_input, "w")
-	ligfile.write("INPUT_FILE_NAME   %s \n" %lig_mae)
-	ligfile.write("OUT_MAE   %s \n" %lig_output)
-	ligfile.write("FORCE_FIELD   %d \n" %force_field)
-	ligfile.write("PH   7.4 \n")
-	ligfile.write("EPIK   yes \n")
-	ligfile.write("DETERMINE_CHIRALITIES   no \n")
-	ligfile.write("IGNORE_CHIRALITIES   no \n")
-	ligfile.write("NUM_STEREOISOMERS   %d \n" %n_stereoisomers)
-	ligfile.write("NUM_RING_CONF   %d \n" %n_ring_conf)
+	ligfile.write("INPUT_FILE_NAME	 %s \n" %lig_mae)
+	ligfile.write("OUT_MAE	 %s \n" %lig_output)
+	ligfile.write("FORCE_FIELD	 %d \n" %force_field)
+	ligfile.write("PH	 7.4 \n")
+	ligfile.write("EPIK	 yes \n")
+	ligfile.write("DETERMINE_CHIRALITIES	 no \n")
+	ligfile.write("IGNORE_CHIRALITIES	 no \n")
+	ligfile.write("NUM_STEREOISOMERS	 %d \n" %n_stereoisomers)
+	ligfile.write("NUM_RING_CONF	 %d \n" %n_ring_conf)
 	ligfile.close()
 
 	cmd = "unset PYTHONPATH; $SCHRODINGER/ligprep -WAIT -inp %s" %lig_input
 	subprocess.call(cmd, shell=True)
 
 
-def prepare_ligands(lig_dir, exts = [".mae"], n_ring_conf=1, n_stereoisomers=1, force_field=16, worker_pool=None, parallel=True, redo=False):
+def write_smiles_files(smiles_df, lig_dir):
+	smiles_df = smiles_df[["ligand", "smiles"]].dropna()
+	lig_names = smiles_df["ligand"].values.tolist()
+	smiles_strings = smiles_df["smiles"].values.tolist()
+	name_list = []
+	name_smiles_tuples = []
+
+	for name, smiles in zip(lig_names, smiles_strings):
+		if name not in name_list:
+			name_list.append(name)
+			name_smiles_tuples.append((name,smiles))
+
+	print("Writing SMILES files now.")
+	for name, smiles in name_smiles_tuples:
+		with open("%s/%s.smi" %(lig_dir, name), "w") as f:
+			f.write(smiles)
+	print("Finished writing SMILES files.")
+
+def get_smiles(idx, names=None, cids=None, sids=None, binding_db=None):
+	try: 
+		cid = int(cids[idx])
+		smiles_string = binding_db.loc[binding_db['PubChem CID'] == cid]["Ligand SMILES"].values[0]
+	except:
+		try:
+			sid = int(sids[idx])
+			smiles_string = binding_db.loc[binding_db['PubChem SID'] == sid]["Ligand SMILES"].values[0]
+		except:
+			try:
+				cid = int(cids[idx])
+				smiles_string = str(Compound.from_cid(int(cid)).isomeric_smiles)
+			except:
+				try:
+					chembl_id = Substance.from_sid(sids[idx]).source_id
+					print(chembl_id)
+					try:
+						compounds = CompoundResource()
+						c = compounds.get(chembl_id)
+						smiles_string = c["smiles"]
+					except:
+						smiles_string = binding_db.loc[binding_db["ChEMBL ID of Ligand"] == chembl_id]["Ligand SMILES"].values[0]
+				except:
+					try:
+						name = names[idx]
+						cs = get_compounds(name, 'name')
+						smiles_string = cs[0].isomeric_smiles
+					except:
+						smiles_string = np.nan 
+	return(smiles_string)
+
+def add_smiles_column(cid_df, names=None, cids=None, sids=None, binding_db=None,
+											worker_pool=None, parallel=False):
+
+	indices = range(0, cid_df.shape[0])
+
+	get_smiles_partial = partial(get_smiles, names=names, cids=cids,
+															 sids=sids, binding_db=binding_db)
+	
+	smiles_strings = function_mapper(get_smiles_partial,
+																	 worker_pool,
+																	 parallel,
+																	 indices)
+
+	cid_df["smiles"] = smiles_strings
+	return(cid_df)
+
+"""
+download SDF from PubChem 
+cid: integer 
+save_dir: string. cannot have slash at end. 
+"""
+def download_sdf_from_cid(cid, save_dir):
+	save_file =	"%s/CID_%d.sdf" %(save_dir, cid)
+	if not os.path.exists(save_file):
+		pcp.download('SDF', save_file, cid, 'cid')
+	return
+
+def download_sdfs_from_cids(cids, save_dir, worker_pool=None, parallel=False):
+	download_sdf_from_cid_partial = partial(download_sdf_from_cid, save_dir=save_dir)
+	function_mapper(download_sdf_from_cid_partial, worker_pool, parallel, cids)
+	return
+
+def prepare_ligands(lig_dir, exts = [".mae"],
+										n_ring_conf=1, n_stereoisomers=1,
+										force_field=16, worker_pool=None,
+										parallel=True, redo=False,
+										smiles_df=None, cid_df=None,
+										binding_db=None,
+										return_df=True):
+	if smiles_df is not None or cid_df is not None:
+		if ".smi" not in exts:
+			exts.append(".smi")
+	
+	if smiles_df is not None:
+		write_smiles_files(smiles_df, lig_dir)
+
+	if cid_df is not None:
+		if "CID" in cid_df.columns.values.tolist():
+			cids = cid_df["CID"].values
+			cid_df["ligand"] = ["CID_%d" %cid for cid in cids.tolist()]
+		else:
+			cids = None
+		if "ID" in cid_df.columns.values.tolist():
+			sids = cid_df["SID"].values
+			cid_df["ligand"] = ["SID_%d" %sid for sid in sids.tolist()]
+		else:
+			sids = None
+		if "name" in cid_df.columns.values.tolist():
+			names = cid_df["name"].values
+			new_names = []
+			for name in names:
+				new_names.append(name.replace("β", "beta").replace("α", "alpha"))
+			cid_df["ligand"] = names
+		else:
+			names = None
+
+		indices = range(0, cid_df.shape[0])
+
+		get_smiles_partial = partial(get_smiles, names=names, cids=cids,
+																 sids=sids, binding_db=binding_db)
+		
+		smiles_strings = function_mapper(get_smiles_partial,
+																		 worker_pool,
+																		 parallel,
+																		 indices)
+
+		cid_df["smiles"] = smiles_strings
+		write_smiles_files(cid_df, lig_dir)
+
+
+	ligs = []
+	for ext in exts:
+		ligs += get_trajectory_files(lig_dir, ext)
+
+	for lig in ligs:
+		if "#" in lig:
+			new_name = lig.replace("#", "")
+			subprocess.call("mv %s %s" %(lig, new_name), shell=True)
+
 	ligs = []
 	for ext in exts:
 		ligs += get_trajectory_files(lig_dir, ext)
 
 	print("Examining %d ligands" %len(ligs))
 
-	"""
-	if not redo: 
-		unfinished_ligs = []
-		for lig in ligs: 
-			lig_no_ext = lig.split(".")[0]
-			lig_mae = "%s-out.maegz" %lig_no_ext
-			if not os.path.exists(lig_mae):
-				unfinished_ligs.append(lig)
-		ligs = unfinished_ligs
 
-	print("Preparing %d ligands" %(len(ligs)))
-	"""
+	lig_partial = partial(prepare_ligand, lig_dir = lig_dir, 
+												n_ring_conf=n_ring_conf,
+												n_stereoisomers=n_stereoisomers,
+												force_field=force_field)
 
-	lig_partial = partial(prepare_ligand, lig_dir = lig_dir, n_ring_conf=n_ring_conf, n_stereoisomers=n_stereoisomers, force_field=force_field)
 	if worker_pool is not None:
+		random.shuffle(ligs)
+		print(ligs)
 		worker_pool.map_sync(lig_partial, ligs)
 	elif parallel:
 		num_workers = mp.cpu_count()
@@ -175,6 +317,8 @@ def prepare_ligands(lig_dir, exts = [".mae"], n_ring_conf=1, n_stereoisomers=1, 
 		for lig in ligs:
 			lig_partial(lig)
 	print("finished preparing ligands")
+	if return_df:
+		return(cid_df)
 
 '''
 To dock, Schrodinger has to generate grid files (in .zip format) for each receptor. This needs as input the (x,y,z) coordinates 
@@ -215,15 +359,15 @@ def generate_grid_input(mae, grid_center, grid_dir, remove_lig = None, outer_box
 		subprocess.call(cmd, shell=True)
 
 	gridfile = open(grid_job, "w")
-	gridfile.write("GRIDFILE   %s.zip \n" %mae_last_name)
-	gridfile.write("OUTPUTDIR   %s \n" %output_dir)
-	gridfile.write("GRID_CENTER   %s \n" %grid_center)
-	gridfile.write("INNERBOX   10, \n")
-	gridfile.write("OUTERBOX   %d, \n" %outer_box)
-	gridfile.write("RECEP_FILE   %s \n" %new_mae)
-	#gridfile.write("RECEP_VSCALE   1.0 \n")
-	#gridfile.write("LIGAND_MOLECULE  1 \n")
-	#gridfile.write("WRITEZIP   TRUE \n")
+	gridfile.write("GRIDFILE	 %s.zip \n" %mae_last_name)
+	gridfile.write("OUTPUTDIR	 %s \n" %output_dir)
+	gridfile.write("GRID_CENTER	 %s \n" %grid_center)
+	gridfile.write("INNERBOX	 10, \n")
+	gridfile.write("OUTERBOX	 %d, \n" %outer_box)
+	gridfile.write("RECEP_FILE	 %s \n" %new_mae)
+	#gridfile.write("RECEP_VSCALE	 1.0 \n")
+	#gridfile.write("LIGAND_MOLECULE	1 \n")
+	#gridfile.write("WRITEZIP	 TRUE \n")
 	gridfile.close()
 
 def generate_grid(grid_file, grid_dir):
@@ -261,8 +405,8 @@ def unzip_file(filename_grid_dir):
 		fh = open(filename, 'rb')
 		z = zipfile.ZipFile(fh)
 		for name in z.namelist():
-		    outpath = grid_dir
-		    z.extract(name, outpath)
+				outpath = grid_dir
+				z.extract(name, outpath)
 		fh.close()
 	except:
 		unzip(filename)
@@ -288,7 +432,9 @@ def unzip_receptors(grid_dir, receptors, worker_pool=None):
 	return
 
 
-def generate_grids(mae_dir, grid_center, grid_dir, remove_lig = None, indices = None, chosen_receptors = None, outer_box=10., worker_pool=None):
+def generate_grids(mae_dir, grid_center, grid_dir, remove_lig = None,
+									 indices = None, chosen_receptors = None, outer_box=10.,
+									 worker_pool=None, parallel=False):
 	print(grid_dir)
 	if not os.path.exists(grid_dir): os.makedirs(grid_dir)
 
@@ -297,27 +443,28 @@ def generate_grids(mae_dir, grid_center, grid_dir, remove_lig = None, indices = 
 		maes = [mae for mae in maes if remove_path_and_extension(mae) in chosen_receptors]
 
 	generate_grid_input_partial = partial(generate_grid_input, grid_dir = grid_dir, grid_center = grid_center, remove_lig = remove_lig, outer_box=outer_box)
-	num_workers = mp.cpu_count()
-	pool = mp.Pool(num_workers)
-	pool.map(generate_grid_input_partial, maes)
-	pool.terminate()
-
-	grid_files = get_trajectory_files(grid_dir, ".in")
-
 	grid_partial = partial(generate_grid, grid_dir = grid_dir)
 
 	if indices is not None:
 		grid_files = grid_files[indices[0] : indices[1]]
 
 	if worker_pool is not None:
+		worker_pool.map_sync(generate_grid_input_partial, maes)
+		grid_files = get_trajectory_files(grid_dir, ".in")
 		worker_pool.map_sync(grid_partial, grid_files)
-	else:
+	elif parallel:
 		num_workers = mp.cpu_count()
 		pool = mp.Pool(num_workers)
+		pool.map(generate_grid_input_partial, maes)
+		grid_files = get_trajectory_files(grid_dir, ".in")
 		pool.map(grid_partial, grid_files)
-		#for grid_file in grid_files:
-		#	grid_partial(grid_file)
 		pool.terminate() 
+	else:
+		for mae in maes:
+			generate_grid_input_partial(mae)		
+		grid_files = get_trajectory_files(grid_dir, ".in")
+		for grid_file in grid_files:
+			grid_partial(grid_file)
 
 	#zips = get_trajectory_files(grid_dir, ".zip")
 	#pool = mp.Pool(num_workers)
@@ -327,34 +474,42 @@ def generate_grids(mae_dir, grid_center, grid_dir, remove_lig = None, indices = 
 	return grid_dir
 
 '''
-the function, dock_conformations() is to dock a single ligand to many conformations. you will probably  be using the function,
+the function, dock_conformations() is to dock a single ligand to many conformations. you will probably	be using the function,
 dock_ligands_and_receptors(), however.
 '''
+
+from subprocess import STDOUT, check_output
 
 def run_command(cmd):
 	subprocess.call(cmd, shell = True)
 
-def dock(dock_job):
-	#signal.alarm(1000000)
+def dock(dock_job, timeout=600):
 	docking_dir = os.path.dirname(dock_job)
 	os.chdir(docking_dir)
-	cmd = "$SCHRODINGER/glide %s -OVERWRITE -WAIT -strict" %dock_job
+	log_file = "%s.log" %(dock_job.split("/")[-1].split(".")[0])
+	cmd = "timeout %d $SCHRODINGER/glide %s -OVERWRITE -WAIT -strict -NOJOBID > %s" %(timeout, dock_job, log_file)
 	print(cmd)
+	try:
+		run_command(cmd)
+	except:
+		print("docking job timed out or failed.")
+	#p = subprocess.Popen(cmd, shell=True)
 	#try:
-	run_command(cmd)
-	os.chdir("/home/enf/b2ar_analysis/conformation")
-	#except TimeoutException:
+	#	p.wait(timeout=5)
+	#except:
 	#	print("Docking job timed out")
-	#	os.chdir("/home/enf/b2ar_analysis/conformation")
-	#	return
-	#else:
-	#	os.chdir("/home/enf/b2ar_analysis/conformation")
-	#	signal.alarm(0)
+	#	p.terminate()
+	#except:
+
+	#	print("Docking job timed out.")
+
+	os.chdir("/home/enf/b2ar_analysis/conformation")
 	return
 
-def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP", chosen_jobs = False,
-					   parallel = False, grid_ext = ".zip", worker_pool=None,
-					   return_jobs=False):
+def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP",
+											 chosen_jobs=None,
+											 parallel = False, grid_ext = ".zip", worker_pool=None,
+											 return_jobs=False, retry_after_failed=False):
 	if not os.path.exists(docking_dir): os.makedirs(docking_dir)
 
 	#grid_subdirs = [x[0] for x in os.walk(grid_dir)]
@@ -366,7 +521,7 @@ def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP", chos
 		grid_filename = grid_file.split("/")[len(grid_file.split("/"))-1]
 		grid_file_no_ext = grid_filename.split(".")[0]
 
-		if chosen_jobs is not False:
+		if chosen_jobs is not None:
 			if grid_file_no_ext not in chosen_jobs:
 				#print "%s not in chosen jobs " %grid_file_no_ext
 				continue
@@ -378,18 +533,25 @@ def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP", chos
 		if os.path.exists(maegz_name):# and log_size > 3000:
 			#print("already docked %s" %grid_file_no_ext)
 			continue
+
+		if not retry_after_failed:
+			if os.path.exists(log_name):
+				conformation, score, best_pose = analyze_log_file(log_name)
+				if score == 0.0:
+					continue
+
 		dock_job_name = "%s/%s.in" %(docking_dir, grid_file_no_ext)
 		dock_jobs.append(dock_job_name)
 
 		dock_job_input = open(dock_job_name, "w")
-		dock_job_input.write("GRIDFILE  %s \n" %grid_file)
-		dock_job_input.write("LIGANDFILE   %s \n" %ligand_dir)
+		dock_job_input.write("GRIDFILE	%s \n" %grid_file)
+		dock_job_input.write("LIGANDFILE	 %s \n" %ligand_dir)
 		if precision == "XP":
-			dock_job_input.write("POSTDOCK_XP_DELE   0.5 \n")
-		dock_job_input.write("PRECISION   %s \n" %precision)
+			dock_job_input.write("POSTDOCK_XP_DELE	 0.5 \n")
+		dock_job_input.write("PRECISION	 %s \n" %precision)
 		if precision == "XP":
-			dock_job_input.write("WRITE_XP_DESC   False \n")
-		dock_job_input.write("OUTPUTDIR   %s \n" %docking_dir)
+			dock_job_input.write("WRITE_XP_DESC	 False \n")
+		dock_job_input.write("OUTPUTDIR	 %s \n" %docking_dir)
 		dock_job_input.close()
 
 	#print("Written all docking job input files")
@@ -427,11 +589,12 @@ def failed(log_file):
 				xp_score = float(line[6])
 				#print "%f, %f" %(xp_score, score)
 				if xp_score < score: score = xp_score
-			elif  (line[0] == "Best" and line[1] == "Emodel="):
+			elif	(line[0] == "Best" and line[1] == "Emodel="):
 				xp_score = float(line[8])
 				#print "%f, %f" %(xp_score, score)
 				if xp_score < score: score = xp_score
 	if score == 0: return False 
+	log.close()
 	return True
 def failed_docking_jobs(docking_dir, ligand, precision):
 	logs = get_trajectory_files(docking_dir, ext = ".log")
@@ -455,15 +618,15 @@ def dock_helper(args):
 	dock_conformations(*args)
 
 class NoDaemonProcess(mp.Process):
-    # make 'daemon' attribute always return False
-    def _get_daemon(self):
-        return False
-    def _set_daemon(self, value):
-        pass
-    daemon = property(_get_daemon, _set_daemon)
+		# make 'daemon' attribute always return False
+		def _get_daemon(self):
+				return False
+		def _set_daemon(self, value):
+				pass
+		daemon = property(_get_daemon, _set_daemon)
 
 class MyPool(mp.pool.Pool):
-    Process = NoDaemonProcess
+		Process = NoDaemonProcess
 
 '''
 This is the function for docking multiple ligands to multiple receptors. 
@@ -483,9 +646,9 @@ parallel --> if you set it to "both" it will run in parallel over both ligands a
 '''
 
 def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "SP",
-							   ext = "-out.maegz", chosen_ligands = False, chosen_receptors = False,
-							   parallel = False, grid_ext = ".zip", worker_pool=None,
-							   ligand_dirs=None):
+								 ext = "-out.maegz", chosen_ligands = False, chosen_receptors = None,
+								 parallel = False, grid_ext = ".zip", worker_pool=None,
+								 ligand_dirs=None, retry_after_failed=False, timeout=600):
 	ligands = get_trajectory_files(ligands_dir, ext = ext)
 
 	if parallel == "both":
@@ -556,19 +719,22 @@ def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "
 			lig_dir = "%s/%s" %(docking_dir, lig_no_ext)
 			if not os.path.exists(lig_dir): os.makedirs(lig_dir)
 			dock_jobs += dock_conformations(grid_dir, lig_dir, ligand, precision = precision,
-							   chosen_jobs = chosen_receptors, grid_ext=grid_ext, 
-							   worker_pool=worker_pool, return_jobs=True)
+								 chosen_jobs = chosen_receptors, grid_ext=grid_ext, 
+								 worker_pool=worker_pool, return_jobs=True, retry_after_failed=retry_after_failed)
+
+		partial_docker = partial(dock, timeout=timeout)
 		if worker_pool is not None:
+			print("About to do %d Docking computations." %len(dock_jobs))
 			random.shuffle(dock_jobs)
-			worker_pool.map_sync(dock, dock_jobs)
+			worker_pool.map_sync(partial_docker, dock_jobs)
 		elif parallel:
 			pool = mp.Pool(4)
-			pool.map(dock, dock_jobs)
+			pool.map(partial_docker, dock_jobs)
 			pool.terminate()
 		else:
-			for dock_job in dock_jobs:
-				dock(dock_job)
-
+			for dock_job in dock_jobs[:2]:
+				partial_docker(dock_job)
+	print("Completed docking.")
 
 '''
 

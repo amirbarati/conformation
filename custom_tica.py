@@ -4,6 +4,7 @@ from io_functions import *
 import multiprocessing as mp
 import glob
 from sklearn.preprocessing import StandardScaler
+from io_functions import compat_verboseload
 
 def fit_normalizer(features_directory, features=None):
 	save_file = "%s/normalizer.h5" %features_directory
@@ -28,7 +29,7 @@ def fit_and_transform(features_directory, model_dir, stride=5, lag_time=10,
 	projected_data_filename = "%s/phi_psi_chi2_allprot_projected.h5" %model_dir
 	fit_model_filename  = "%s/phi_psi_chi2_allprot_tica_coords.h5" %model_dir
 	normalizer = "%s/normalizer.h5" %features_directory
-	n = verboseload(normalizer)
+	n = compat_verboseload(normalizer)
 	#active_pdb_file = "/scratch/users/enf/b2ar_analysis/renamed_topologies/A-00.pdb"
 
 	if not sparse:
@@ -140,12 +141,12 @@ def fit_and_transform(features_directory, model_dir, stride=5, lag_time=10,
 	#atom_indices = atom_indices = [a.index for a in top.atoms if str(a.residue)[0:3] != "POP" and not a.residue.is_water and str(a.residue)[0:2] != "NA" and str(a.residue)[0:2] != "CL"]
 	#active_pdb = md.load(active_pdb_file, atom_indices=atom_indices)
 	#read_and_featurize_custom(active_pdb_file, condition = "A-00_custom_features", location = "/scratch/users/enf/b2ar_analysis")
-	#active_features = [np.transpose(verboseload("/scratch/users/enf/b2ar_analysis/A-00_custom_features.h5"))]
+	#active_features = [np.transpose(compat_verboseload("/scratch/users/enf/b2ar_analysis/A-00_custom_features.h5"))]
 	#active_pdb_projected = fit_model.transform(active_features)
 	#print(active_pdb_projected)
 
 def transform(existing_model, features_directory, tica_dir, normalizer):
-	model = verboseload(existing_model)
+	model = compat_verboseload(existing_model)
 	feature_files = get_trajectory_files(features_directory, ext = ".dataset")
 	features = load_file_list(feature_files)
 	features = [normalizer.transform(feature) for feature in features]
@@ -167,7 +168,7 @@ def transform_features(feature_filename, model, normalizer):
 def transform_to_h5(existing_model_filename, features_directory,
 					projected_data_filename, normalizer,
 					worker_pool=None, parallel=False):
-	model = verboseload(existing_model_filename)
+	model = compat_verboseload(existing_model_filename)
 	transform_partial = partial(transform_features, model=model, normalizer=normalizer)
 	feature_files = get_trajectory_files(features_directory, ext=".dataset")
 	if worker_pool is not None:
@@ -182,7 +183,7 @@ def transform_to_h5(existing_model_filename, features_directory,
 
 
 def check_tica_vs_features(tica_coords_dir, feature_dir):
-	tica_coords = verboseload(tica_coords_dir)
+	tica_coords = compat_verboseload(tica_coords_dir)
 	tica_coords = np.concatenate(tica_coords)
 	print((np.shape(tica_coords)))
 	feature_files = get_trajectory_files(feature_dir, ext = ".h5")

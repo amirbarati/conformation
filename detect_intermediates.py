@@ -1,9 +1,6 @@
 from sklearn import mixture
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 import numpy as np
-import matplotlib
-from matplotlib import pyplot as plt
-matplotlib.style.use('ggplot')
 from msmbuilder.dataset import dataset, _keynat, NumpyDirDataset
 from msmbuilder.utils import verbosedump, verboseload
 import time
@@ -14,6 +11,10 @@ import csv
 from io_functions import *
 from interpret_tICs import plot_importance_df, compute_residue_importances, merge_importances_features, compute_per_residue_importance
 from functools import partial
+import matplotlib
+from matplotlib import pyplot as plt
+import seaborn as sns
+sns.set_style("whitegrid")
 import gzip, pickle
 from matplotlib.backends.backend_pdf import PdfPages
 import pandas as pd
@@ -26,6 +27,7 @@ from sklearn.grid_search import GridSearchCV
 from scipy.signal import argrelextrema
 from scipy import stats
 from scipy import spatial
+from matplotlib.colors import ListedColormap
 
 from msmbuilder.utils import KDTree
 from matplotlib.pyplot import cm
@@ -462,48 +464,125 @@ def plot_coef_path(df, filename):
   pp.close()
   plt.clf()
 
-def plot_df_rolling(df, filename, return_fig=True, subplots=True, smoothing=100, include_original=False, min_periods=1,
-                    ref_df=None, color="rainbow"):
+def plot_df_list_rolling(dfs, filename, return_fig=True, smoothing=100, include_original=False,
+                         ref_df=None, xlabel="Time (nanoseconds)", custom_y_bounds=None, color="rainbow",
+                         subplots=True):
   plt.clf()
-  if subplots:
-    if color == "rainbow":
-      n_colors_i = np.floor(len(df.columns.values) / 2.)
-      n_colors_j = np.ceil(len(df.columns.values)/2.)
-      color = iter(cm.gist_rainbow(np.concatenate([np.linspace(0., 0.4, n_colors_i), np.linspace(.6, 1.0, n_colors_j)])))
+  min_length = min([df.shape[0] for df in dfs])
+  dfs = [df.iloc[:min_length] for df in dfs]
+  with plt.style.context(('seaborn-whitegrid')):
+    if subplots:
+      fig, axes = plt.subplots(nrows=len(dfs[0].columns.values), ncols=1, figsize=(8.0, len(dfs[0].columns.values)*3.0))
+      plt.ylabel("Distance (Angstroms)")
+
+      for i,var in enumerate(dfs[0].columns.values):
+        if ref_df is not None:
+          try:
+            dot_df = pd.DataFrame(ref_df[var])
+            dot_df = pd.concat([dot_df.transpose()]*dfs[0].shape[0], axis=0)
+            dot_df.index = dfs[0].index
+            dot_df[dot_df.columns.values[0]].plot(ax=axes[i], c="blue", linestyle='dashed', label="", title="")
+            dot_df[dot_df.columns.values[1]].plot(ax=axes[i], c="green", linestyle='dashed', label="", title="")
+          except:
+            print("Feature does not have reference crystal values.")
+        if include_original:
+          color=iter(cm.inferno(np.linspace(0.2,0.6,len(dfs))))
+          for df in dfs:
+            c = next(color)
+            if custom_y_bounds is None:
+              df[var].plot(ax=axes[i], title="", label="", c=c, alpha=0.2)
+            else:
+              df[var].plot(ax=axes[i], title="", label="", c=c, alpha=0.2, ylim=custom_y_bounds[i])
+        
+        color=iter(cm.inferno(np.linspace(0.2, 0.6,len(dfs))))
+
+        for df in dfs:
+          c = next(color)
+          pd.rolling_mean(df, smoothing, center=True, min_periods=None)[var].plot(ax=axes[i], linewidth=2.5, title=var, c=c)
+
+
+        axes[i].legend(loc='center left', bbox_to_anchor=(1.0,0.5))
+        axes[i].set_title("")
+
+      #axes[0].set_ylabel('Distance in Angstroms')
+      #pd.rolling_mean(df, 100).plot(colormap='gist_rainbow', subplots=True, ax=f.gca(), layout=(1,5))
     else:
-      color=iter(cm.ocean(np.linspace(0.2,0.8,len(df.columns.values))))
-    fig, axes = plt.subplots(nrows=len(df.columns.values), ncols=1, figsize=(8.0, len(df.columns.values)*3.0))
-    for i,var in enumerate(df.columns.values):
-      c = next(color)
-      if ref_df is not None:
-        dot_df = pd.DataFrame(ref_df[var])
-        dot_df = pd.concat([dot_df.transpose()]*df.shape[0], axis=0)
-        dot_df.index = df.index
-        dot_df[dot_df.columns.values[0]].plot(ax=axes[i], c="blue", linestyle='dashed', label="Inactive Crystal")
-        dot_df[dot_df.columns.values[1]].plot(ax=axes[i], c="green", linestyle='dashed', label="Active Crystal")
-      if include_original:
-        df[var].plot(ax=axes[i], title=var, c=c, alpha=0.2)
-      pd.rolling_mean(df, smoothing, center=True, min_periods=None)[var].plot(ax=axes[i], linewidth=2.5, title=var, c=c)
+      fig = plt.figure()
 
-      axes[i].legend(loc='center left', bbox_to_anchor=(1.0,0.5))
-      axes[i].set_title("")
+      for df in dfs:
+        pd.rolling_mean(df, smoothing).plot(colormap='gist_rainbow', subplots=True, ax=fig.gca())
 
-    #axes[0].set_ylabel('Distance in Angstroms')
-    #pd.rolling_mean(df, 100).plot(colormap='gist_rainbow', subplots=True, ax=f.gca(), layout=(1,5))
-  else:
-    fig = plt.figure()
-    pd.rolling_mean(df, smoothing).plot(colormap='gist_rainbow', subplots=True, ax=fig.gca())
+    #plt.legend(loc='center left', bbox_to_anchor=(1.0,0.5))
+    #plt.rc('text', usetex=True)
+    plt.xlabel(xlabel)
+    plt.savefig(filename, bbox_inches='tight', dpi=300)
+    #pp = PdfPages(filename)
+    #pp.savefig(bbox_inches='tight')
+    #pp.close()
+    if return_fig:
+      return
 
-  #plt.legend(loc='center left', bbox_to_anchor=(1.0,0.5))
-  #plt.rc('text', usetex=True)
-  plt.savefig(filename, bbox_inches='tight', dpi=300)
-  #pp = PdfPages(filename)
-  #pp.savefig(bbox_inches='tight')
-  #pp.close()
-  if return_fig:
-    return
+    plt.clf()
+
+
+def plot_df_rolling(df, filename, return_fig=True, subplots=True, smoothing=100, include_original=False, min_periods=1,
+                    ref_df=None, color="rainbow", xlabel="Time (microseconds)", custom_y_bounds=None):
 
   plt.clf()
+  with plt.style.context(('seaborn-whitegrid')):
+    if subplots:
+      if color == 'rainbow':
+        n_colors_i = np.floor(len(df.columns.values) / 2.)
+        n_colors_j = np.ceil(len(df.columns.values)/2.)
+        color = iter(cm.gist_rainbow(np.concatenate([np.linspace(0., 0.4, n_colors_i), np.linspace(.6, 1.0, n_colors_j)])))
+      else:
+        color=iter(ListedColormap(sns.hls_palette(8, l=.3, s=.8))(np.linspace(0.2,0.8,len(df.columns.values))))
+        #color=iter(cm.get_cmap(color)(np.linspace(0.2,0.8,len(df.columns.values))))
+      fig, axes = plt.subplots(nrows=len(df.columns.values), ncols=1, figsize=(8.0, len(df.columns.values)*3.0))
+      plt.ylabel("Distance (Angstroms)")
+
+      for i,var in enumerate(df.columns.values):
+        c = next(color)
+        if ref_df is not None:
+          try:
+            dot_df = pd.DataFrame(ref_df[var])
+            dot_df = pd.concat([dot_df.transpose()]*df.shape[0], axis=0)
+            dot_df.index = df.index
+            dot_df[dot_df.columns.values[0]].plot(ax=axes[i], c="blue", linestyle='dashed', label="", title="")
+            dot_df[dot_df.columns.values[1]].plot(ax=axes[i], c="green", linestyle='dashed', label="", title="")
+          except:
+            print("Feature does not have reference crystal values.")
+        if include_original:
+          if custom_y_bounds is None:
+            df[var].plot(ax=axes[i], title="", label="", c=c, alpha=0.2, ylim=[df[var].values.min(), df[var].values.max()])
+          else:
+            df[var].plot(ax=axes[i], title="", label="", c=c, alpha=0.2, ylim=custom_y_bounds[i])
+
+        pd.rolling_mean(df, smoothing, center=True, min_periods=None)[var].plot(ax=axes[i], linewidth=2.5, title=var, c=c)
+
+
+        axes[i].legend(loc='center left', bbox_to_anchor=(1.0,0.5))
+        axes[i].set_title("")
+
+      #axes[0].set_ylabel('Distance in Angstroms')
+      #pd.rolling_mean(df, 100).plot(colormap='gist_rainbow', subplots=True, ax=f.gca(), layout=(1,5))
+    else:
+      fig = plt.figure()
+      pd.rolling_mean(df, smoothing).plot(colormap='gist_rainbow', subplots=True, ax=fig.gca())
+
+    #plt.legend(loc='center left', bbox_to_anchor=(1.0,0.5))
+    #plt.rc('text', usetex=True)
+    plt.xlabel(xlabel)
+    plt.savefig(filename, bbox_inches='tight', dpi=300)
+    #pp = PdfPages(filename)
+    #pp.savefig(bbox_inches='tight')
+    #pp.close()
+    if return_fig:
+      return
+
+    plt.clf()
+
+
 
 def compute_docking_cutoff(docking_csv, plot_file):
   docking = pd.read_csv(docking_csv, header=0, index_col=0)
@@ -694,27 +773,39 @@ def plot_tICs_vs_docking(docking_csv, tica_coords_csv, plot_file, chosen_ligand=
   df = pd.DataFrame(df[tica_names].values[:,list(range(0,max_tIC))], index=df[chosen_ligand], columns=list(range(1,max_tIC + 1)))
   plot_df_rolling(df, plot_file)
 
-def compute_and_plot_single_kde(data, title, xlabel, fig_file, custom_bounds=None, custom_y_bounds=None):
+
+def compute_and_plot_single_kde(data, title, xlabel,
+                                fig_file=None, custom_bounds=None,
+                                custom_y_bounds=None, n_points=200,
+                                convert_to_energy=False, crystal_values=None):
   try:
-    kde = stats.gaussian_kde(data)
-    if custom_bounds is not None:
-      x = np.linspace(custom_bounds[0], custom_bounds[1], 200)
-    else:
-      x = np.linspace(0.8*data.min(), 1.2*data.max(),200)
-    dx = kde(x)
-    plt.clf()
-    pp = PdfPages(fig_file)
-    plt.plot(x,dx,color='black')
-    plt.xlim(x.min(), x.max())
-    if custom_y_bounds is not None:
-      plt.ylim(custom_y_bounds[0], custom_y_bounds[1])
-    plt.fill(x,dx, alpha=.75,color='#5673E0')
-    plt.xlabel(xlabel)
-    plt.ylabel("Estimated Equilibrium Population")
-    plt.title(title)
-    pp.savefig()
-    plt.show()
-    pp.close()
+    with plt.style.context(('seaborn-whitegrid')):
+      kde = stats.gaussian_kde(data)
+      if custom_bounds is not None:
+        x = np.linspace(custom_bounds[0], custom_bounds[1], n_points)
+      else:
+        x = np.linspace(0.8*data.min(), 1.2*data.max(),n_points)
+      dx = kde(x)
+      if convert_to_energy:
+        dx *= -0.61
+      plt.plot(x,dx,color='black')
+      print("plotted")
+      plt.xlim(x.min(), x.max())
+      if custom_y_bounds is not None:
+        plt.ylim(custom_y_bounds[0], custom_y_bounds[1])
+      plt.fill_between(x,0,dx, alpha=.75,color='#5673E0')
+      plt.xlabel(xlabel)
+      if convert_to_energy:
+        plt.ylabel("delta G")
+      else:
+        plt.ylabel("Estimated Equilibrium Population")
+      plt.title(title)
+      if fig_file is not None:
+        plt.savefig(fig_file)
+      if crystal_values is not None:
+        plt.axvline(x=crystal_values[0], color='b', ls='dashed')
+        plt.axvline(x=crystal_values[1], color='g', ls='dashed')
+      plt.show()
   except:
     print("Couldn't plot, likely due to singular matrix.")
 
@@ -731,39 +822,45 @@ def compute_kde_difference(data_i, data_j, custom_bounds=None, n_points=200):
   return x, dx
 
 def compute_and_plot_kde_difference(data_i, data_j, title, xlabel,
-                                    fig_file, custom_bounds=None,
+                                    fig_file=None, custom_bounds=None,
                                     custom_y_bounds=None,
                                     crystal_values=None,
                                     show_plot=True):
   try:
-    kde_i = stats.gaussian_kde(data_i)
-    kde_j = stats.gaussian_kde(data_j)
-    if custom_bounds is not None:
-      x = np.linspace(custom_bounds[0], custom_bounds[1], 200)
-    else:
-      x = np.linspace(0.8*data_i.min(), 1.2*data_j.max(),200)
-    dx_i = kde_i(x)
-    dx_j = kde_j(x)
-    dx = dx_i - dx_j
+    with plt.style.context(('seaborn-whitegrid')):
+      kde_i = stats.gaussian_kde(data_i)
+      kde_j = stats.gaussian_kde(data_j)
+      if custom_bounds is not None:
+        x = np.linspace(custom_bounds[0], custom_bounds[1], 200)
+      else:
+        x = np.linspace(0.8*data_i.min(), 1.2*data_j.max(),200)
+      dx_i = kde_i(x)
+      dx_j = kde_j(x)
 
-    plt.clf()
-    pp = PdfPages(fig_file)
-    plt.plot(x,dx,color='black')
-    plt.xlim(x.min(), x.max())
-    if custom_y_bounds is not None:
-      plt.ylim(custom_y_bounds[0], custom_y_bounds[1])
-    plt.fill_between(x,0,dx, alpha=.75,color='#5673E0')
-    plt.xlabel(xlabel)
-    plt.ylabel("Estimated Equilibrium Population")
-    plt.title(title)
+      print(dx_i.shape)
+      print(dx_j.shape)
 
-    if crystal_values is not None:
-      plt.axvline(x=crystal_values[0], color='b', ls='dashed')
-      plt.axvline(x=crystal_values[1], color='g', ls='dashed')
+      dx = dx_i - dx_j
 
-    plt.savefig(fig_file)
-    if show_plot:
-      plt.show()
+      print(dx.shape)
+
+      plt.plot(x,dx,color='black')
+      plt.xlim(x.min(), x.max())
+      if custom_y_bounds is not None:
+        plt.ylim(custom_y_bounds[0], custom_y_bounds[1])
+      plt.fill_between(x,0,dx, alpha=.75,color='#5673E0')
+      plt.xlabel(xlabel)
+      plt.ylabel("Estimated Equilibrium Population")
+      plt.title(title)
+
+      if crystal_values is not None:
+        plt.axvline(x=crystal_values[0], color='b', ls='dashed')
+        plt.axvline(x=crystal_values[1], color='g', ls='dashed')
+
+      if fig_file is not None:
+        plt.savefig(fig_file)
+      if show_plot:
+        plt.show()
   except:
     print("Couldn't plot, likely due to singular matrix.")
 
@@ -816,7 +913,6 @@ def plot_lp_pp_model_outcomes(importances_df, scores, save_dir, traj_features_df
     for i in range(0, df.shape[0]):
       lig_feature = df.index.values.tolist()[i].replace("[", "").replace("]", "")
       print(lig_feature)
-      print(type(lig_feature))
       #lig_feature = get_ori_feature_name(lig_feature)
 
       save_pdf = "%s/%s_difference.pdf" %(pp_feature_dir, lig_feature)
@@ -829,9 +925,7 @@ def plot_lp_pp_model_outcomes(importances_df, scores, save_dir, traj_features_df
       data_i = traj_features_df.loc[onehot_features_df[lig_feature] == 1][ori_pp_feature].values
       data_j = traj_features_df.loc[onehot_features_df[lig_feature] == 0][ori_pp_feature].values
 
-      print(lig_feature)
-      print(data_i.shape)
-      print(data_j.shape)
+      print(ori_pp_feature)
 
       title = lig_feature.replace("Lig900", "BU72")
       title = lig_feature.replace("Lig1", "SUF")
@@ -841,7 +935,7 @@ def plot_lp_pp_model_outcomes(importances_df, scores, save_dir, traj_features_df
           #                            "Phe289 to Asn150 Distance, Angstroms", "%s/%s.pdf" %(analysis_dir,title_i), custom_bounds=[5,16], custom_y_bounds=[0,.6])
           #compute_and_plot_single_kde(data_j, title_j,
           #                            "Phe289 to Asn150 Distance, Angstroms", "%s/%s.pdf" %(analysis_dir,title_j), custom_bounds=[5,16], custom_y_bounds=[0,.6])
-  
+      plt.clf()
       compute_and_plot_kde_difference(data_i, data_j, title, 
                                       "%s Distance, Angstroms" %ori_pp_feature, 
                                       save_pdf,
@@ -993,7 +1087,9 @@ def multi_onehot_trajectories(data, names, custom_bounds=None,
     new_traj = np.concatenate(new_traj, axis=1)
     new_data.append(new_traj)
 
-  return new_data, new_names
+  new_dfs = [pd.DataFrame(t, columns=new_names) for t in new_data]
+
+  return new_data, new_names, new_dfs
 
 def make_edge_list(scores, importances_df, cutoff_score=0.8, cutoff_importance=0.):
     importances_arr = importances_df.values
@@ -1006,7 +1102,7 @@ def make_edge_list(scores, importances_df, cutoff_score=0.8, cutoff_importance=0
             print(j)
             importances = importances_arr[:,j]
             for i, importance in enumerate(importances):
-                if importance > cutoff_importance:
+                if np.abs(importance) > cutoff_importance:
                     edge_tuples.append((x_names[i], y_names[j], importances[i]*score))
     edge_df = pd.DataFrame(edge_tuples, columns=["feature_i", "feature_j", "importance"])
     return edge_df

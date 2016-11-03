@@ -5,6 +5,7 @@ from interpret_tICs import *
 import pickle
 from msm_resampled import *
 from sklearn.preprocessing import StandardScaler
+import sklearn.preprocessing as preprocessing
 from sklearn.metrics import auc as calculate_auc
 import statsmodels
 import scipy
@@ -30,10 +31,14 @@ from detect_intermediates import *
 from interpret_tICs import *
 from custom_tica import *
 from sklearn.svm import SVR
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, precision_score, recall_score
 from sklearn.preprocessing import StandardScaler
 from pandas.tools.plotting import table
 from msm_resampled import *
+import random
+from rdkit.ML.Scoring.Scoring import CalcBEDROC, CalcROC
+import pybel as pb
+import pubchempy as pc
 
 matplotlib.style.use('ggplot')
 
@@ -74,11 +79,10 @@ def get_sample_coords(sample_indices, coords):
         sample_coords.append(cluster_coords)
     return sample_coords
 
-def analyze_docking_results_in_dir(docking_dir, ligands_dir, precision="SP", redo=False, write_to_disk=False):
-  ligands = get_ligands(ligands_dir)
+def analyze_docking_results_in_dir(docking_dir, ligands_dir, precision="SP", redo=False, write_to_disk=False, ligands=None):
   summary = "%s/all_docking_summary.csv" %docking_dir
   df = analyze_docking_results_multiple(docking_dir, precision=precision, 
-                                        summary=summary, ligands=ligands,
+                                        summary=summary, ligands=None,
                                         redo=redo, write_to_disk=write_to_disk)
   return df
 
@@ -256,27 +260,76 @@ def initialize_analysis(clusterer_dir, user_defined_coords, user_defined_names, 
          cluster_pnas_averages, cluster_tica_averages, cluster_tica_pnas, top_features, clusters_map, tica_resampled_file, projected_features, num_trajs, features_eq, all_traj_features, samples_indices_file, samples_dir,
          samples_tica_avg_df, samples_pnas_avg_df, samples_features_avg_df, samples_normalized_features_avg_df, feature_names, feature_strings, samples_pnas_tica, reference_docking]
 
-def msm_reweighted_features_per_ligand(feature_dfs, new_populations, bi_msm, total_samples, clusters_map, num_trajs, apo_populations=None, save_dir=""):
+def msm_reweighted_features_per_ligand(feature_dfs, 
+                                       ligand_populations_df,
+                                       total_samples,
+                                       clusters_map,
+                                       msm_object,
+                                       save_dir=""):
+  num_trajs = len(feature_dfs)
   lig_features_eq = {}
   lig_features_eq_filename = "%s/lig_features_eq.h5" %save_dir
-  for ligand in new_populations.columns.values.tolist():
+  for ligand in ligand_populations_df.index.values.tolist():
     print(ligand)
     lig_msm_resampled_file = "%s/%s_msm_eq_resampled.h5" %(save_dir, ligand)
-    eq_pops = new_populations[ligand]
-    msm_lig_populations = np.zeros(len(eq_pops))
-    for cluster_id in bi_msm.mapping_.keys():
-        msm_lig_populations[bi_msm.mapping_[cluster_id]] = eq_pops[cluster_id]
-    new_msm = copy.deepcopy(bi_msm)
-    new_msm.populations_ = msm_lig_populations
-    lig_traj_to_frames = resample_by_msm(total_samples, msm_object=bi_msm, clusters_map=clusters_map, num_trajs=num_trajs, save_file=None, equilibrium_populations=msm_lig_populations)
-    lig_tICA_resampled_file = "%s/%s_msm_eq_resampled.h5" %(save_dir, ligand)
-    lig_features_eq[ligand] = resample_features_by_msm_equilibirum_pop(feature_dfs, lig_traj_to_frames, None)
+    eq_pops = ligand_populations_df.loc[ligand][list(range(0, ligand_populations_df.shape[1]))].values
+    new_msm = copy.deepcopy(msm_object)
+    new_msm.populations_ = eq_pops
 
-  if apo_populations is not None:
-    apo_traj_to_frames = resample_by_msm(total_samples, msm_object=bi_msm, clusters_map=clusters_map, num_trajs=num_trajs, save_file=None, equilibrium_populations=apo_populations)
-    lig_features_eq["apo"] = resample_features_by_msm_equilibirum_pop(feature_dfs, apo_traj_to_frames, None)    
+    lig_traj_to_frames = resample_by_msm(total_samples,
+                                         msm_object=new_msm,
+                                         clusters_map=clusters_map,
+                                         num_trajs=num_trajs,
+                                         save_file=None,
+                                         equilibrium_populations=new_msm.populations_)
+
+    lig_features_eq[ligand] = resample_features_by_msm_equilibirum_pop(feature_dfs,
+                                                                       lig_traj_to_frames, None)
 
   return lig_features_eq
+
+def compute_docking_ddg(full_docking_df, md_lig_name, msm_object):
+  docking_df = copy.deepcopy(full_docking_df)
+  col_inds = []
+  cols = []
+  msm_state_ids = []
+  for i, cluster in enumerate(docking_df.columns.values.tolist()):
+    if "state" in cluster.lower():
+      cluster_id = int(cluster[5:])
+      print(cluster_id)
+      try:
+        print(msm_object.mapping_[cluster_id])
+        msm_state_ids.append(msm_object.mapping_[cluster_id])
+        col_inds.append(i)
+        cols.append(cluster)
+      except:
+        continue
+  msm_docking_df = docking_df[cols]
+  eq_pops = msm_object.populations_[msm_state_ids]
+  dg_md = np.log(eq_pops) / (-0.61)
+
+  Boltzmann_per_state = np.exp(-0.61 * (dg_md - (msm_docking_df.loc[md_lig_name].values)))
+  Z_apo = np.sum(Boltzmann_per_state)
+  dg_apo = np.log(Boltzmann_per_state / Z_apo) / (-0.61)
+
+  Boltzmanns_per_ligand = np.exp(-0.61*(dg_apo + msm_docking_df.values))
+  Z_per_ligand = np.sum(Boltzmanns_per_ligand, axis=1)
+  eq_pops_ligs = Boltzmanns_per_ligand / Z_per_ligand.reshape((-1,1))
+  dg = np.log(eq_pops_ligs) / (-0.61)
+
+  dg_dg_apo = np.vstack([dg, dg_apo.reshape((1, -1))])
+  all_eq_pops = np.exp(dg_dg_apo * (-0.61))
+ 
+  eq_pops_df = pd.DataFrame(all_eq_pops,
+                            index=full_docking_df.index.values.tolist() + ["apo"],
+                            columns=msm_state_ids)
+  print(msm_state_ids)
+
+  ddg = dg - dg_apo 
+
+  docking_df[cols] = ddg
+
+  return(docking_df, eq_pops_df)
 
 def compute_docking_dg(docking_cluster_averages, msm_object, samples_tica_avg_df, samples_pnas_avg_df,
                        samples_normalized_features_avg_df, important_contact_features, traj_dir, traj_ext, 
@@ -343,10 +396,10 @@ def compute_docking_dg(docking_cluster_averages, msm_object, samples_tica_avg_df
 
 
   docking_normalized = copy.deepcopy(aggregate_docking_msm)
-  docking_normalized[docking_normalized.columns.values] = scale(docking_normalized.values)
+  #docking_normalized[docking_normalized.columns.values] = scale(docking_normalized.values)
 
   ddg_scaled = copy.deepcopy(delta_delta_g)
-  ddg_scaled[delta_delta_g.columns.values] = scale(delta_delta_g.values)
+  #ddg_scaled[delta_delta_g.columns.values] = scale(delta_delta_g.values)
       
   deltas_tica = pd.concat([delta_delta_g, samples_tica_avg_df, samples_pnas_avg_df, samples_top_features_avg_df], axis=1)
 
@@ -354,8 +407,9 @@ def compute_docking_dg(docking_cluster_averages, msm_object, samples_tica_avg_df
   bi_msm = msm_obj
   num_trajs = len(get_trajectory_files(traj_dir, traj_ext))
 
-  lig_features_eq = msm_reweighted_features_per_ligand(feature_dfs, new_populations, bi_msm, 
-                                                       total_samples, clusters_map, num_trajs, apo_populations, save_dir)
+  lig_features_eq = {}
+  #lig_features_eq = msm_reweighted_features_per_ligand(feature_dfs, new_populations, bi_msm, 
+  #                                                     total_samples, clusters_map, num_trajs, apo_populations, save_dir)
 
   features = delta_delta_g.transpose()
   null_features = reference_docking.transpose().loc[features.index]
@@ -414,16 +468,16 @@ def make_clustermap(delta_delta_g, tica_dir, n_clusters, msm_lag_time, n_compone
   #delta_delta_g = delta_delta_g[drug_order]
   #delta_delta_g.sort("nebivolol", inplace=True)
 
-  #plot_heatmap(scale(delta_delta_g.values).T, delta_delta_g.columns.values, delta_delta_g.index.values, save_file="%s/msm_n-clusters%d_lag-time%d_n-heatmap.pdf" %(tica_dir, n_clusters, msm_lag_time))
-  #plot_heatmap(MI_matrix, samples_docking.columns.values, samples_tica.columns.values, save_file="%s/msm_n-clusters%d_lag-time%d_tICs%d.pdf" %(tica_dir, n_clusters, msm_lag_time, n_components))
+  #plot_heatmap(scale(delta_delta_g.values).T, delta_delta_g.columns.values, delta_delta_g.index.values, save_file="%s/msm_n-clusters%d_lag-time%d_n-heatmap.eps" %(tica_dir, n_clusters, msm_lag_time))
+  #plot_heatmap(MI_matrix, samples_docking.columns.values, samples_tica.columns.values, save_file="%s/msm_n-clusters%d_lag-time%d_tICs%d.eps" %(tica_dir, n_clusters, msm_lag_time, n_components))
   ddg_scaled = copy.deepcopy(delta_delta_g)
   ddg_scaled[delta_delta_g.columns.values] = scale(delta_delta_g.values)
   #ddg_scaled.index = [n.split("cluster")[1] for n in ddg_scaled.index.values]
 
 
-  #plot_clustermap(docking_normalized[["nebivolol", "terbutaline", "s-carvedilol", "Ici118551", "s-atenolol", "propranolol", "bisoprolol", "s-carazolol", "timolol", "procaterol", "r_isopreterenol", "norepinephrine", "r_epinephrine", "ethylnorepinephrine", "isoetharine", "N-Cyclopentylbutanephrine", "3p0g_lig", "fenoterol", "formoterol"]].loc[["cluster80", "cluster16", "cluster99", "cluster90", "cluster43", "cluster62", "cluster9", "cluster89", "cluster58", "cluster74", "cluster6"]].transpose(), save_file="%s/msm_n-clusters%d_lag-time%d_tICs%d.pdf" %(tica_dir, n_clusters, msm_lag_time, n_components), method='average')
-  #plot_clustermap(ddg_scaled[["s-carvedilol", "s-carazolol", "alprenalol", "norepinephrine", "nebivolol", "clenbuterol", "Tulobuterol", "r_isopreterenol", "isoetharine", "formoterol", "r_epinephrine", "ethylnorepinephrine", "N-Cyclopentylbutanephrine"]].loc[importances_df.index.values.tolist()[:10]].transpose(), save_file="%s/msm_n-clusters%d_lag-time%d_tICs%d.pdf" %(tica_dir, n_clusters, msm_lag_time, n_components), method='average')
-  plot_clustermap(pd.concat([ddg_scaled.transpose(), null_features], axis=1), save_file="%s/msm_n-clusters%d_lag-time%d_tICs%d_%s.pdf" %(tica_dir, n_clusters, msm_lag_time, n_components, precision), method='average', z_score=1)
+  #plot_clustermap(docking_normalized[["nebivolol", "terbutaline", "s-carvedilol", "Ici118551", "s-atenolol", "propranolol", "bisoprolol", "s-carazolol", "timolol", "procaterol", "r_isopreterenol", "norepinephrine", "r_epinephrine", "ethylnorepinephrine", "isoetharine", "N-Cyclopentylbutanephrine", "3p0g_lig", "fenoterol", "formoterol"]].loc[["cluster80", "cluster16", "cluster99", "cluster90", "cluster43", "cluster62", "cluster9", "cluster89", "cluster58", "cluster74", "cluster6"]].transpose(), save_file="%s/msm_n-clusters%d_lag-time%d_tICs%d.eps" %(tica_dir, n_clusters, msm_lag_time, n_components), method='average')
+  #plot_clustermap(ddg_scaled[["s-carvedilol", "s-carazolol", "alprenalol", "norepinephrine", "nebivolol", "clenbuterol", "Tulobuterol", "r_isopreterenol", "isoetharine", "formoterol", "r_epinephrine", "ethylnorepinephrine", "N-Cyclopentylbutanephrine"]].loc[importances_df.index.values.tolist()[:10]].transpose(), save_file="%s/msm_n-clusters%d_lag-time%d_tICs%d.eps" %(tica_dir, n_clusters, msm_lag_time, n_components), method='average')
+  plot_clustermap(pd.concat([ddg_scaled.transpose(), null_features], axis=1), save_file="%s/msm_n-clusters%d_lag-time%d_tICs%d_%s.eps" %(tica_dir, n_clusters, msm_lag_time, n_components, precision), method='average', z_score=1)
   return secret_compounds, ddg_scaled
 
 
@@ -600,7 +654,7 @@ def construct_difference_plots():
       plt.title("Isopreterenol Eq. Population Frequency")
       plt.xlabel("%s closest heavy atom distance" %str(measurement))
       plt.ylabel("Eq. Population")
-      save_file = "%s/%s_isopreterenol_kde.pdf" %(analysis_dir, measurement)
+      save_file = "%s/%s_isopreterenol_kde.eps" %(analysis_dir, measurement)
       plt.savefig(save_file)
       
       plt.clf()
@@ -608,7 +662,7 @@ def construct_difference_plots():
       plt.title("Isopreterenol Eq. Population Frequency")
       plt.xlabel("%s closest heavy atom distance" %str(measurement))
       plt.ylabel("Eq. Population")
-      save_file = "%s/%s_isopreterenol_hist.pdf" %(analysis_dir, measurement)
+      save_file = "%s/%s_isopreterenol_hist.eps" %(analysis_dir, measurement)
       plt.savefig(save_file)
       """
       cara = lig_features_eq["s-carazolol"][measurement]
@@ -622,7 +676,7 @@ def construct_difference_plots():
       plt.title("s-carazolol Eq. Population Frequency")
       plt.xlabel("%s closest heavy atom distance" %str(measurement))
       plt.ylabel("Eq. Population")
-      save_file = "%s/%s_carazolol_kde.pdf" %(analysis_dir, measurement)
+      save_file = "%s/%s_carazolol_kde.eps" %(analysis_dir, measurement)
       plt.savefig(save_file)
       
       plt.clf()
@@ -630,12 +684,12 @@ def construct_difference_plots():
       plt.title("Carazolol Eq. Population Frequency")
       plt.xlabel("%s closest heavy atom distance" %str(measurement))
       plt.ylabel("Eq. Population")
-      save_file = "%s/%s_carazolol_hist.pdf" %(analysis_dir, measurement)
+      save_file = "%s/%s_carazolol_hist.eps" %(analysis_dir, measurement)
       plt.savefig(save_file)
       """
       
       for ligand in ["3p0g_lig", "salbutamol", "salmeterol", "s-carvedilol", "isoetharine", "norepinephrine", "r_epinephrine", "ethylnorepinephrine", "nebivolol", "N-Cyclopentylbutanephrine"]:
-          save_file = "%s/%s_%s_minus_carazolol_frequency.pdf" %(analysis_dir, measurement, ligand)
+          save_file = "%s/%s_%s_minus_carazolol_frequency.eps" %(analysis_dir, measurement, ligand)
           if os.path.exists(save_file):
               continue
               
@@ -677,6 +731,57 @@ def construct_2d_distance_plots():
               custom_lims=custom_lim_finder(all_apo_data), max_diff=2.5, tpt_paths=None, tpt_paths_j=None,
                n_levels=10, worker_pool=None, parallel=True, n_pts=200j, all_apo_data=all_apo_data)
 
+def convert_sdf_to_smiles(sdf_file):
+  try:
+    for mol in pb.readfile("sdf", sdf_file):
+      return(mol.write("can"))
+  except:
+    return("")
+
+def convert_sdfs_to_smiles(sdfs, parallel=False, worker_pool=None):
+  smiles_list = function_mapper(convert_sdf_to_smiles, worker_pool, parallel, sdfs)
+  return(smiles_list)
+
+def convert_smiles_to_compound(smiles):
+  try: 
+    c = pc.get_compounds(smiles, namespace='smiles')
+    pc_smiles = c[0].canonical_smiles
+    c2 = pc.get_compounds(pc_smiles, namespace='smiles')[0]
+    return((c[0].synonyms[0], c[0].canonical_smiles, c2.synonyms[0]))
+  except:
+    return(("", "", ""))
+
+def convert_smiles_to_compounds(smiles, parallel=False, worker_pool=None):
+  compound_names_smiles = function_mapper(convert_smiles_to_compound, worker_pool, parallel, smiles)
+  return(compound_names_smiles)
+
+def convert_sdfs_to_compounds(sdfs, parallel=False, worker_pool=None):
+  print("Getting SMILES from SDFs...")
+  smiles_list = convert_sdfs_to_smiles(sdfs, parallel, worker_pool)
+  print("Done. Now getting compound names from SMILES...")
+  compound_names_smiles = convert_smiles_to_compounds(smiles_list, parallel, worker_pool)
+  names = [t[0] for t in compound_names_smiles]
+  pc_smiles = [t[1] for t in compound_names_smiles]
+  pc_names = [t[2] for t in compound_names_smiles]
+  print("Done. returning compound names.")
+  return(smiles_list, names, pc_smiles, pc_names) 
+
+"""
+adapted from RDKit since there is no AUC
+calculator for BedROC
+"""
+
+def calc_auc_from_roc(roc, scores, col):
+  TNR = roc[0] 
+  TPR = roc[1]    
+  numMol = len(scores) 
+  AUC = 0 
+
+   # loop over score list 
+  for i in range(0, numMol-1): 
+    AUC += (TNR[i+1]-TNR[i]) * (TPR[i+1]+TPR[i]) 
+
+  return 0.5*AUC 
 
 def compute_auc(y_train, y_score):
     fpr, tpr, _ = roc_curve(y_train, y_score[:,1])
@@ -701,90 +806,105 @@ def logauc2(x, y, lam=0.001):
             num += (np.log10(x[i+1]) - np.log10(x[i])) * (y[i+1]+y[i]) /2.
     return num / (np.log10(1./lam))
 
-def do_regression_experiment(features, y, feature_names, n_trials, train_size=0.8, regularize=False, model="rfr"):
+def do_regression_experiment(features, y, feature_names, n_trials, 
+                             train_size=0.8, regularize=False, model="rfr",
+                             normalize=False, normalize_axis0=True):
     test_r2s = []
     feature_importances = []
 
-    features_y = copy.deepcopy(features)
-    features_y.append(y)
-    kendall_coefficients = []
-    kendall_pvalues = []
+    do_single_regression_experiment_partial = partial(do_single_regression_experiment, features=features, 
+                                                      y=y, n_estimators=1000, train_size=train_size,
+                                                      model=model, normalize=normalize, normalize_axis0=normalize_axis0)
+
+    model_results = function_mapper(do_single_classification_experiment_single_partial, worker_pool, parallel, list(range(0,n_trials)))
     
-    for j in range(0,n_trials):
-        print(j)
-        r2_scores = []
-        train_test_arrays = train_test_split(*features_y, train_size=0.8) 
-        y_train = train_test_arrays[2*len(features)]
-        y_test = train_test_arrays[2*len(features) + 1]
-        feature_importance = []
-        kendall_score = []
-        kendall_pvalue = []
+    print("Finished fitting models")
 
-        for i in range(0, len(features)):
-            X_train = train_test_arrays[2*i]
-            X_test = train_test_arrays[2*i+1]
+    results_dict['feature_importances'] = [t[0] for t in model_results]
+    results_dict['test_aucs'] = [t[1] for t in model_results]
+    results_dict['test_log_aucs'] = [t[2] for t in model_results]
+    results_dict['test_roc_aucs'] =  [t[3] for t in model_results]
+    results_dict['bedrocs'] =  [t[4] for t in model_results]
+    results_dict['tprs'] =  [t[5] for t in model_results]
+    results_dict['fprs'] =  [t[6] for t in model_results]
+    results_dict['recalls'] =  [t[7] for t in model_results]
 
-
-            sc = StandardScaler()
-            sc.fit(X_train)
-            X_train = sc.transform(X_train)
-            X_test = sc.transform(X_test)
-
-            if model == "rfr":
-              rfr = RandomForestRegressor(n_estimators=100, max_depth=None, max_features='sqrt', n_jobs=-1)
-              rfr.fit(X_train, y_train)
-              feature_importance.append(rfr.feature_importances_)
-            elif model == "LassoCV":
-              rfr = linear_model.LassoCV(n_jobs=-1)
-              rfr.fit(X_train, y_train)
-              feature_importance.append(rfr.coef_)
-            elif model == "RidgeCV":
-              rfr = linear_model.RidgeCV()
-              rfr.fit(X_train, y_train)
-              feature_importance.append(rfr.coef_)
-            elif model == "SVR":
-              rfr = SVR()
-              rfr.fit(X_train, y_train)
-              feature_importance.append([0. for i in range(0, X_train.shape[1])])
-            if regularize:
-                top_indices = np.argsort(rfr.feature_importances_*-1.)[:min(5, X.shape[1])]
-                rfr = RandomForestRegressor(n_estimators=100, max_depth = 3, max_features=None, n_jobs=-1, oob_score=False)
-                X_train = X_train[:, top_indices]
-                X_test = X_test[:, top_indices]
-                rfr.fit(X_train, y_train)
-                f = np.zeros(X.shape[1])
-                f[top_indices] = rfr.feature_importances_
-                feature_importance.append(f)
-
-
-
-            if train_size == 1.:
-                X_test = X_train
-                y_test = y_train
-           
-            coef, pval = scipy.stats.kendalltau(rfr.predict(X_test).ravel(), y_test.ravel())
-            kendall_score.append(coef)
-            kendall_pvalue.append(pval)
-            r2_score = rfr.score(X_test, y_test)
-            r2_scores.append(r2_score)
-            
-        
-        test_r2s.append(r2_scores)
-        kendall_coefficients.append(kendall_score)
-        kendall_pvalues.append(kendall_pvalue)
-
-        feature_importances.append(feature_importance)
-        results_dict = {"test_r2s": test_r2s, "feature_importances": feature_importances,
-                        "kendall_coefficients": kendall_coefficients,
-                        "kendall_pvalues": kendall_pvalues}
     
     return results_dict
 
+def do_single_regression_experiment(trial, features, y,
+                                    n_estimators, 
+                                    train_size=0.8,
+                                    regularize=False,
+                                    model="rfr",
+                                    normalize=True,
+                                    normalize_axis0=True):
+
+  train_test_arrays = train_test_split(*features_y, train_size=train_size) 
+
+  y_train = train_test_arrays[2*len(features)]
+  y_test = train_test_arrays[2*len(features) + 1]
+  feature_importance = []
+
+  test_r2s = []
+  kendall_coefficients = []
+  kendall_pvalues = []
+  feature_importances = []
+
+
+  for i in range(0, len(features)):
+      X_train = train_test_arrays[2*i]
+      X_test = train_test_arrays[2*i+1]
+
+      if normalize:
+        sc = StandardScaler()
+        sc.fit(X_train)
+      else:
+        sc = None
+      X_train = custom_normalize(X_train, sc, normalize_axis0)
+      X_test = custom_normalize(X_test, sc, normalize_axis0)
+
+      if model == "rfr":
+        rfr = RandomForestRegressor(n_estimators=100, max_depth=None, max_features='sqrt', n_jobs=-1)
+        rfr.fit(X_train, y_train)
+        feature_importance.append(rfr.feature_importances_)
+      elif model == "LassoCV":
+        rfr = linear_model.LassoCV(n_jobs=-1)
+        rfr.fit(X_train, y_train)
+        feature_importance.append(rfr.coef_)
+      elif model == "RidgeCV":
+        rfr = linear_model.RidgeCV()
+        rfr.fit(X_train, y_train)
+        feature_importance.append(rfr.coef_)
+      elif model == "SVR":
+        rfr = SVR()
+        rfr.fit(X_train, y_train)
+        feature_importance.append([0. for i in range(0, X_train.shape[1])])
+
+         
+      coef, pval = scipy.stats.kendalltau(rfr.predict(X_test).ravel(), y_test.ravel())
+      kendall_scores.append(coef)
+      kendall_pvalues.append(pval)
+      r2_score = rfr.score(X_test, y_test)
+      r2_scores.append(r2_score)
+          
+
+      feature_importances.append(feature_importance)
+      results_dict = {"test_r2s": test_r2s, "feature_importances": feature_importances,
+                      "kendall_coefficients": kendall_coefficients,
+                      "kendall_pvalues": kendall_pvalues}
+    
+  return((feature_importance, aucs, log_aucs, roc_aucs, bedrocs, tprs, fprs, recalls))
+
+
 class RegularizedModel(object):
 
-  def __init__(self, sklearn_model, retained_features=None):
+  def __init__(self, sklearn_model, input_transformer=None,
+               normalize_axis0=False, retained_features=None):
     self.sklearn_model = sklearn_model
     self.retained_features = retained_features
+    self.input_transformer = input_transformer
+    self.normalize_axis0 = normalize_axis0
 
   def predict(self, X):
     X = self.pre_regularize(X)
@@ -797,32 +917,198 @@ class RegularizedModel(object):
     return(proba)
 
   def pre_regularize(self, X):
+    X = custom_normalize(X, self.input_transformer, self.normalize_axis0)
     if self.retained_features is not None:
       X = X[:, self.retained_features]
     return X
 
+class CustomSplitter(object):
+
+  def __init__(self, antagonist_inds, a_agonist_inds,
+               b_agonist_inds,
+               proportion=0.9):
+    self.antagonist_inds = antagonist_inds
+    self.a_agonist_inds = a_agonist_inds
+    self.b_agonist_inds = b_agonist_inds
+    self.proportion = proportion
+
+  def split(self, array_list):
+      random.shuffle(self.antagonist_inds)
+      random.shuffle(self.a_agonist_inds)
+      n_ligands = len(self.antagonist_inds) + len(self.a_agonist_inds) + len(self.b_agonist_inds)
+      antagonist_prop = float(len(self.antagonist_inds)) / float(n_ligands)
+
+      n_test_ligands = float(len(self.b_agonist_inds))/(1.-antagonist_prop)
+      n_test_antagonists = int(np.round(n_test_ligands * antagonist_prop))
+
+      test_inds = self.b_agonist_inds + self.antagonist_inds[:n_test_antagonists]
+      train_inds = self.antagonist_inds[n_test_antagonists:] + self.a_agonist_inds
+
+      split_list = []
+      for arr in array_list:
+          split_list.append(arr[train_inds,:])
+          split_list.append(arr[test_inds, :])
+      return split_list
+
 def generate_or_load_model(features, y, featurizer_names, 
                            n_trials, train_test_split_p,
                            manual_regularize, model_name, filename,
-                           redo=True):
+                           n_estimators=1000, max_depth=3,
+                           redo=True, parallel=False, worker_pool=None,
+                           criterion='gini', normalize=True, splitter=None,
+                           normalize_axis0=False):
     
-    if os.path.exists(filename) and not redo:
-        with open(filename, "rb") as f:
-            model = pickle.load(f)
-        return(model)
+  if os.path.exists(filename) and not redo:  
+    print("Already fit model, loading now.")
+    with open(filename, "rb") as f:
+        model = pickle.load(f)
+    return(model)
+  else:
+    print("Aobut to fit model(s).")
+    model = do_classification_experiment(features=features, y=y, feature_names=featurizer_names,
+                                         n_trials=n_trials, train_size=train_test_split_p, 
+                                         regularize=manual_regularize,
+                                         model=model_name, parallel=parallel, worker_pool=worker_pool,
+                                         n_estimators=n_estimators, max_depth=max_depth, criterion=criterion,
+                                         normalize=normalize, splitter=splitter, normalize_axis0=normalize_axis0)
+    with open(filename, "wb") as f:
+        pickle.dump(model, f, protocol=2)
+    return(model)
+
+
+def do_single_classification_experiment(trial, features_y=[], y=None,
+                                        features=None, model=None,
+                                        regularize=None, train_size=None,
+                                        max_depth=None, n_estimators=1000,
+                                        splitter=None, normalize=True,
+                                        normalize_axis0=False):
+  aucs = []
+  log_aucs = []
+  roc_aucs = []
+  bedrocs = []
+  fprs = []
+  tprs = []
+  recalls = []
+  if splitter is None:
+    train_test_arrays = train_test_split(*features_y, train_size=train_size, stratify=y) 
+  else:
+    train_test_arrays = splitter.split(features_y)
+  y_train = train_test_arrays[2*len(features)]
+  y_test = train_test_arrays[2*len(features) + 1]
+  feature_importance = []
+
+  for i in range(0, len(features)):
+      X_train = train_test_arrays[2*i]
+      X_test = train_test_arrays[2*i+1]
+
+      if normalize:
+        sc = StandardScaler()
+        sc.fit(X_train)
+      else:
+        sc = None
+      X_train = custom_normalize(X_train, sc, normalize_axis0)
+      X_test = custom_normalize(X_test, sc, normalize_axis0)
+
+      if model == "rfr":
+        rfr = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, max_features='sqrt', oob_score=False)
+        rfr.fit(X_train, y_train)
+        if not regularize:
+            feature_importance.append(rfr.feature_importances_)
+        else:
+            f = np.zeros(X_train.shape[1])
+            top_indices = np.argsort(rfr.feature_importances_*-1.)[:regularize]
+            rfr = RandomForestClassifier(n_estimators=n_estimators, max_features='sqrt', oob_score=False)
+            X_train = X_train[:, top_indices]
+            X_test = X_test[:, top_indices]
+            rfr.fit(X_train, y_train)
+            f[top_indices] = rfr.feature_importances_
+            feature_importance.append(f)
+      elif model=="logistic_cv":
+        rfr = linear_model.LogisticRegressionCV()
+        rfr.fit(X_train, y_train)
+        #print(rfr.coef_)
+        if not regularize:
+            feature_importance.append(rfr.coef_)
+        else:
+            f = np.zeros(X_train.shape[1])
+            top_indices = np.argsort(np.abs(rfr.coef_)*-1.)[:(X_train.shape[0]/2)].flatten()
+            rfr = linear_model.LogisticRegressionCV()
+            X_train = X_train[:, top_indices]
+            X_test = X_test[:, top_indices]
+            rfr.fit(X_train, y_train)
+            f[top_indices] = rfr.coef_
+            feature_importance.append(f)
+      if train_size == 1.:
+          X_test = X_train
+          y_test = y_train
+      
+      y_pred = rfr.predict(X_test)
+      tp = float(len(set(np.where(y_test == 1.)[0].tolist()).intersection(set(np.where(y_pred == 1.)[0].tolist()))))
+      fp = float(len(set(np.where(y_test == 0.)[0].tolist()).intersection(set(np.where(y_pred == 1.)[0].tolist()))))
+
+      P = float(len(np.where(y_test == 1.)[0]))
+      if P == 0:
+        recalls.append(0.)
+      else:
+        recalls.append(recall_score(y_test, y_pred))
+        #recalls.append(tp / P)
+
+      if (tp+fp) == 0:
+        tprs.append(0.)
+        fprs.append(1.)
+      else:
+        tpr = precision_score(y_test, y_pred)
+        fpr = 1. - tpr
+        #tpr = tp / (tp + fp)
+        #fpr = fp / (tp + fp)
+        tprs.append(tpr)
+        fprs.append(fpr)
+
+      y_score = rfr.predict_proba(X_test)
+
+
+      try:
+        auc, logauc = compute_auc(y_test, y_score)
+        aucs.append(auc)
+        log_aucs.append(logauc)  
+      except:
+        pass
+      roc_aucs.append(roc_auc_score(convert_to_n_class(y_test[:,0]), y_score))
+
+      try:
+        scores_conc = np.hstack([y_test, y_score[:,1].reshape((-1,1))])
+        score_df = pd.DataFrame(scores_conc, columns=["label"] + [str(i) for i in range(0, scores_conc.shape[1]-1)])
+        score_df.sort("0", inplace=True, ascending=False)
+        bedroc_auc = CalcBEDROC(score_df.values, col=0, alpha=20)
+        #bedroc_auc = calc_auc_from_roc(CalcBEDROC(score_df.values, col=0, alpha=20), score_df.values, col=0)
+        bedrocs.append(bedroc_auc)
+      except:
+        bedrocs.append(0.)
+
+
+  return((feature_importance, aucs, log_aucs, roc_aucs, bedrocs, tprs, fprs, recalls))
+
+def convert_to_n_class(values):
+  return np.eye(len(set(values.tolist())))[values.tolist()]
+
+def custom_normalize(X, normalizer, normalize_axis0=False):
+  if normalizer is not None:
+    if not normalize_axis0:
+      X = normalizer.transform(X)
     else:
-        model = do_classification_experiment(features, y, featurizer_names,
-                                             n_trials, train_test_split_p, 
-                                             regularize=manual_regularize,
-                                             model=model_name)
-        with open(filename, "wb") as f:
-            pickle.dump(model, f, protocol=2)
-        return(model)
+      X = np.hstack([normalizer.transform(X), preprocessing.normalize(X, axis=1)])#, return_norm=True)
+  elif normalize_axis0:
+    X = np.hstack([X, preprocessing.normalize(X, axis=1)])#, return_norm=True)
+    X = np.hstack([X, preprocessing.normalize(X, axis=1)])#, return_norm=True)
+  return X
 
 def do_classification_experiment(features, y, feature_names,
                                  n_trials, train_size=0.8,
-                                 regularize=False, model="rfr"):
-    test_accuracies = []
+                                 regularize=False, model="rfr",
+                                 parallel=False, worker_pool=None,
+                                 n_estimators=1000, max_depth=3,
+                                 splitter=None, criterion='gini',
+                                 normalize=False, normalize_axis0=False):
     test_aucs = []
     test_log_aucs = []
     test_roc_aucs = []
@@ -835,22 +1121,27 @@ def do_classification_experiment(features, y, feature_names,
 
     print("Fitting models over all data...")
     for feature_ind, X_train in enumerate(features):
-      sc = StandardScaler()
-      sc.fit(X_train)
-      X_train = sc.transform(X_train)
+      if normalize:
+        sc = StandardScaler()
+        sc.fit(X_train)
+      else:
+        sc = None
+      X_train = custom_normalize(X_train, sc, normalize_axis0)
+
       y_train = copy.deepcopy(y)
       if model == "rfr":
-        rfr = RandomForestClassifier(n_estimators=1000, max_depth=3, max_features='sqrt', n_jobs=-1, oob_score=False)
+        rfr = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, max_features='sqrt', n_jobs=-1, oob_score=False, criterion=criterion)
         rfr.fit(X_train, y_train)
         if not regularize:
-            results_dict[feature_names[feature_ind]] = (rfr, rfr.feature_importances_)
+            final_rfr = RegularizedModel(sklearn_model=rfr, input_transformer=sc, normalize_axis0=normalize_axis0)
+            results_dict[feature_names[feature_ind]] = (final_rfr, rfr.feature_importances_)
         else:
             f = np.zeros(X_train.shape[1])
             top_indices = np.argsort(rfr.feature_importances_*-1.)[:(X_train.shape[0]/2)]
             rfr = RandomForestClassifier(n_estimators=500, max_depth=3, max_features='sqrt', n_jobs=-1, oob_score=False)
             X_train = X_train[:, top_indices]
             rfr.fit(X_train, y_train)
-            final_rfr = RegularizedModel(sklearn_model=rfr, retained_features=top_indices)
+            final_rfr = RegularizedModel(sklearn_model=rfr, retained_features=top_indices, input_transformer=sc, normalize_axis0=normalize_axis0)
             f[top_indices] = rfr.feature_importances_
             results_dict[feature_names[feature_ind]] = (final_rfr, f)
 
@@ -858,105 +1149,48 @@ def do_classification_experiment(features, y, feature_names,
         rfr = linear_model.LogisticRegressionCV()
         rfr.fit(X_train, y_train)
         if not regularize:
-            results_dict[feature_names[feature_ind]] = (rfr, rfr.coef_)
+            final_rfr = RegularizedModel(sklearn_model=rfr, input_transformer=sc, normalize_axis0=normalize_axis0)
+            results_dict[feature_names[feature_ind]] = (final_rfr, rfr.coef_)
         else:
-            f = np.zeros(X_train.shape[1])
+            f = np.zeros(X_train.shape[1])  
             top_indices = np.argsort(np.abs(rfr.coef_)*-1.)[:(X_train.shape[0]/2)].flatten()
             rfr = linear_model.LogisticRegressionCV()
             X_train = X_train[:, top_indices]
             rfr.fit(X_train, y_train)
-            final_rfr = RegularizedModel(sklearn_model=rfr, retained_features=top_indices)
+            final_rfr = RegularizedModel(sklearn_model=rfr, retained_features=top_indices, input_transformer=sc, normalize_axis0=normalize_axis0)
             f[top_indices] = rfr.coef_
             results_dict[feature_names[feature_ind]] = (final_rfr, f)
 
 
     print("Fitting models over split train data...")
     
-    for j in range(0,n_trials):
-        print(j)
-        aucs = []
-        log_aucs = []
-        roc_aucs = []
-        train_test_arrays = train_test_split(*features_y, train_size=0.8, stratify=y) 
-        y_train = train_test_arrays[2*len(features)]
-        y_test = train_test_arrays[2*len(features) + 1]
-        feature_importance = []
-
-        for i in range(0, len(features)):
-            X_train = train_test_arrays[2*i]
-            X_test = train_test_arrays[2*i+1]
-
-            sc = StandardScaler()
-            sc.fit(X_train)
-            X_train = sc.transform(X_train)
-            X_test = sc.transform(X_test)
-
-            if model == "rfr":
-              rfr = RandomForestClassifier(n_estimators=1000, max_depth=3, max_features='sqrt', n_jobs=-1, oob_score=False)
-              rfr.fit(X_train, y_train)
-              if not regularize:
-                  feature_importance.append(rfr.feature_importances_)
-              else:
-                  f = np.zeros(X_train.shape[1])
-                  top_indices = np.argsort(rfr.feature_importances_*-1.)[:(X_train.shape[0]/2)]
-                  rfr = RandomForestClassifier(n_estimators=500, max_depth=3, max_features='sqrt', n_jobs=-1, oob_score=False)
-                  X_train = X_train[:, top_indices]
-                  X_test = X_test[:, top_indices]
-                  rfr.fit(X_train, y_train)
-                  f[top_indices] = rfr.feature_importances_
-                  feature_importance.append(f)
-            elif model=="logistic_cv":
-              rfr = linear_model.LogisticRegressionCV()
-              rfr.fit(X_train, y_train)
-              #print(rfr.coef_)
-              if not regularize:
-                  feature_importance.append(rfr.coef_)
-              else:
-                  f = np.zeros(X_train.shape[1])
-                  top_indices = np.argsort(np.abs(rfr.coef_)*-1.)[:(X_train.shape[0]/2)].flatten()
-                  rfr = linear_model.LogisticRegressionCV()
-                  X_train = X_train[:, top_indices]
-                  X_test = X_test[:, top_indices]
-                  rfr.fit(X_train, y_train)
-                  f[top_indices] = rfr.coef_
-                  feature_importance.append(f)
-
-
-
-            if train_size == 1.:
-                X_test = X_train
-                y_test = y_train
-            
-            y_pred = rfr.predict(X_test)
-            y_score = rfr.predict_proba(X_test)
-            try:
-              auc, logauc = compute_auc(y_test, y_score)
-              aucs.append(auc)
-              log_aucs.append(logauc)  
-            except:
-              pass
-            def convert_to_n_class(values):
-              return np.eye(len(set(values.tolist())))[values.tolist()]
-            roc_aucs.append(roc_auc_score(convert_to_n_class(y_test[:,0]), y_score))
-
-        feature_importances.append(feature_importance)
-        test_aucs.append(aucs)
-        test_log_aucs.append(log_aucs)
-        test_roc_aucs.append(roc_aucs)
+    do_single_classification_experiment_single_partial = partial(do_single_classification_experiment, features_y=features_y,
+                                                                                             y=y, features=features, model=model,
+                                                                                             regularize=regularize, train_size=train_size, 
+                                                                                             n_estimators=n_estimators, max_depth=max_depth,
+                                                                                             normalize=normalize, splitter=splitter,
+                                                                                             normalize_axis0=normalize_axis0)
+    model_results = function_mapper(do_single_classification_experiment_single_partial, worker_pool, parallel, list(range(0,n_trials)))
     
-    results_dict.update({"test_accuracies": test_accuracies,
-                    "test_aucs": test_aucs,
-                    "test_log_aucs": test_log_aucs,
-                    "test_roc_aucs": test_roc_aucs,
-                    "feature_importances": feature_importances})
+    print("Finished fitting models")
+
+    results_dict['feature_importances'] = [t[0] for t in model_results]
+    results_dict['test_aucs'] = [t[1] for t in model_results]
+    results_dict['test_log_aucs'] = [t[2] for t in model_results]
+    results_dict['test_roc_aucs'] =  [t[3] for t in model_results]
+    results_dict['bedrocs'] =  [t[4] for t in model_results]
+    results_dict['tprs'] =  [t[5] for t in model_results]
+    results_dict['fprs'] =  [t[6] for t in model_results]
+    results_dict['recalls'] =  [t[7] for t in model_results]
 
 
-    #return test_accuracies, test_aucs, test_log_aucs, C_test_aucs, C_test_log_aucs, feature_importances
     return results_dict
 
-def analyze_regression_experiment(test_r2s, feature_importances, feature_names,
-                        X, y, X_df, top_clusters, common_agonists, experiment_name, save_dir):
-    
+def analyze_regression_experiment(results_dict, feature_names,
+                                  top_clusters, common_agonists, experiment_name, save_dir):
+    test_r2s = results_dict["test_r2s"]
+    feature_importances = results_dict["feature_importances"]
+
     auc_df = pd.DataFrame(np.array(test_r2s), columns=feature_names)    
     plt.style.use('ggplot')
     plt.figure(figsize=(5, 5))
@@ -972,7 +1206,7 @@ def analyze_regression_experiment(test_r2s, feature_importances, feature_names,
     plt.xlabel("Featurization")
     plt.tight_layout()
     plt.show()
-    plt.savefig("%s/%s_r2s.pdf" %(save_dir, experiment_name))
+    plt.savefig("%s/%s_r2s.eps" %(save_dir, experiment_name))
     plt.clf()
     
     docking_importances = [f[2] for f in feature_importances]
@@ -985,7 +1219,7 @@ def analyze_regression_experiment(test_r2s, feature_importances, feature_names,
     plt.tight_layout()
 
 
-    plt.savefig("%s/%s_feature_importances.pdf" %(save_dir, experiment_name))
+    plt.savefig("%s/%s_feature_importances.eps" %(save_dir, experiment_name))
     plt.clf()
 
     cs = np.logspace(-3., 20.)
@@ -1006,10 +1240,10 @@ def analyze_regression_experiment(test_r2s, feature_importances, feature_names,
     plt.tight_layout()
 
 
-    plt.savefig("%s/%s_lasso.pdf" %(save_dir, experiment_name))
+    plt.savefig("%s/%s_lasso.eps" %(save_dir, experiment_name))
     plt.clf()
     
-    plot_clustermap(X_df[common_agonists].loc[importances_df.index.values.tolist()[:max_features]].transpose(), save_file="%s/%s_ligands_vs_msm_states_ddg.pdf" %(save_dir, experiment_name), method='average', z_score=1)
+    #plot_clustermap(X_df[common_agonists].loc[importances_df.index.values.tolist()[:max_features]].transpose(), save_file="%s/%s_ligands_vs_msm_states_ddg.eps" %(save_dir, experiment_name), method='average', z_score=1)
     
     test_r2s = np.array(test_r2s)
     delta_r2s = np.zeros((test_r2s.shape[0], len(feature_names)-1))
@@ -1043,7 +1277,7 @@ def make_auc_df(test_aucs, featurizer_names, exp_title, save_dir):
   plt.ylabel("Frequency of AUCs over Random Splits")
   plt.xlabel("Featurization")
   plt.tight_layout()
-  plt.savefig("%s/%s%s_aucs.pdf" %(save_dir, exp_title, str(featurizer_names)))#, transparent=True)
+  plt.savefig("%s/%s%s_aucs.eps" %(save_dir, exp_title, str(featurizer_names)))#, transparent=True)
   plt.show()
 
   if auc_df.shape[1] > 1:
@@ -1064,7 +1298,7 @@ def make_auc_df(test_aucs, featurizer_names, exp_title, save_dir):
     plt.ylabel("Change in AUC vs. Crystal Structures")
     plt.xlabel("Featurization")
     plt.tight_layout()
-    plt.savefig("%s/%s%s_auc_deltas.pdf" %(save_dir, exp_title, str(featurizer_names)))#, transparent=True)
+    plt.savefig("%s/%s%s_auc_deltas.eps" %(save_dir, exp_title, str(featurizer_names)))#, transparent=True)
     plt.show()
 
 
@@ -1073,18 +1307,20 @@ Following function takes helpful code from:
 http://stackoverflow.com/questions/35634238/how-to-save-a-pandas-dataframe-table-as-a-png
 Thanks!
 """
-def test_auc_significance(test_aucs, featurizer_names, exp_title, save_dir):
-  test_aucs = np.array(test_aucs)
+def test_auc_significance(test_aucs, featurizer_names, exp_title, save_dir, fxn=np.median):
+  test_aucs = np.vstack(test_aucs)
+  print(test_aucs.shape)
   delta_aucs = np.zeros((test_aucs.shape[0], len(featurizer_names)-1))
-  results_rows = [[np.median(test_aucs[:,0]), 0., (0, 0.)]]
+  results_rows = [[fxn(test_aucs[:,0]), 0., (0, 0.)]]
   for i, name in enumerate(featurizer_names):
       if i == 0: continue
       delta_aucs[:,i-1] = test_aucs[:,i] - test_aucs[:,0]    
       n_successes = len(np.where(delta_aucs[:,i-1] > 0.)[0])
       nobs = delta_aucs.shape[0]
       confint = statsmodels.stats.proportion.proportion_confint(count=n_successes, nobs=nobs, alpha=0.01, method='wilson')
-      results_rows.append([np.median(test_aucs[:,i]), np.median(delta_aucs[:,i-1]), confint])
+      results_rows.append([fxn(test_aucs[:,i]), fxn(delta_aucs[:,i-1]), confint])
   results_df = pd.DataFrame(results_rows, columns=["Median AUC", "Median delta AUC", "Sign Test 99% CI"], index=featurizer_names)
+  print(results_df)
   
   fig, ax = plt.subplots(figsize=(8,6)) # no visible frame
   fig.patch.set_visible(False)
@@ -1095,13 +1331,43 @@ def test_auc_significance(test_aucs, featurizer_names, exp_title, save_dir):
 
   table(ax, results_df, fontsize=36.)  # where df is your data frame#
 
-  plt.savefig("%s/%s_%s_auc_significance.pdf" %(save_dir, exp_title, str(featurizer_names)))#, transparent=True)
+  plt.savefig("%s/%s_%s_auc_significance.eps" %(save_dir, exp_title, str(featurizer_names)))#, transparent=True)
   plt.show()
+
+
+
+def plot_clustermap(corr_df, save_file, method='single', row_cluster=True, col_cluster=True, xtick_labelsize=8, ytick_labelsize=8, z_score=0):
+  sns.set_style("darkgrid", {"figure.facecolor": "white"})
+  plt.rcParams['xtick.labelsize'] = xtick_labelsize
+  plt.rcParams['ytick.labelsize'] = ytick_labelsize
+  ratio = float(corr_df.shape[0]) / float(corr_df.shape[1])
+  if ratio > 1.:
+    figsize=(8./ratio , 8.)
+  else:
+    figsize = (8., 8./ratio)
+
+  #fig = plt.figure(figsize)
+  #fig.patch.set_alpha(0.)
+  #ax = fig.add_subplot(111)
+  g = sns.clustermap(corr_df, z_score=z_score, method=method, row_cluster=row_cluster, col_cluster=col_cluster)
+  plt.setp(g.ax_heatmap.yaxis.get_majorticklabels(), rotation=0)
+  sns.set(font_scale=0.5)
+  
+  g.savefig(save_file, facecolor='w', edgecolor='w')
+  #plt.show()
 
 def analyze_multiclass_experiment(results_dict, featurizer_names, 
                                   all_feature_names, drug_names, save_dir, 
                                   class_names, X, coef_name="Importance", 
-                                  exp_title=""):
+                                  exp_title="", remake=True):
+
+  X_df = pd.DataFrame(X, columns=all_feature_names[1], index=drug_names)
+
+  if not os.path.exists("%s/ligands_vs_msm_states_ddg.eps" %(save_dir)) or remake:
+    plot_clustermap(standardize_df(X_df), 
+                    save_file="%s/ligands_vs_msm_states_ddg.eps" %(save_dir), 
+                    method='average', z_score=None)
+
   """
   Takes a dictionary mapping model result type (feature importances, AUC's, etc.)
     to the results across many trials.
@@ -1110,12 +1376,56 @@ def analyze_multiclass_experiment(results_dict, featurizer_names,
      with one array per trial. The function then finds average feature_importance
      for each feature for each class among all the trials
   """
-  X_df = pd.DataFrame(X, columns=all_feature_names[1], index=drug_names)
+
+  print("analyzing Recall:")
+  test_auc_significance(results_dict["recalls"],
+                        featurizer_names, "Recall", save_dir, fxn=np.mean)
+
+  make_auc_df(results_dict["recalls"], 
+              featurizer_names, "Recall", save_dir)
+
+  print("analyzing TPR:")
+  test_auc_significance(results_dict["tprs"],
+                        featurizer_names, "TPR", save_dir, fxn=np.mean)
+
+  make_auc_df(results_dict["tprs"], 
+              featurizer_names, "TPR", save_dir)
+
+  print("analyzing FPR:")
+  test_auc_significance(results_dict["fprs"],
+                        featurizer_names, "FPR", save_dir, fxn=np.mean)
+
+  make_auc_df(results_dict["fprs"], 
+              featurizer_names, "FPR", save_dir)
+
+  print("analyzing ROC AUC:")
   test_auc_significance(results_dict["test_roc_aucs"],
-                        featurizer_names, exp_title, save_dir)
+                        featurizer_names, exp_title, save_dir, fxn=np.mean)
+
   make_auc_df(results_dict["test_roc_aucs"], 
               featurizer_names, exp_title, save_dir)
 
+  try:
+    print("analyzing BedROC")
+    test_auc_significance(results_dict["bedrocs"],
+                          featurizer_names, "BedROC", save_dir, fxn=np.mean)
+    make_auc_df(results_dict["bedrocs"], 
+                featurizer_names, "BedROCs", save_dir)
+  except:
+    print("/n")
+
+  try:
+    print("analyzing LogAUC")
+    test_auc_significance(results_dict["test_log_aucs"],
+                          featurizer_names, "LogAUC", save_dir, fxn=np.mean)
+    make_auc_df(results_dict["test_log_aucs"], 
+                featurizer_names, "LogAUCs", save_dir)
+  except:
+    print("/n")
+
+
+
+  importance_dfs = {}
   for k, featurizer_name in enumerate(featurizer_names):
     feature_names = all_feature_names[k]
 
@@ -1133,11 +1443,14 @@ def analyze_multiclass_experiment(results_dict, featurizer_names,
                                    index=feature_names,
                                    columns=["Importance"]).sort(["Importance"],
                                    inplace=False)
-
+      if class_id == 0:
+        importance_dfs[featurizer_name] = importance_df
+                                     
       if importance_df.shape[0] > 30:
         importance_df = pd.concat([importance_df.iloc[:20], 
                                    importance_df.iloc[range(importance_df.shape[0]-20,
                                    importance_df.shape[0])]], axis=0)
+
       fig = plt.figure()
       ax = fig.add_subplot(111)
       importance_df.plot(kind='barh', ax=ax)
@@ -1149,21 +1462,18 @@ def analyze_multiclass_experiment(results_dict, featurizer_names,
       title = "Feature Importances: %s" %str(class_names[class_id])
       plt.title(title)
       plt.tight_layout()
-      plt.savefig("%s/%s_%s_%s.pdf" %(save_dir, exp_title, featurizer_name, title))#, transparent=True)
+      plt.savefig("%s/%s_%s_%s.eps" %(save_dir, exp_title, featurizer_name, title))#, transparent=True)
       plt.show()
 
+  return(importance_dfs)
 
-
-  if not os.path.exists("%s/ligands_vs_msm_states_ddg.pdf" %(save_dir)):
-    plot_clustermap(standardize_df(X_df), 
-                    save_file="%s/ligands_vs_msm_states_ddg.pdf" %(save_dir), 
-                    method='average', z_score=None)
-
-
-  return
-
-def standardize_df(df):
-  return(pd.DataFrame(StandardScaler().fit_transform(df.values), columns=df.columns, index=df.index))
+def standardize_df(df, columns=None):
+  new_df = copy.deepcopy(df)
+  if columns is not None:
+    new_df[columns] = StandardScaler().fit_transform(new_df[columns].values)
+    return(new_df)
+  else:
+    return(pd.DataFrame(StandardScaler().fit_transform(df.values), columns=df.columns, index=df.index))
 
 
 def analyze_classification_experiment(test_aucs, feature_importances, feature_names,
@@ -1184,7 +1494,7 @@ def analyze_classification_experiment(test_aucs, feature_importances, feature_na
     plt.xlabel("Featurization")
     plt.tight_layout()
 
-    plt.savefig("%s/%s_aucs.pdf" %(save_dir, experiment_name))
+    plt.savefig("%s/%s_aucs.eps" %(save_dir, experiment_name))
     plt.show()
     plt.clf()
     
@@ -1198,7 +1508,7 @@ def analyze_classification_experiment(test_aucs, feature_importances, feature_na
     plt.tight_layout()
 
 
-    plt.savefig("%s/%s_feature_importances.pdf" %(save_dir, experiment_name))
+    plt.savefig("%s/%s_feature_importances.eps" %(save_dir, experiment_name))
     plt.clf()
 
     cs = np.logspace(-3., 20.)
@@ -1219,11 +1529,11 @@ def analyze_classification_experiment(test_aucs, feature_importances, feature_na
     plt.tight_layout()
 
 
-    plt.savefig("%s/%s_lasso.pdf" %(save_dir, experiment_name))
+    plt.savefig("%s/%s_lasso.eps" %(save_dir, experiment_name))
     plt.clf()
     
 
-    plot_clustermap(X_df[common_agonists].loc[importances_df.index.values.tolist()[:max_features]].transpose(), save_file="%s/%s_ligands_vs_msm_states_ddg.pdf" %(save_dir, experiment_name), method='average', z_score=1)
+    plot_clustermap(X_df[common_agonists].loc[importances_df.index.values.tolist()[:max_features]].transpose(), save_file="%s/%s_ligands_vs_msm_states_ddg.eps" %(save_dir, experiment_name), method='average', z_score=1)
     
     test_aucs = np.array(test_aucs)
     delta_aucs = np.zeros((test_aucs.shape[0], len(feature_names)-1))

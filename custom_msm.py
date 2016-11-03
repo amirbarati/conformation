@@ -79,7 +79,7 @@ def build_msm(clusterer_dir, lag_time, msm_model_dir, prior_counts=0.0, ergodic_
 def construct_graph(msm_modeler_dir, clusterer_dir, n_clusters, tica_lag_time=5, msm_lag_time=10, graph_file="~/graph_file.graphml", msm_object=None, clusterer_object=None,
                     inactive = None, active = None, pnas_clusters_averages = None, 
                     tica_clusters_averages = None, docking=None, macrostate = None, 
-                    cluster_attributes=None, msm_attributes=None):
+                    cluster_attributes=None, msm_attributes=None, min_prob=1e-4):
   
   """
   Construct a .graphml graph based on an MSM and attributes of clusters and/or MSM states.
@@ -133,11 +133,11 @@ def construct_graph(msm_modeler_dir, clusterer_dir, n_clusters, tica_lag_time=5,
   for i in range(0, msm_modeler.n_states_):
     for j in range(0, msm_modeler.n_states_):
       prob = transmat[i][j]
-      if prob > 0.0:
-        if prob < 0.001: prob = 0.001
-        original_i = inv_mapping[i]
-        original_j = inv_mapping[j]
-        graph.add_edge(original_i, original_j, prob = float(prob), inverse_prob = 1.0 / float(prob))
+      if prob < min_prob:
+        continue
+      original_i = inv_mapping[i]
+      original_j = inv_mapping[j]
+      graph.add_edge(original_i, original_j, prob = float(prob), inverse_prob = 1.0 / float(prob))
 
   print("Number of nodes in graph:")
   print((graph.number_of_nodes()))

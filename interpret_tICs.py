@@ -17,7 +17,6 @@ from sklearn import preprocessing
 from sklearn.cross_validation import train_test_split
 from sklearn.linear_model import lasso_path, LogisticRegressionCV
 #import matplotlib
-plt.style.use('fivethirtyeight')
 #from matplotlib import rcParams
 import seaborn as sns
 from sklearn.metrics import roc_auc_score
@@ -600,7 +599,6 @@ def compute_single_model(j, data_i, data_j, task, model_type, n_trees, n_folds, 
 def compute_sl_matrix(data_i, data_j, task="regression", model_type="rfr",
                       n_trees=500, n_folds=5, max_depth=3, symmetric=False, worker_pool=None, 
                       parallel=False):
-  scores = []
   importances_matrix = np.zeros((np.shape(data_i)[1], np.shape(data_j)[1]))
   
   compute_single_model_partial = partial(compute_single_model, data_i=data_i, data_j=data_j,

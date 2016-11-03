@@ -17,6 +17,17 @@ from scipy.stats import pearsonr
 from scipy import stats
 import pandas as pd
 
+def function_mapper(fxn, worker_pool, parallel, var_list):
+  if worker_pool is not None:
+    results = worker_pool.map_sync(fxn, var_list)
+  elif parallel:
+    pool = mp.Pool(mp.cpu_count())
+    results = pool.map(fxn, var_list)
+    pool.terminate
+  else:
+    results = [fxn(var) for var in var_list]
+  return(results)
+
 def calc_mean_and_stdev(rmsd_map):
 	stats_map = {}
 	for key in list(rmsd_map.keys()):
@@ -641,31 +652,33 @@ def analyze_log_file(log_file):
 					best_pose = current_pose
 
 	score = -1.0*score
+	log.close()
 	return (conformation, score, best_pose)
 
-def analyze_docking_results(docking_dir, ligand, precision, docking_summary, redo = False, write_to_disk=False):
-	results_file = docking_summary
+def analyze_docking_results(docking_dir, ligand, precision, docking_summary, reread=True, write_to_disk=False):
+	try:
+		results_file = docking_summary
 
-	if os.path.exists(results_file):
-		if not redo:
-			return pd.read_csv(scores_df)
+		if os.path.exists(results_file):
+			if reread:
+				return pd.read_csv(results_file)
 
-	logs = get_trajectory_files(docking_dir, ext = ".log")
-	scores_list = []
+		logs = get_trajectory_files(docking_dir, ext = ".log")
+		scores_list = []
 
-	for log in logs:
-		scores_list.append(analyze_log_file(log))
+		for log in logs:
+			scores_list.append(analyze_log_file(log))
 
-	scores_df = pd.DataFrame(scores_list, columns=["sample", "%s" %("%s_%s_score" %(ligand, precision)), "best_pose_id"])
-	if write_to_disk:
-		scores_df.to_csv(results_file)
-
-	#scores_map = {score[0] : score[1] for score in scores_list}
-	#titles = ["sample", "%s" %("%s_%s_score" %(ligand, precision))]
-	#write_map_to_csv(results_file, scores_map, titles)
-	#merged_results = merge_samples(scores_map)
-		
-	return scores_df
+		scores_df = pd.DataFrame(scores_list, columns=["sample", "%s" %("%s_%s_score" %(ligand, precision)), "best_pose_id"])
+		if write_to_disk:
+			scores_df.to_csv(results_file)
+		#scores_map = {score[0] : score[1] for score in scores_list}
+		#titles = ["sample", "%s" %("%s_%s_score" %(ligand, precision))]
+		#write_map_to_csv(results_file, scores_map, titles)
+		#merged_results = merge_samples(scores_map)
+		return scores_df
+	except:
+		return None
 
 def analyze_docking_results_wrapper(args):
 	return analyze_docking_results(*args)
@@ -681,10 +694,13 @@ def get_lig_names(docking_dir):
 	return lig_names
 
 def listdirs(folder):
-    return [
-        d for d in (os.path.join(folder, d1) for d1 in os.listdir(folder))
-        if os.path.isdir(d)
-    ]
+		#return [
+		#    d for d in (os.path.join(folder, d1) for d1 in os.listdir(folder))
+		#    if os.path.isdir(d)
+		#]
+		#from glob import glob
+		return(["%s/%s" %(folder, f) for f in os.listdir(folder)])
+		#return([d.path for d in os.scandir(folder) if d.is_dir()])
 
 def parse_log_file(result):
 	keep_columns = [c for c in result.columns.values.tolist() if "score" in c]
@@ -695,19 +711,22 @@ def parse_log_file(result):
 
 	return (docking_pose, result)
 
-def get_arg_tuple(subdir, ligands=None, precision="SP", redo=False, write_to_disk=False):
+def get_arg_tuple(subdir, ligands=None, precision="SP", redo=False, reread=True, write_to_disk=False):
 	lig_name = subdir.split("/")[len(subdir.split("/"))-1]
 	if ligands is not None:
 		if lig_name not in ligands:
 			return None
 	docking_summary = "%s/docking_summary.csv" %subdir
-	return([subdir, lig_name, precision, docking_summary, redo, write_to_disk])
+	return([subdir, lig_name, precision, docking_summary, reread, write_to_disk])
 
 def analyze_docking_results_multiple(docking_dir, precision, summary, 
-																		 ligands=None, poses_summary=None, redo = False, 
-																		 write_to_disk=False):
+																		 ligands=None, poses_summary=None, redo=False, reread=True,
+																		 write_to_disk=False, parallel=False, worker_pool=None):
 	if os.path.exists(summary) and not redo:
-		df = pd.read_csv(summary, index_col=0).transpose()
+		with open(summary, "rb") as f:
+			df = pickle.load(f)
+		return(df, None)
+		#df = pd.read_csv(summary, index_col=0).transpose()
 		return df, None
 
 	print("Analyzing docking results")
@@ -720,26 +739,20 @@ def analyze_docking_results_multiple(docking_dir, precision, summary,
 
 	print("Obtaining docking scores now...")
 
-	print(mp.cpu_count())
-
-	pool = mp.Pool(mp.cpu_count())
-
-	get_arg_tuple_partial = partial(get_arg_tuple, ligands=ligands, precision=precision, redo=redo, write_to_disk=write_to_disk)
-	arg_tuples = pool.map(get_arg_tuple_partial, subdirs)
+	get_arg_tuple_partial = partial(get_arg_tuple, ligands=ligands, precision=precision, redo=redo, reread=reread, write_to_disk=write_to_disk)
+	arg_tuples = function_mapper(get_arg_tuple_partial, worker_pool, parallel, subdirs)
 	arg_tuples = [t for t in arg_tuples if t is not None]
 	lig_names = [t[1] for t in arg_tuples]
 
 	print("Obtained ligand arguments.")
-
-	results_list = pool.map(analyze_docking_results_wrapper, arg_tuples)
+	results_list = function_mapper(analyze_docking_results_wrapper, worker_pool, parallel, arg_tuples)
+	result_ids = [idx for idx in range(0, len(results_list)) if results_list[idx] is not None]
+	results_list = [results_list[idx] for idx in result_ids]
+	lig_names = [lig_names[idx] for idx in result_ids]
 	print("Examined all ligands.")
 
-	results = pool.map(parse_log_file, results_list)
+	results = function_mapper(parse_log_file, worker_pool, parallel, results_list)
 	print("Parsed all log files.")
-
-	pool.terminate()
-
-	print("Finished writing log files.")
 
 	all_docking_results = [t[1] for t in results]
 	all_docking_poses = [t[0] for t in results]
@@ -751,7 +764,12 @@ def analyze_docking_results_multiple(docking_dir, precision, summary,
 
 	all_docking_results = pd.concat(all_docking_results, axis=1)
 	all_docking_results.columns = lig_names
-	all_docking_results.to_csv(summary)
+
+	all_docking_results = all_docking_results.transpose()
+
+	with open(summary, "wb") as f:
+		pickle.dump(all_docking_results, f, protocol=2)
+	#all_docking_results.to_csv(summary)
 	return all_docking_results, all_docking_poses
 
 	#combined_map = combine_maps(results_list)

@@ -175,6 +175,7 @@ def plot_clustermap(corr_df, save_file, method='single', row_cluster=True, col_c
   #fig.patch.set_alpha(0.)
   #ax = fig.add_subplot(111)
   g = sns.clustermap(corr_df, z_score=z_score, method=method, row_cluster=row_cluster, col_cluster=col_cluster)
+  plt.setp(cg.ax_heatmap.yaxis.get_majorticklabels(), rotation=0)
   sns.set(font_scale=0.5)
   
   g.savefig(save_file, facecolor='w', edgecolor='w')
