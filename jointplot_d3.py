@@ -12,6 +12,7 @@ import matplotlib.cm as cm
 from functools import partial
 import multiprocessing as mp
 from io_functions import *
+from sklearn import preprocessing
 
 def beautify(ax):
     ax.axes.get_xaxis().set_visible(False)
@@ -72,11 +73,11 @@ def jointplots(data, save_dir, titles = None, main = "", refcoords = None, refco
 def jointplot(i_j_tuple, all_data, save_dir=None, make_animation=False, trajectory=None, video_file=None, titles=None,
               main="", include_1d_kde=False, custom_lims=None, custom_lims_j=None, axes=None, data_j=None, titles_j=None, refcoords=None, 
               refcoords_j=None, max_tIC=5, min_density=None, max_diff=2.5, tpt_paths=None, tpt_paths_j=None, n_levels=15, n_pts=200j,
-              all_apo_data=None, remake=False, min_i=None):
+              all_apo_data=None, remake=False, min_i=None, superpose_circles=None, cmap=None):
   matplotlib.use('Agg')
   i, j = i_j_tuple
-  #if 1==1:
-  try:
+  if 1==1:
+  #try:
     if data_j is not None: 
       data = np.column_stack([all_data[:,i], data_j[:,j]])
       partial_titles = [titles[i], titles_j[j]]
@@ -203,7 +204,8 @@ def jointplot(i_j_tuple, all_data, save_dir=None, make_animation=False, trajecto
                                               vmin=vmin, vmax=vmax),
                        cmap='RdBu_r')
     else:
-      cmap = plt.cm.get_cmap("coolwarm")
+      if cmap is None:
+        cmap = plt.cm.get_cmap("coolwarm")
       cmap.set_under([cmap(k) for k in range(cmap.N)][0])
       cmap.set_over([cmap(k) for k in range(cmap.N)][-1])
 
@@ -216,8 +218,8 @@ def jointplot(i_j_tuple, all_data, save_dir=None, make_animation=False, trajecto
     
     if refcoords is not None:
       print(ref_data)
-      ax.scatter([ref_data[0,0]], [ref_data[0,1]], marker = 's', c='k',s=50)
-      ax.scatter([ref_data[1,0]], [ref_data[1,1]], marker = 'v', c='g',s=50)
+      ax.scatter([ref_data[0,0]], [ref_data[0,1]], marker = 'v', c='k',s=75)
+      ax.scatter([ref_data[1,0]], [ref_data[1,1]], marker = 'v', c='k',s=75)
 
     #Marginals
     
@@ -253,6 +255,15 @@ def jointplot(i_j_tuple, all_data, save_dir=None, make_animation=False, trajecto
         #plt.scatter(path[1:-1,0], path[1:-1,1], marker='o', c=color[p], s=15)
 
 
+    if superpose_circles is not None:
+      coords = superpose_circles["coords"]
+      radii = superpose_circles["radii"]
+      radii = preprocessing.MinMaxScaler().fit_transform(radii)
+      color=iter(cm.winter(radii))
+      for i, coord in enumerate(coords):
+        radius = radii[i]
+        c = next(color)
+        ax.scatter(coord[0], coord[1], marker = 'o', c=c,s=radius*100)
     if fig_file is not None:
       fig.savefig(fig_file)#, format='svg', dpi=1200)
     else:
@@ -288,8 +299,8 @@ def jointplot(i_j_tuple, all_data, save_dir=None, make_animation=False, trajecto
       anim.save(video_file, fps=30, 
             extra_args=['-vcodec', 'h264', 
                         '-pix_fmt', 'yuv420p'])
-  except:
-  #else:
+  #except:
+  else:
     return
 
 

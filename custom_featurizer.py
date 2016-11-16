@@ -24,6 +24,20 @@ from aromatic_featurizer import compute_pi_interactions
 import subprocess
 import random
 
+def swap_chains_in_traj(traj_file, chains, return_traj=False):
+    t = md.load(traj_file)
+    for idx, chain in enumerate(t.topology.chains):
+        if chain.id == chains[0]:
+            chain.id = chains[1]
+        elif chain.id == chains[1]:
+            chain.id = chains[0]
+    t.save(traj_file, force_overwrite=True)
+    if return_traj:
+        return t
+    else:
+        return
+
+
 def compute_average_min_distance(traj, residues_i, residues_j):
 
   atoms_i = []

@@ -161,7 +161,11 @@ def plot_heatmap(corr_matrix, row_names, col_names, save_file):
   #plt.show()
 
 
-def plot_clustermap(corr_df, save_file, method='single', row_cluster=True, col_cluster=True, xtick_labelsize=8, ytick_labelsize=8, z_score=0):
+def plot_clustermap(corr_df, save_file, method='single',
+                    row_cluster=True, col_cluster=True,
+                    xtick_labelsize=8, ytick_labelsize=8,
+                    z_score=0):
+
   sns.set_style("darkgrid", {"figure.facecolor": "white"})
   plt.rcParams['xtick.labelsize'] = xtick_labelsize
   plt.rcParams['ytick.labelsize'] = ytick_labelsize

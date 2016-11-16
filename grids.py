@@ -225,15 +225,28 @@ cid: integer
 save_dir: string. cannot have slash at end. 
 """
 def download_sdf_from_cid(cid, save_dir):
-	save_file =	"%s/CID_%d.sdf" %(save_dir, cid)
-	if not os.path.exists(save_file):
-		pcp.download('SDF', save_file, cid, 'cid')
-	return
+	try:
+		save_file =	"%s/CID_%d.sdf" %(save_dir, cid)
+		if not os.path.exists(save_file):
+			pcp.download('SDF', save_file, cid, 'cid')
+		return
+	except:
+		return
 
 def download_sdfs_from_cids(cids, save_dir, worker_pool=None, parallel=False):
 	download_sdf_from_cid_partial = partial(download_sdf_from_cid, save_dir=save_dir)
 	function_mapper(download_sdf_from_cid_partial, worker_pool, parallel, cids)
 	return
+
+def convert_name_to_cid(name):
+	try:
+		cid = get_compounds(name, 'name')[0].cid
+	except:
+		cid = None
+	return(cid)
+
+def convert_names_to_cids(names, worker_pool=None, parallel=False):
+	return(function_mapper(convert_name_to_cid, worker_pool, parallel, names))
 
 def prepare_ligands(lig_dir, exts = [".mae"],
 										n_ring_conf=1, n_stereoisomers=1,
@@ -509,7 +522,8 @@ def dock(dock_job, timeout=600):
 def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP",
 											 chosen_jobs=None,
 											 parallel = False, grid_ext = ".zip", worker_pool=None,
-											 return_jobs=False, retry_after_failed=False):
+											 return_jobs=False, retry_after_failed=False,
+											 redo=False):
 	if not os.path.exists(docking_dir): os.makedirs(docking_dir)
 
 	#grid_subdirs = [x[0] for x in os.walk(grid_dir)]
@@ -525,20 +539,21 @@ def dock_conformations(grid_dir, docking_dir, ligand_dir, precision = "SP",
 			if grid_file_no_ext not in chosen_jobs:
 				#print "%s not in chosen jobs " %grid_file_no_ext
 				continue
-		#print grid_file_no_ext
-		maegz_name = "%s/%s_pv.maegz" %(docking_dir, grid_file_no_ext)
-		log_name = "%s/%s.log" %(docking_dir, grid_file_no_ext)
-		log_size = 0
-		if os.path.exists(log_name): log_size = os.stat(log_name).st_size
-		if os.path.exists(maegz_name):# and log_size > 3000:
-			#print("already docked %s" %grid_file_no_ext)
-			continue
+		if not redo:
+			#print grid_file_no_ext
+			maegz_name = "%s/%s_pv.maegz" %(docking_dir, grid_file_no_ext)
+			log_name = "%s/%s.log" %(docking_dir, grid_file_no_ext)
+			log_size = 0
+			if os.path.exists(log_name): log_size = os.stat(log_name).st_size
+			if os.path.exists(maegz_name) and log_size > 3000:
+				#print("already docked %s" %grid_file_no_ext)
+				continue
 
-		if not retry_after_failed:
-			if os.path.exists(log_name):
-				conformation, score, best_pose = analyze_log_file(log_name)
-				if score == 0.0:
-					continue
+			if not retry_after_failed:
+				if os.path.exists(log_name):
+					conformation, score, best_pose = analyze_log_file(log_name)
+					if score == 0.0:
+						continue
 
 		dock_job_name = "%s/%s.in" %(docking_dir, grid_file_no_ext)
 		dock_jobs.append(dock_job_name)
@@ -648,7 +663,8 @@ parallel --> if you set it to "both" it will run in parallel over both ligands a
 def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "SP",
 								 ext = "-out.maegz", chosen_ligands = False, chosen_receptors = None,
 								 parallel = False, grid_ext = ".zip", worker_pool=None,
-								 ligand_dirs=None, retry_after_failed=False, timeout=600):
+								 ligand_dirs=None, retry_after_failed=False, timeout=600,
+								 redo=False):
 	ligands = get_trajectory_files(ligands_dir, ext = ext)
 
 	if parallel == "both":
@@ -720,7 +736,8 @@ def dock_ligands_and_receptors(grid_dir, docking_dir, ligands_dir, precision = "
 			if not os.path.exists(lig_dir): os.makedirs(lig_dir)
 			dock_jobs += dock_conformations(grid_dir, lig_dir, ligand, precision = precision,
 								 chosen_jobs = chosen_receptors, grid_ext=grid_ext, 
-								 worker_pool=worker_pool, return_jobs=True, retry_after_failed=retry_after_failed)
+								 worker_pool=worker_pool, return_jobs=True, retry_after_failed=retry_after_failed,
+								 redo=redo)
 
 		partial_docker = partial(dock, timeout=timeout)
 		if worker_pool is not None:

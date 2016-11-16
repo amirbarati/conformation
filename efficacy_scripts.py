@@ -31,7 +31,7 @@ from detect_intermediates import *
 from interpret_tICs import *
 from custom_tica import *
 from sklearn.svm import SVR
-from sklearn.metrics import roc_auc_score, precision_score, recall_score
+from sklearn.metrics import roc_auc_score, precision_score, recall_score, accuracy_score
 from sklearn.preprocessing import StandardScaler
 from pandas.tools.plotting import table
 from msm_resampled import *
@@ -755,6 +755,9 @@ def convert_smiles_to_compounds(smiles, parallel=False, worker_pool=None):
   compound_names_smiles = function_mapper(convert_smiles_to_compound, worker_pool, parallel, smiles)
   return(compound_names_smiles)
 
+def write_smiles_to_disk():
+  return
+
 def convert_sdfs_to_compounds(sdfs, parallel=False, worker_pool=None):
   print("Getting SMILES from SDFs...")
   smiles_list = convert_sdfs_to_smiles(sdfs, parallel, worker_pool)
@@ -773,20 +776,20 @@ calculator for BedROC
 
 def calc_auc_from_roc(roc, scores, col):
   TNR = roc[0] 
-  TPR = roc[1]    
+  precision = roc[1]    
   numMol = len(scores) 
   AUC = 0 
 
    # loop over score list 
   for i in range(0, numMol-1): 
-    AUC += (TNR[i+1]-TNR[i]) * (TPR[i+1]+TPR[i]) 
+    AUC += (TNR[i+1]-TNR[i]) * (precision[i+1]+precision[i]) 
 
   return 0.5*AUC 
 
 def compute_auc(y_train, y_score):
-    fpr, tpr, _ = roc_curve(y_train, y_score[:,1])
-    roc_auc = calculate_auc(fpr, tpr)
-    log_auc = logauc2(fpr, tpr)
+    fdr, precision, _ = roc_curve(y_train, y_score[:,1])
+    roc_auc = calculate_auc(fdr, precision)
+    log_auc = logauc2(fdr, precision)
     return roc_auc, log_auc
 
 def b(x, y, i):
@@ -825,8 +828,8 @@ def do_regression_experiment(features, y, feature_names, n_trials,
     results_dict['test_log_aucs'] = [t[2] for t in model_results]
     results_dict['test_roc_aucs'] =  [t[3] for t in model_results]
     results_dict['bedrocs'] =  [t[4] for t in model_results]
-    results_dict['tprs'] =  [t[5] for t in model_results]
-    results_dict['fprs'] =  [t[6] for t in model_results]
+    results_dict['precisions'] =  [t[5] for t in model_results]
+    results_dict['fdrs'] =  [t[6] for t in model_results]
     results_dict['recalls'] =  [t[7] for t in model_results]
 
     
@@ -894,7 +897,7 @@ def do_single_regression_experiment(trial, features, y,
                       "kendall_coefficients": kendall_coefficients,
                       "kendall_pvalues": kendall_pvalues}
     
-  return((feature_importance, aucs, log_aucs, roc_aucs, bedrocs, tprs, fprs, recalls))
+  return((feature_importance, aucs, log_aucs, roc_aucs, bedrocs, precisions, fdrs, recalls))
 
 
 class RegularizedModel(object):
@@ -944,6 +947,12 @@ class CustomSplitter(object):
       test_inds = self.b_agonist_inds + self.antagonist_inds[:n_test_antagonists]
       train_inds = self.antagonist_inds[n_test_antagonists:] + self.a_agonist_inds
 
+      print("train inds:")
+      print(train_inds,end="")
+
+      print("test_inds:")
+      print(test_inds, end="")
+
       split_list = []
       for arr in array_list:
           split_list.append(arr[train_inds,:])
@@ -956,7 +965,7 @@ def generate_or_load_model(features, y, featurizer_names,
                            n_estimators=1000, max_depth=3,
                            redo=True, parallel=False, worker_pool=None,
                            criterion='gini', normalize=True, splitter=None,
-                           normalize_axis0=False):
+                           normalize_axis0=False, loocv=False):
     
   if os.path.exists(filename) and not redo:  
     print("Already fit model, loading now.")
@@ -970,7 +979,8 @@ def generate_or_load_model(features, y, featurizer_names,
                                          regularize=manual_regularize,
                                          model=model_name, parallel=parallel, worker_pool=worker_pool,
                                          n_estimators=n_estimators, max_depth=max_depth, criterion=criterion,
-                                         normalize=normalize, splitter=splitter, normalize_axis0=normalize_axis0)
+                                         normalize=normalize, splitter=splitter, normalize_axis0=normalize_axis0,
+                                         loocv=loocv)
     with open(filename, "wb") as f:
         pickle.dump(model, f, protocol=2)
     return(model)
@@ -981,15 +991,40 @@ def do_single_classification_experiment(trial, features_y=[], y=None,
                                         regularize=None, train_size=None,
                                         max_depth=None, n_estimators=1000,
                                         splitter=None, normalize=True,
-                                        normalize_axis0=False):
+                                        normalize_axis0=False,
+                                        loocv=False):
   aucs = []
   log_aucs = []
   roc_aucs = []
+  class_b_aucs = []
   bedrocs = []
-  fprs = []
-  tprs = []
+  fdrs = []
+  precisions = []
+  class_b_precisions = []
+  class_b_fdrs = []
+
   recalls = []
-  if splitter is None:
+  class_b_recalls = []
+
+  fdr_means = []
+  precision_means = []
+  recall_means = []
+
+  accuracies = []
+
+  if loocv:
+    train_test_arrays = []
+    indices = list(range(0,features_y[0].shape[0]))
+    train_inds = [n for n in indices if n != trial]
+    test_ind = [trial]
+    for arr in features_y:
+      if "pandas" in str(type(arr)).lower():
+        arr = arr.values
+      arr_train = arr[train_inds, :]
+      arr_test = arr[test_ind, :]
+      train_test_arrays.append(arr_train)
+      train_test_arrays.append(arr_test)
+  elif splitter is None:
     train_test_arrays = train_test_split(*features_y, train_size=train_size, stratify=y) 
   else:
     train_test_arrays = splitter.split(features_y)
@@ -1018,8 +1053,12 @@ def do_single_classification_experiment(trial, features_y=[], y=None,
             f = np.zeros(X_train.shape[1])
             top_indices = np.argsort(rfr.feature_importances_*-1.)[:regularize]
             rfr = RandomForestClassifier(n_estimators=n_estimators, max_features='sqrt', oob_score=False)
-            X_train = X_train[:, top_indices]
-            X_test = X_test[:, top_indices]
+            try:
+              X_train = X_train[:, top_indices]
+              X_test = X_test[:, top_indices]
+            except:
+              X_train = X_train.values[:, top_indices]
+              X_test = X_test.values[:, top_indices]
             rfr.fit(X_train, y_train)
             f[top_indices] = rfr.feature_importances_
             feature_importance.append(f)
@@ -1043,26 +1082,72 @@ def do_single_classification_experiment(trial, features_y=[], y=None,
           y_test = y_train
       
       y_pred = rfr.predict(X_test)
+      y_score = rfr.predict_proba(X_test)
+
+      y_probb = y_score[:,1]
+
+      n_model_positives = len(np.where(y_pred == 1.)[0])
+      n_model_negatives = len(np.where(y_pred == 0.)[0])
+
+      positive_indices = np.where(y_test == 1.)[0].tolist()
+      negative_indices = np.where(y_test == 0.)[0].tolist()
+
+      tp_indices = set(np.where(y_test == 1.)[0].tolist()).intersection(set(np.where(y_pred == 1.)[0].tolist()))
+      fp_indices = set(np.where(y_test == 0.)[0].tolist()).intersection(set(np.where(y_pred == 1.)[0].tolist()))
+
+      try:
+        recall_mean = np.mean(y_score[positive_indices][:,1])/(float(len(positive_indices))/float(len(y_test)))
+      except:
+        recall_mean = 0.
+      try:
+        fdr_mean = np.mean(y_score[negative_indices][:,1])/(float(n_model_positives)/float(y_score.shape[0]))
+      except:
+        fdr_mean = 0.
+      try:
+        precision_mean = np.mean(y_score[positive_indices][:,1])/(float(n_model_positives)/float(y_score.shape[0]))
+      except:
+        precision_mean = 0.
+
+      recall_means.append(recall_mean)
+      precision_means.append(precision_mean)
+      fdr_means.append(fdr_mean)
+
       tp = float(len(set(np.where(y_test == 1.)[0].tolist()).intersection(set(np.where(y_pred == 1.)[0].tolist()))))
       fp = float(len(set(np.where(y_test == 0.)[0].tolist()).intersection(set(np.where(y_pred == 1.)[0].tolist()))))
 
       P = float(len(np.where(y_test == 1.)[0]))
-      if P == 0:
+      try: 
+        mean_recall = recall_score(y_test, y_pred)
+        class_b_recall = recall_score(y_test, y_pred, average=None)[1]
+        recalls.append(mean_recall)
+        class_b_recalls.append(class_b_recall)
+        #print("class_b_recall:")
+        #print(class_b_recall)
+      except:
         recalls.append(0.)
-      else:
-        recalls.append(recall_score(y_test, y_pred))
-        #recalls.append(tp / P)
+        class_b_recalls.append(0.)
 
-      if (tp+fp) == 0:
-        tprs.append(0.)
-        fprs.append(1.)
-      else:
-        tpr = precision_score(y_test, y_pred)
-        fpr = 1. - tpr
-        #tpr = tp / (tp + fp)
-        #fpr = fp / (tp + fp)
-        tprs.append(tpr)
-        fprs.append(fpr)
+      try:
+        precision = precision_score(y_test, y_pred)
+        fdr = 1. - precision
+        precisions.append(precision)
+        fdrs.append(fdr)
+
+        class_b_precision = precision_score(y_test, y_pred, average=None)[1]
+        class_b_fdr = 1. - class_b_precision
+
+        class_b_precisions.append(class_b_precision)
+        #print("class_b_fdr:")
+        #$print(class_b_fdr)
+
+        #print("class_b_precision")
+        #print(class_b_precision)
+        class_b_fdrs.append(class_b_fdr)
+      except:
+        precisions.append(0.)
+        fdrs.append(1.)
+        class_b_precisions.append(0.)
+        class_b_fdrs.append(1.)
 
       y_score = rfr.predict_proba(X_test)
 
@@ -1073,7 +1158,12 @@ def do_single_classification_experiment(trial, features_y=[], y=None,
         log_aucs.append(logauc)  
       except:
         pass
-      roc_aucs.append(roc_auc_score(convert_to_n_class(y_test[:,0]), y_score))
+      try:
+        roc_aucs.append(roc_auc_score(convert_to_n_class(y_test[:,0]), y_score))
+        class_b_aucs.append(roc_auc_score(convert_to_n_class(y_test[:,0]), y_score, average=None)[1])
+      except:
+        roc_aucs.append(0.)
+        class_b_aucs.append(0.)
 
       try:
         scores_conc = np.hstack([y_test, y_score[:,1].reshape((-1,1))])
@@ -1085,8 +1175,9 @@ def do_single_classification_experiment(trial, features_y=[], y=None,
       except:
         bedrocs.append(0.)
 
+      accuracies.append(accuracy_score(y_test, y_pred))
 
-  return((feature_importance, aucs, log_aucs, roc_aucs, bedrocs, tprs, fprs, recalls))
+  return((feature_importance, aucs, log_aucs, roc_aucs, bedrocs, precisions, fdrs, recalls, precision_means, fdr_means, recall_means, class_b_aucs, class_b_recalls, class_b_precisions, class_b_fdrs, accuracies))
 
 def convert_to_n_class(values):
   return np.eye(len(set(values.tolist())))[values.tolist()]
@@ -1108,7 +1199,8 @@ def do_classification_experiment(features, y, feature_names,
                                  parallel=False, worker_pool=None,
                                  n_estimators=1000, max_depth=3,
                                  splitter=None, criterion='gini',
-                                 normalize=False, normalize_axis0=False):
+                                 normalize=False, normalize_axis0=False,
+                                 loocv=False):
     test_aucs = []
     test_log_aucs = []
     test_roc_aucs = []
@@ -1137,9 +1229,12 @@ def do_classification_experiment(features, y, feature_names,
             results_dict[feature_names[feature_ind]] = (final_rfr, rfr.feature_importances_)
         else:
             f = np.zeros(X_train.shape[1])
-            top_indices = np.argsort(rfr.feature_importances_*-1.)[:(X_train.shape[0]/2)]
+            top_indices = np.argsort(rfr.feature_importances_*-1.)[:(X_train.shape[0]/2)].tolist()
             rfr = RandomForestClassifier(n_estimators=500, max_depth=3, max_features='sqrt', n_jobs=-1, oob_score=False)
-            X_train = X_train[:, top_indices]
+            try:
+              X_train = X_train[:, top_indices]
+            except:
+              X_train = X_train.values[:, top_indices]
             rfr.fit(X_train, y_train)
             final_rfr = RegularizedModel(sklearn_model=rfr, retained_features=top_indices, input_transformer=sc, normalize_axis0=normalize_axis0)
             f[top_indices] = rfr.feature_importances_
@@ -1163,14 +1258,19 @@ def do_classification_experiment(features, y, feature_names,
 
 
     print("Fitting models over split train data...")
-    
+    if loocv:
+      trial_indices = list(range(0, features[0].shape[0]))
+    else:
+      trial_indices = list(range(0,n_trials))
+
     do_single_classification_experiment_single_partial = partial(do_single_classification_experiment, features_y=features_y,
                                                                                              y=y, features=features, model=model,
                                                                                              regularize=regularize, train_size=train_size, 
                                                                                              n_estimators=n_estimators, max_depth=max_depth,
                                                                                              normalize=normalize, splitter=splitter,
-                                                                                             normalize_axis0=normalize_axis0)
-    model_results = function_mapper(do_single_classification_experiment_single_partial, worker_pool, parallel, list(range(0,n_trials)))
+                                                                                             normalize_axis0=normalize_axis0,
+                                                                                             loocv=loocv)
+    model_results = function_mapper(do_single_classification_experiment_single_partial, worker_pool, parallel, trial_indices)
     
     print("Finished fitting models")
 
@@ -1179,10 +1279,17 @@ def do_classification_experiment(features, y, feature_names,
     results_dict['test_log_aucs'] = [t[2] for t in model_results]
     results_dict['test_roc_aucs'] =  [t[3] for t in model_results]
     results_dict['bedrocs'] =  [t[4] for t in model_results]
-    results_dict['tprs'] =  [t[5] for t in model_results]
-    results_dict['fprs'] =  [t[6] for t in model_results]
+    results_dict['precisions'] =  [t[5] for t in model_results]
+    results_dict['fdrs'] =  [t[6] for t in model_results]
     results_dict['recalls'] =  [t[7] for t in model_results]
-
+    results_dict['precision_means'] =  [t[8] for t in model_results]
+    results_dict['fdr_means'] =  [t[9] for t in model_results]
+    results_dict['recall_means'] =  [t[10] for t in model_results]
+    results_dict['class_b_aucs'] =  [t[11] for t in model_results]
+    results_dict['class_b_recalls'] =  [t[12] for t in model_results]
+    results_dict['class_b_precisions'] =  [t[13] for t in model_results]
+    results_dict['class_b_fdrs'] =  [t[14] for t in model_results]  
+    results_dict['accuracies'] =  [t[15] for t in model_results]    
 
     return results_dict
 
@@ -1359,7 +1466,7 @@ def plot_clustermap(corr_df, save_file, method='single', row_cluster=True, col_c
 def analyze_multiclass_experiment(results_dict, featurizer_names, 
                                   all_feature_names, drug_names, save_dir, 
                                   class_names, X, coef_name="Importance", 
-                                  exp_title="", remake=True):
+                                  exp_title="", remake=True, fxn=np.mean):
 
   X_df = pd.DataFrame(X, columns=all_feature_names[1], index=drug_names)
 
@@ -1376,31 +1483,65 @@ def analyze_multiclass_experiment(results_dict, featurizer_names,
      with one array per trial. The function then finds average feature_importance
      for each feature for each class among all the trials
   """
+  print("analyzing Accuracy:")
+  test_auc_significance(results_dict["accuracies"],
+                        featurizer_names, "Accuracy", save_dir, fxn=fxn)
+
+  make_auc_df(results_dict["accuracies"], 
+              featurizer_names, "Accuracy", save_dir)
+
+  print("analyzing Recall:")
+  test_auc_significance(results_dict["class_b_recalls"],
+                        featurizer_names, "Recall", save_dir, fxn=fxn)
+
+  make_auc_df(results_dict["class_b_recalls"], 
+              featurizer_names, "Recall", save_dir)
+
+  print("analyzing precision:")
+  test_auc_significance(results_dict["class_b_precisions"],
+                        featurizer_names, "precision", save_dir, fxn=fxn)
+
+  make_auc_df(results_dict["class_b_precisions"], 
+              featurizer_names, "precision", save_dir)
+
+  print("analyzing fdr:")
+  test_auc_significance(results_dict["class_b_fdrs"],
+                        featurizer_names, "fdr", save_dir, fxn=fxn)
+
+  make_auc_df(results_dict["class_b_fdrs"], 
+              featurizer_names, "fdr", save_dir)
 
   print("analyzing Recall:")
   test_auc_significance(results_dict["recalls"],
-                        featurizer_names, "Recall", save_dir, fxn=np.mean)
+                        featurizer_names, "Recall", save_dir, fxn=fxn)
 
   make_auc_df(results_dict["recalls"], 
               featurizer_names, "Recall", save_dir)
 
-  print("analyzing TPR:")
-  test_auc_significance(results_dict["tprs"],
-                        featurizer_names, "TPR", save_dir, fxn=np.mean)
+  print("analyzing precision:")
+  test_auc_significance(results_dict["precisions"],
+                        featurizer_names, "precision", save_dir, fxn=fxn)
 
-  make_auc_df(results_dict["tprs"], 
-              featurizer_names, "TPR", save_dir)
+  make_auc_df(results_dict["precisions"], 
+              featurizer_names, "precision", save_dir)
 
-  print("analyzing FPR:")
-  test_auc_significance(results_dict["fprs"],
-                        featurizer_names, "FPR", save_dir, fxn=np.mean)
+  print("analyzing fdr:")
+  test_auc_significance(results_dict["fdrs"],
+                        featurizer_names, "fdr", save_dir, fxn=fxn)
 
-  make_auc_df(results_dict["fprs"], 
-              featurizer_names, "FPR", save_dir)
+  make_auc_df(results_dict["fdrs"], 
+              featurizer_names, "fdr", save_dir)
+
+  print("analyzing class B ROC AUC:")
+  test_auc_significance(results_dict["class_b_aucs"],
+                        featurizer_names, exp_title, save_dir, fxn=fxn)
+
+  make_auc_df(results_dict["class_b_aucs"], 
+              featurizer_names, exp_title, save_dir)
 
   print("analyzing ROC AUC:")
   test_auc_significance(results_dict["test_roc_aucs"],
-                        featurizer_names, exp_title, save_dir, fxn=np.mean)
+                        featurizer_names, exp_title, save_dir, fxn=fxn)
 
   make_auc_df(results_dict["test_roc_aucs"], 
               featurizer_names, exp_title, save_dir)
@@ -1408,7 +1549,7 @@ def analyze_multiclass_experiment(results_dict, featurizer_names,
   try:
     print("analyzing BedROC")
     test_auc_significance(results_dict["bedrocs"],
-                          featurizer_names, "BedROC", save_dir, fxn=np.mean)
+                          featurizer_names, "BedROC", save_dir, fxn=fxn)
     make_auc_df(results_dict["bedrocs"], 
                 featurizer_names, "BedROCs", save_dir)
   except:
@@ -1417,7 +1558,7 @@ def analyze_multiclass_experiment(results_dict, featurizer_names,
   try:
     print("analyzing LogAUC")
     test_auc_significance(results_dict["test_log_aucs"],
-                          featurizer_names, "LogAUC", save_dir, fxn=np.mean)
+                          featurizer_names, "LogAUC", save_dir, fxn=fxn)
     make_auc_df(results_dict["test_log_aucs"], 
                 featurizer_names, "LogAUCs", save_dir)
   except:

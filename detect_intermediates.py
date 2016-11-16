@@ -32,18 +32,6 @@ from matplotlib.colors import ListedColormap
 from msmbuilder.utils import KDTree
 from matplotlib.pyplot import cm
 
-#from rpy2.robjects.packages import importr
-#import rpy2.robjects as ro
-#import pandas.rpy.common as com
-#from rpy2.robjects import r
-#import rpy2.robjects.numpy2ri as numpy2ri
-#numpy2ri.activate()
-base = get_base()
-#R_functions = "%s/conformation/analysis.R" %base
-#R_analysis = "%s/conformation/b2ar_analysis.R" %base
-#ro.r.source(R_functions)
-#ro.r.source(R_analysis)
-
 
 def select_model(X, tic_j, max_components, save_dir):
   num_trials = 0
